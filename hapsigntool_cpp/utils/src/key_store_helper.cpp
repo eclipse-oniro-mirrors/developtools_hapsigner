@@ -652,6 +652,10 @@ int KeyStoreHelper::SetCertPkcs12(X509* cert, PKCS12_SAFEBAG* bag, STACK_OF(PKCS
 {
     if (cert) {
         bag = PKCS12_add_cert(&certBags, cert);
+        if (bag == nullptr) {
+            goto err;
+        }
+        
         if (name && !PKCS12_add_friendlyname(bag, name, -1)) {
             goto err;
         }
