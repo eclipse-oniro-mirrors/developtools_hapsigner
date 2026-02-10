@@ -198,7 +198,7 @@ bool CmdUtil::UpdateParamForCheckOutFile(Options* options, const std::initialize
                                     + outFilePath + "', parameter name '-" + key + "'");
                 return false;
             } else {
-                SIGNATURE_TOOLS_LOGI("UpdateParamForCheckOutFile GetFileName:%s", fileName.c_str());
+                SIGNATURE_TOOLS_LOGI("UpdateParamForCheckOutFile GetFileName %s", fileName.c_str());
             }
             (*options)[key] = charStr + "/" + fileName;
         }
