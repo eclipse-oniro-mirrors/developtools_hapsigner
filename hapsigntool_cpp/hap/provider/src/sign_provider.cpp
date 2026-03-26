@@ -21,6 +21,7 @@
 #include <cinttypes>
 #include <filesystem>
 #include <algorithm>
+#include <numeric>
 
 #include "string_utils.h"
 #include "file_utils.h"
@@ -377,6 +378,39 @@ bool SignProvider::AppendCodeSignBlock(SignerConfig* signerConfig, std::string o
         OptionalBlock tmp = {HapUtils::HAP_PROPERTY_BLOCK_ID, *result};
         optionalBlocks.insert(optionalBlocks.begin(), tmp);
     }
+    return true;
+}
+
+bool SignProvider::AppendReCodeSignBlock(SignerConfig* signerConfig, std::string outputFilePath,
+                                       const std::string& suffix, int64_t centralDirectoryOffset, ZipSigner& zip)
+{
+    SIGNATURE_TOOLS_LOGI("start re code signing.");
+    std::string suffixTmp = suffix;
+    std::transform(suffixTmp.begin(), suffixTmp.end(), suffixTmp.begin(), ::tolower);
+    int64_t optionalBlockSize = std::accumulate(optionalBlocks.begin(), optionalBlocks.end(), 0,
+        [](int64_t sum, const auto& elem) { return sum + elem.optionalBlockValue.GetCapacity(); });
+    // 4 means hap format occupy 4 byte storage location,2 means optional blocks reserve 2 storage location
+    int64_t appendOptionalBlocksHeaderSize = (4 + 4 + 4) * 2 + 12;
+    int64_t codeSignOffset = centralDirectoryOffset + optionalBlockSize + appendOptionalBlocksHeaderSize;
+    // create CodeSigning Object
+    CodeSigning codeSigning(signerConfig);
+    std::vector<int8_t> codeSignArray;
+    if (!codeSigning.GetCodeSignBlock(outputFilePath, codeSignOffset, suffixTmp, profileContent, zip,
+                                        codeSignArray)) {
+        SIGNATURE_TOOLS_LOGE("Codesigning getCodeSignBlock Fail.");
+        return false;
+    }
+    SIGNATURE_TOOLS_LOGI("generate codeSignArray finished.");
+    std::unique_ptr<ByteBuffer> result =
+        std::make_unique<ByteBuffer>(codeSignArray.size()
+                                        + (FOUR_BYTE + FOUR_BYTE + FOUR_BYTE));
+    result->PutInt32(HapUtils::HAP_CODE_SIGN_BLOCK_ID);
+    result->PutInt32(codeSignArray.size()); // length
+    result->PutInt32((int32_t)codeSignOffset); // offset
+    result->PutData(codeSignArray.data(), codeSignArray.size());
+
+    OptionalBlock tmp = {HapUtils::ENTERPRISE_CODE_RE_SIGN_BLOCK_ID, *result};
+    optionalBlocks.push_back(tmp);
     return true;
 }
 
