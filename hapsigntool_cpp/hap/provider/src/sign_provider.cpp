@@ -390,6 +390,7 @@ bool SignProvider::AppendReCodeSignBlock(SignerConfig* signerConfig, std::string
     int64_t optionalBlockSize = std::accumulate(optionalBlocks.begin(), optionalBlocks.end(), 0,
         [](int64_t sum, const auto& elem) { return sum + elem.optionalBlockValue.GetCapacity(); });
     // 4 means hap format occupy 4 byte storage location,2 means optional blocks reserve 2 storage location
+    // 12 byte before codeSignArray
     int64_t appendOptionalBlocksHeaderSize = (4 + 4 + 4) * 2 + 12;
     int64_t codeSignOffset = centralDirectoryOffset + optionalBlockSize + appendOptionalBlocksHeaderSize;
     // create CodeSigning Object
@@ -404,7 +405,7 @@ bool SignProvider::AppendReCodeSignBlock(SignerConfig* signerConfig, std::string
     std::unique_ptr<ByteBuffer> result =
         std::make_unique<ByteBuffer>(codeSignArray.size()
                                         + (FOUR_BYTE + FOUR_BYTE + FOUR_BYTE));
-    result->PutInt32(HapUtils::HAP_CODE_SIGN_BLOCK_ID);
+    result->PutInt32(HapUtils::HAP_CODE_SIGN_BLOCK_ID); //type
     result->PutInt32(codeSignArray.size()); // length
     result->PutInt32((int32_t)codeSignOffset); // offset
     result->PutData(codeSignArray.data(), codeSignArray.size());
