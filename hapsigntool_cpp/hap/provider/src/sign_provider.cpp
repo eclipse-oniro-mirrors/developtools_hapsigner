@@ -382,7 +382,7 @@ bool SignProvider::AppendCodeSignBlock(SignerConfig* signerConfig, std::string o
 }
 
 bool SignProvider::AppendReCodeSignBlock(SignerConfig* signerConfig, std::string outputFilePath,
-                                       const std::string& suffix, int64_t centralDirectoryOffset, ZipSigner& zip)
+    const std::string& suffix, int64_t centralDirectoryOffset, ZipSigner& zip)
 {
     SIGNATURE_TOOLS_LOGI("start re code signing.");
     std::string suffixTmp = suffix;
@@ -396,8 +396,7 @@ bool SignProvider::AppendReCodeSignBlock(SignerConfig* signerConfig, std::string
     // create CodeSigning Object
     CodeSigning codeSigning(signerConfig);
     std::vector<int8_t> codeSignArray;
-    if (!codeSigning.GetCodeSignBlock(outputFilePath, codeSignOffset, suffixTmp, profileContent, zip,
-                                        codeSignArray)) {
+    if (!codeSigning.GetCodeSignBlock(outputFilePath, codeSignOffset, suffixTmp, profileContent, zip, codeSignArray)) {
         SIGNATURE_TOOLS_LOGE("Codesigning getCodeSignBlock Fail.");
         return false;
     }
