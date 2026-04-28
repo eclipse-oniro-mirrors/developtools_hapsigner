@@ -132,7 +132,7 @@ std::string StringUtils::SubjectToString(X509* cert)
     return result;
 }
 
-bool StringUtils::CheckStringToint(const std::string& in, int& out)
+bool StringUtils::CheckStringToInt(const std::string& in, int& out)
 {
     std::istringstream iss(in);
     if ((iss >> out) && iss.eof()) {

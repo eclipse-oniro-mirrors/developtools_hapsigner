@@ -38,7 +38,7 @@ public:
     static std::string Pkcs7ToString(PKCS7* p7);
     static std::string x509CertToString(X509* cert);
     static std::string SubjectToString(X509* cert);
-    static bool CheckStringToint(const std::string& in, int& out);
+    static bool CheckStringToInt(const std::string& in, int& out);
 };
 } // namespace SignatureTools
 } // namespace OHOS

@@ -58,7 +58,7 @@ bool SignProvider::InitSigerConfig(SignerConfig& signerConfig, STACK_OF(X509)* p
         return false;
     }
     int CompatibleVersion;
-    if (!StringUtils::CheckStringToint(signParams.at(ParamConstants::PARAM_BASIC_COMPATIBLE_VERSION),
+    if (!StringUtils::CheckStringToInt(signParams.at(ParamConstants::PARAM_BASIC_COMPATIBLE_VERSION),
         CompatibleVersion)) {
         SIGNATURE_TOOLS_LOGE("[SignHap] CompatibleVersion String To int failed");
         return false;
@@ -138,7 +138,7 @@ bool SignProvider::InitZipOutput(std::shared_ptr<RandomAccessFile> outputHap,
                                  const std::string& Path)
 {
     int alignment;
-    if (!StringUtils::CheckStringToint(signParams.at(ParamConstants::PARAM_BASIC_ALIGNMENT), alignment)) {
+    if (!StringUtils::CheckStringToInt(signParams.at(ParamConstants::PARAM_BASIC_ALIGNMENT), alignment)) {
         SIGNATURE_TOOLS_LOGE("[signHap] alignment String To int failed");
         inputStream->close();
         tmpOutput->close();
@@ -825,7 +825,7 @@ bool SignProvider::CheckCompatibleVersion()
     }
     const std::string& compatibleApiVersionVal = it->second;
     int compatibleApiVersion;
-    if (!StringUtils::CheckStringToint(compatibleApiVersionVal, compatibleApiVersion)) {
+    if (!StringUtils::CheckStringToInt(compatibleApiVersionVal, compatibleApiVersion)) {
         PrintErrorNumberMsg("COMMAND_PARAM_ERROR", COMMAND_PARAM_ERROR,
                             "compatibleVersion Parameter is must integer");
         return false;
