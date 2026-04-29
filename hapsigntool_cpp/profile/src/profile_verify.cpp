@@ -244,15 +244,6 @@ AppProvisionVerifyResult ReturnIfStringIsEmpty(const std::string& str, const std
     return PROVISION_OK;
 }
 
-AppProvisionVerifyResult ReturnIfIntIsNonPositive(int num, const std::string& errMsg)
-{
-    if (num <= 0) {
-        PrintErrorNumberMsg("PROVISION_INVALID_ERROR", PROVISION_INVALID_ERROR, errMsg);
-        return PROVISION_INVALID;
-    }
-    return PROVISION_OK;
-}
-
 static AppProvisionVerifyResult CheckProfileValidType(const ProfileInfo& info)
 {
     if (info.type == ProvisionType::DEBUG) {
@@ -261,10 +252,6 @@ static AppProvisionVerifyResult CheckProfileValidType(const ProfileInfo& info)
             return PROVISION_INVALID;
         }
     } else if (info.type == ProvisionType::RELEASE) {
-        if (ReturnIfIntIsNonPositive(info.distributionType,
-                                     "Tag app-distribution-type is empty.") != PROVISION_OK) {
-            return PROVISION_INVALID;
-        }
         if (ReturnIfStringIsEmpty(info.bundleInfo.distributionCertificate,
                                   "Tag distribution-certificate is empty.") != PROVISION_OK) {
             return PROVISION_INVALID;
