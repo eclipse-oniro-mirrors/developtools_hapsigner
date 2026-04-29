@@ -61,11 +61,11 @@ bool VerifyCodeSignature::VerifyElf(std::string file, int64_t offset, int64_t le
         return false;
     }
     signedElf.seekg(offset, std::ios::beg);
-    std::vector<char> codeSignBlockBytes(length);
-    signedElf.read(codeSignBlockBytes.data(), codeSignBlockBytes.size());
+    std::vector<int8_t> codeSignBlockBytes(length);
+    signedElf.read(reinterpret_cast<char*>(codeSignBlockBytes.data()), codeSignBlockBytes.size());
     signedElf.close();
     ElfSignBlock elfSignBlock;
-    bool arrFlag = ElfSignBlock::FromByteArray(*(std::vector<int8_t> *) & codeSignBlockBytes, elfSignBlock);
+    bool arrFlag = ElfSignBlock::FromByteArray(codeSignBlockBytes, elfSignBlock);
     if (!arrFlag) {
         SIGNATURE_TOOLS_LOGE("parse sign block to ElfCodeSignBlock object failed");
         return false;
@@ -124,16 +124,10 @@ bool VerifyCodeSignature::VerifyCodeSign(std::string file, std::pair<std::string
     std::vector<int8_t> signature = csb.GetHapInfoSegment().GetSignInfo().GetSignature();
     Extension* ext = csb.GetHapInfoSegment().GetSignInfo()
         .GetExtensionByType(MerkleTreeExtension::MERKLE_TREE_INLINED);
-    MerkleTreeExtension* mte = new MerkleTreeExtension(0, 0, std::vector<int8_t>());
-    if (mte == nullptr) {
-        PrintErrorNumberMsg("VERIFY_ERROR", VERIFY_ERROR, "system failed to allocate memory for MerkleTreeExtension");
-        return false;
-    }
+    MerkleTreeExtension defaultMte(0, 0, std::vector<int8_t>());
+    MerkleTreeExtension* mte = &defaultMte;
     if (ext != nullptr) {
-        delete mte;
         mte = static_cast<MerkleTreeExtension*>(ext);
-    } else {
-        std::shared_ptr<MerkleTreeExtension> merkleTreeExt(mte);
     }
     // temporary: merkle tree offset set to zero, change to merkleTreeOffset
     bool verifyFlag = VerifySingleFile(hap, dataSize, signature, mte->GetMerkleTreeOffset(),
@@ -191,11 +185,11 @@ bool VerifyCodeSignature::GenerateCodeSignBlock(const std::string& file, int64_t
     // 1.1) skip data part, but fileReadOffset remains at start(0)
     signedHap.seekg(offset, std::ios::beg);
     // 1.2) parse codeSignBlockHeader
-    std::vector<char> codeSignBlockHeaderByteArray(CodeSignBlockHeader::Size());
-    signedHap.read(codeSignBlockHeaderByteArray.data(), codeSignBlockHeaderByteArray.size());
+    std::vector<int8_t> codeSignBlockHeaderByteArray(CodeSignBlockHeader::Size());
+    signedHap.read(reinterpret_cast<char*>(codeSignBlockHeaderByteArray.data()), codeSignBlockHeaderByteArray.size());
     fileReadOffset += signedHap.gcount();
     CodeSignBlockHeader* pCodeSignBlockHeader =
-        CodeSignBlockHeader::FromByteArray(*(std::vector<int8_t>*) &codeSignBlockHeaderByteArray);
+        CodeSignBlockHeader::FromByteArray(codeSignBlockHeaderByteArray);
     if (pCodeSignBlockHeader == nullptr) {
         SIGNATURE_TOOLS_LOGE("Invalid code Sign block header");
         signedHap.close();
@@ -212,10 +206,10 @@ bool VerifyCodeSignature::GenerateCodeSignBlock(const std::string& file, int64_t
     }
     // 2) parse segment headers
     for (int i = 0; i < csb.GetCodeSignBlockHeader().GetSegmentNum(); i++) {
-        std::vector<char> segmentHeaderByteArray(SegmentHeader::SEGMENT_HEADER_LENGTH);
-        signedHap.read(segmentHeaderByteArray.data(), segmentHeaderByteArray.size());
+        std::vector<int8_t> segmentHeaderByteArray(SegmentHeader::SEGMENT_HEADER_LENGTH);
+        signedHap.read(reinterpret_cast<char*>(segmentHeaderByteArray.data()), segmentHeaderByteArray.size());
         fileReadOffset += signedHap.gcount();
-        csb.AddToSegmentList(*SegmentHeader::FromByteArray(*(std::vector<int8_t> *) &segmentHeaderByteArray));
+        csb.AddToSegmentList(*SegmentHeader::FromByteArray(segmentHeaderByteArray));
     }
     // compute merkle tree offset by alignment, based on file start
     int64_t computedTreeOffset = GetAlignmentAddr(CodeSignBlock::PAGE_SIZE_4K, fileReadOffset + offset);
@@ -232,7 +226,7 @@ bool VerifyCodeSignature::GenerateCodeSignBlock(const std::string& file, int64_t
 }
 
 bool VerifyCodeSignature::ParseSegmentHead(CodeSignBlock& csb, std::ifstream& signedHap,
-    std::vector<char> &merkleTreeBytes, int32_t &fileReadOffset)
+    std::vector<int8_t> &merkleTreeBytes, int32_t &fileReadOffset)
 {
     for (auto& segmentHeader : csb.GetSegmentHeaderList()) {
         if (fileReadOffset > segmentHeader.GetSegmentOffset()) {
@@ -242,26 +236,26 @@ bool VerifyCodeSignature::ParseSegmentHead(CodeSignBlock& csb, std::ifstream& si
         // get merkle tree bytes
         if (fileReadOffset < segmentHeader.GetSegmentOffset()) {
             merkleTreeBytes.resize(segmentHeader.GetSegmentOffset() - fileReadOffset);
-            signedHap.read(merkleTreeBytes.data(), merkleTreeBytes.size());
+            signedHap.read(reinterpret_cast<char*>(merkleTreeBytes.data()), merkleTreeBytes.size());
             fileReadOffset += signedHap.gcount();
         }
-        std::vector<char> sh(segmentHeader.GetSegmentSize(), 0);
-        signedHap.read(sh.data(), sh.size());
+        std::vector<int8_t> sh(segmentHeader.GetSegmentSize(), 0);
+        signedHap.read(reinterpret_cast<char*>(sh.data()), sh.size());
         fileReadOffset += signedHap.gcount();
         int32_t type = segmentHeader.GetType();
         if (type == SegmentHeader::CSB_FSVERITY_INFO_SEG) {
             // 3) parse fs-verity info segment
             FsVerityInfoSegment fsVerityInfoSegment =
-                FsVerityInfoSegment::FromByteArray(*(std::vector<int8_t> *) & sh);
+                FsVerityInfoSegment::FromByteArray(sh);
             csb.SetFsVerityInfoSegment(fsVerityInfoSegment);
         } else if (type == SegmentHeader::CSB_HAP_META_SEG) {
             // 4) parse hap info segment
-            HapInfoSegment hapInfoSegment = HapInfoSegment::FromByteArray(*(std::vector<int8_t> *) & sh);
+            HapInfoSegment hapInfoSegment = HapInfoSegment::FromByteArray(sh);
             csb.SetHapInfoSegment(hapInfoSegment);
         } else if (type == SegmentHeader::CSB_NATIVE_LIB_INFO_SEG) {
             // 5) parse so info segment
             NativeLibInfoSegment nativeLibInfoSegment =
-                NativeLibInfoSegment::FromByteArray(*(std::vector<int8_t> *) & sh);
+                NativeLibInfoSegment::FromByteArray(sh);
             csb.SetSoInfoSegment(nativeLibInfoSegment);
         }
     }
@@ -272,7 +266,7 @@ bool VerifyCodeSignature::ParseSegmentHead(CodeSignBlock& csb, std::ifstream& si
 bool VerifyCodeSignature::ParseMerkleTree(CodeSignBlock& csb, int32_t readOffset, std::ifstream& signedHap,
                                           int64_t computedTreeOffset)
 {
-    std::vector<char> merkleTreeBytes;
+    std::vector<int8_t> merkleTreeBytes;
     int32_t fileReadOffset = readOffset;
     bool parseFlag = ParseSegmentHead(csb, signedHap, merkleTreeBytes, fileReadOffset);
     if (!parseFlag) {
@@ -300,7 +294,7 @@ bool VerifyCodeSignature::ParseMerkleTree(CodeSignBlock& csb, int32_t readOffset
             PrintErrorNumberMsg("VERIFY_ERROR", VERIFY_ERROR, "Invalid merkle tree offset or tree size");
             return false;
         }
-        csb.AddOneMerkleTree(CodeSigning::HAP_SIGNATURE_ENTRY_NAME, *(std::vector<int8_t> *) &merkleTreeBytes);
+        csb.AddOneMerkleTree(CodeSigning::HAP_SIGNATURE_ENTRY_NAME, merkleTreeBytes);
     }
     return true;
 }

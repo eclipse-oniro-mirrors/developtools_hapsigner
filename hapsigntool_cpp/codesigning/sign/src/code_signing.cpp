@@ -431,8 +431,6 @@ bool CodeSigning::DoNativeLibVerify(std::string fileName, std::stringbuf& sb,
         if (!verifyFlag) {
             return false;
         }
-        std::ifstream* inputFile = (std::ifstream*)(&input);
-        inputFile->close();
         std::pair<std::string, std::string> pairResult = param.GetPairResult();
         bool checkOwnerIDFlag = CmsUtils::CheckOwnerID(entrySigStr, pairResult.first, pairResult.second);
         if (!checkOwnerIDFlag) {
@@ -454,10 +452,9 @@ bool CodeSigning::DoNativeLibSignOrVerify(std::string fileName, std::stringbuf& 
         if (!signFileFlag) {
             return false;
         }
-        m_mutex.lock();
+        std::lock_guard<std::mutex> lock(m_mutex);
         std::vector<std::pair<std::string, SignInfo>> &ret = param.GetRet();
         ret.push_back(std::make_pair(fileName, pairSignInfoAndMerkleTreeBytes.first));
-        m_mutex.unlock();
     } else {
         bool flag = DoNativeLibVerify(fileName, sb, param, readFileSize);
         if (!flag) {

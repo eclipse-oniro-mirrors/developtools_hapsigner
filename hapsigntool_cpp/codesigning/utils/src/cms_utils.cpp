@@ -55,7 +55,7 @@ bool CmsUtils::CheckOwnerID(const std::string& signature, const std::string& pro
     if (signerInfosk == nullptr) {
         PKCS7_free(p7);
         PrintErrorNumberMsg("INVALIDPARAM_ERROR", INVALIDPARAM_ERROR, "can't get signerinfo from pkcs7");
-        return true;
+        return false;
     }
     for (int i = 0; i < sk_PKCS7_SIGNER_INFO_num(signerInfosk); i++) {
         PKCS7_SIGNER_INFO* signerInfo = sk_PKCS7_SIGNER_INFO_value(signerInfosk, i);

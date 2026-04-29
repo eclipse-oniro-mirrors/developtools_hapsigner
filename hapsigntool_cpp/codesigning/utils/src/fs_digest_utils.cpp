@@ -22,14 +22,20 @@ void DigestUtils::AddData(const std::string &data)
 
 void DigestUtils::AddData(const char* data, int length)
 {
+    if (m_ctx == nullptr) {
+        SIGNATURE_TOOLS_LOGE("Digest context is null!");
+    }
     int ret = EVP_DigestUpdate(m_ctx, data, length);
     if (ret < 1) {
-        printf("Update DigestFunc failed!\n");
+        SIGNATURE_TOOLS_LOGE("Update DigestFunc failed!");
     }
 }
 
 std::string DigestUtils::Result(DigestUtils::Type type)
 {
+    if (m_ctx == nullptr) {
+        SIGNATURE_TOOLS_LOGE("Digest context is null!");
+    }
     unsigned int len = 0;
 
     const std::map<HashType, int> hashLength = {
@@ -40,7 +46,7 @@ std::string DigestUtils::Result(DigestUtils::Type type)
     unsigned char* md = reinterpret_cast<unsigned char*>(new char[hashLength.at(m_type)]);
     int ret = EVP_DigestFinal_ex(m_ctx, md, &len);
     if (ret < 1) {
-        printf("Failed to Calculate Hash Relsult\n");
+        SIGNATURE_TOOLS_LOGE("Failed to Calculate Hash Relsult");
     }
     int temporaryVariableFirst = 2;
     if (type == Type::HEX) {
@@ -64,6 +70,9 @@ DigestUtils::DigestUtils(HashType type)
 {
     m_type = type;
     m_ctx = EVP_MD_CTX_new();
+    if (m_ctx == nullptr) {
+        SIGNATURE_TOOLS_LOGE("EVP_MD_CTX_new failed");
+    }
 
     const std::map<HashType, hashFunc> hashMethods = {
         {HASH_SHA256, EVP_sha256},
@@ -72,7 +81,7 @@ DigestUtils::DigestUtils(HashType type)
 
     int ret = EVP_DigestInit_ex(m_ctx, hashMethods.at(type)(), nullptr);
     if (ret < 1) {
-        printf("Init DigestFunc failed!\n");
+        SIGNATURE_TOOLS_LOGE("Init DigestFunc failed!");
     }
 }
 
