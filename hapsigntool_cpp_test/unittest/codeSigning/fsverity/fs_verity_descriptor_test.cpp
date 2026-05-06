@@ -393,11 +393,12 @@ HWTEST_F(FsVerityDescriptorTest, WriteBytesWithSize, testing::ext::TestSize.Leve
     FsVerityDescriptor fsVerityDescriptor = builder.Build();
 
     std::unique_ptr<ByteBuffer> buffer = std::make_unique<ByteBuffer>(64);
+    int pos = buffer->GetPosition();
     std::vector<int8_t> src = { 1, 1, 1, 1, 1, 1, 1, 1 };
     fsVerityDescriptor.WriteBytesWithSize(buffer.get(), src, 4);
-    int32_t size = src.size();
+    int newPos = buffer->GetPosition();
 
-    EXPECT_EQ(size, 8);
+    EXPECT_EQ((newPos - pos), 4);
 }
 } // namespace SignatureTools
 } // namespace OHOS
