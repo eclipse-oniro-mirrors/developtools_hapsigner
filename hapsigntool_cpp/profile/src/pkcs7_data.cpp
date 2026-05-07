@@ -522,7 +522,7 @@ int PKCS7Data::Pkcs7SignAttr(PKCS7_SIGNER_INFO* info)
     int sigLen = 0;
 
     int attrLen = ASN1_item_i2d(reinterpret_cast<ASN1_VALUE*>(info->auth_attr), &attrBuf,
-                            ASN1_ITEM_rptr(PKCS7_ATTR_SIGN));
+                                ASN1_ITEM_rptr(PKCS7_ATTR_SIGN));
     if (!attrBuf) {
         OPENSSL_free(attrBuf);
         return 0;
