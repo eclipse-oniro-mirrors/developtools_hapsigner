@@ -94,7 +94,15 @@ bool VerifyElf::ParseSignBlock(const ELFIO::elfio& elfReader)
         SIGNATURE_TOOLS_LOGE("code signature section size is not aligned");
         return false;
     }
+    if (csBlockSize < sizeof(ElfSignInfo)) {
+        SIGNATURE_TOOLS_LOGE("csBlockSize is too small: %lu", csBlockSize);
+        return false;
+    }
     const ElfSignInfo* signInfo = reinterpret_cast<const ElfSignInfo*>(data);
+    if (signInfo->signSize == 0 || (signInfo->signSize > csBlockSize - sizeof(ElfSignInfo))) {
+        SIGNATURE_TOOLS_LOGE("invalid signSize: %u", signInfo->signSize);
+        return false;
+    }
     if ((signInfo->flags & FLAG_SELF_SIGN) == FLAG_SELF_SIGN) {
         PrintMsg("code signature is self-sign");
         return true;

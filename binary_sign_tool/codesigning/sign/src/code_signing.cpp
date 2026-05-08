@@ -132,11 +132,13 @@ bool CodeSigning::GetOwnerIdFromCert(std::string& ownerID)
     STACK_OF(X509)* certs = m_signConfig->GetSigner()->GetCertificates();
     if (sk_X509_num(certs) < MIN_CERT_CHAIN_SIZE) {
         SIGNATURE_TOOLS_LOGE("sign certs not a cert chain");
+        sk_X509_pop_free(certs, X509_free);
         return false;
     }
     X509* cert = sk_X509_value(certs, 0);
     X509_NAME* subject = X509_get_subject_name(cert);
     VerifyCertOpensslUtils::GetTextFromX509Name(subject, NID_organizationalUnitName, ownerID);
+    sk_X509_pop_free(certs, X509_free);
     SIGNATURE_TOOLS_LOGI("organizationalUnitName = %s.", ownerID.c_str());
     return true;
 }

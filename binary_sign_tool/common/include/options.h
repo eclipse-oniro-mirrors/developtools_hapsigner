@@ -36,7 +36,6 @@ public:
     bool Equals(const std::string& argf, const std::string& args);
     bool Required(const std::initializer_list<std::string>& keys);
     bool IsEmpty(const std::string& cs);
-    bool GetBool(const std::string& key);
     bool Exists(const std::string& key);
 
 public:

@@ -49,7 +49,7 @@ private:
     static bool GenerateCodeSignBlock(const std::string& file, int64_t offset, int64_t length,
                                       CodeSignBlock& csb);
     static bool ParseSegmentHead(CodeSignBlock& csb, std::ifstream& signedHap,
-                                 std::vector<char>& merkleTreeBytes, int32_t& fileReadOffset);
+                                 std::vector<int8_t>& merkleTreeBytes, int32_t& fileReadOffset);
     static bool ParseMerkleTree(CodeSignBlock& csb, int32_t readOffset, std::ifstream& signedHap,
                                 int64_t computedTreeOffset);
     static int64_t GetAlignmentAddr(int64_t alignment, int64_t input);

@@ -82,7 +82,7 @@ void FsVerityDescriptor::WriteBytesWithSize(ByteBuffer* buffer, std::vector<int8
     int pos = buffer->GetPosition();
     if (!src.empty()) {
         if (src.size() > size) {
-            buffer->PutData(0, src.data(), src.size());
+            buffer->PutData(src.data(), size);
         } else {
             buffer->PutData(src.data(), src.size());
         }
