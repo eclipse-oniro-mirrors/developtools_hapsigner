@@ -541,8 +541,8 @@ bool HapSignerBlockUtils::VerifyOldHapIntegrity(
 
     std::vector<OptionalBlock> filteredBlocks;
     for (const auto& block : signInfo.optionBlocks) {
-        if (block.optionalType != HapUtils::HAP_SIGNATURE_SCHEME_V1_BLOCK_ID &&
-            block.optionalType != HapUtils::ENTERPRISE_CODE_RE_SIGN_BLOCK_ID) {
+        if (block.optionalType != HAP_SIGN_BLOB &&
+            block.optionalType != ENTERPRISE_CODE_RE_SIGN_BLOB) {
             filteredBlocks.push_back(block);
         }
     }
