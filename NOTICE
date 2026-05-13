@@ -6,7 +6,7 @@ THE OPEN SOURCE SOFTWARE IN THIS SOFTWARE IS DISTRIBUTED IN THE HOPE THAT IT WIL
 Copyright Notice and License Texts
 
 ------------------------------------------------------------
-Software: The Legion of the Bouncy Castle 1.79
+Software: The Legion of the Bouncy Castle 1.82
 Path:
 License: The Legion of the Bouncy Castle License
 ------------------------------------------------------------
@@ -234,7 +234,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 
 ------------------------------------------------------------
-Software: Apache Log4j 2.23.1
+Software: Apache Log4j 2.25.4
 Path:
 License: Apache License Version 2.0, January 2004 http://www.apache.org/licenses/
 ------------------------------------------------------------
