@@ -515,15 +515,14 @@ void PKCS7Data::ClearCertChain(std::vector<X509*>& certChain) const
 int PKCS7Data::Pkcs7SignAttr(PKCS7_SIGNER_INFO* info)
 {
     unsigned char* attrBuf = NULL;
-    int attrLen;
 
     std::string data;
     std::string signature;
     unsigned char* sigRet = NULL;
     int sigLen = 0;
 
-    attrLen = ASN1_item_i2d(reinterpret_cast<ASN1_VALUE*>(info->auth_attr), &attrBuf,
-                            ASN1_ITEM_rptr(PKCS7_ATTR_SIGN));
+    int attrLen = ASN1_item_i2d(reinterpret_cast<ASN1_VALUE*>(info->auth_attr), &attrBuf,
+                                ASN1_ITEM_rptr(PKCS7_ATTR_SIGN));
     if (!attrBuf) {
         OPENSSL_free(attrBuf);
         return 0;

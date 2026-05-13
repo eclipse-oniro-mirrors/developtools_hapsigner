@@ -53,7 +53,7 @@ static bool UpdateParamForVariantCertInt(const ParamsSharedPtr& param)
                 return false;
             }
         }
-        if (!StringUtils::CheckStringToint(val, validity)) {
+        if (!StringUtils::CheckStringToInt(val, validity)) {
             PrintErrorNumberMsg("COMMAND_PARAM_ERROR", COMMAND_PARAM_ERROR, "Invalid parameter '"
                                 + val + "'");
             return false;

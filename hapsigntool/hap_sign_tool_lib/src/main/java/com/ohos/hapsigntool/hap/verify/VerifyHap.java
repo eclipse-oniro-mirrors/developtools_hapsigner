@@ -262,8 +262,7 @@ public class VerifyHap {
             List<SigningBlock> optionalBlocks = blockPair.getSecond();
             Collections.reverse(optionalBlocks);
             if (!checkCodeSign(hapFilePath, optionalBlocks)) {
-                String errMsg = "code sign verify failed";
-                return new VerifyResult(false, VerifyResult.RET_CODESIGN_DATA_ERROR, errMsg);
+                return new VerifyResult(false, VerifyResult.RET_CODESIGN_DATA_ERROR, "code sign verify failed");
             }
             HapVerify verifyEngine = getHapVerify(hapFile, zipInfo, hapSigningBlockAndOffsetInFile,
                     signatureSchemeBlock, optionalBlocks);
