@@ -18,6 +18,7 @@ package com.ohos.hapsigntool.signer;
 import java.security.cert.X509CRL;
 import java.security.cert.X509Certificate;
 import java.security.spec.AlgorithmParameterSpec;
+import java.util.Date;
 import java.util.List;
 
 /**
@@ -50,4 +51,12 @@ public interface ISigner {
      */
     List<X509Certificate> getCertificates();
 
+    /**
+     * Get the signing timestamp.
+     *
+     * @return Date object of current time.
+     */
+    default Date getSignTime() {
+        return new Date();
+    }
 }
