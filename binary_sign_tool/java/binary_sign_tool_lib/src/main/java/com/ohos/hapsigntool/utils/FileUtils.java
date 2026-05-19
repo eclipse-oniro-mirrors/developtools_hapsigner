@@ -28,6 +28,10 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.attribute.PosixFilePermission;
+import java.util.Set;
 
 /**
  * Common file operation.
@@ -192,5 +196,25 @@ public final class FileUtils {
     public static FileInputStream openInputStream(File file) throws IOException {
         isValidFile(file);
         return new FileInputStream(file);
+    }
+
+    /**
+     * copy permission (cross-filesystem)
+     */
+    public static void copyPermissions(Path source, Path target) throws IOException {
+        //  POSIX（Linux/macOS）
+        try {
+            Set<PosixFilePermission> perms = Files.getPosixFilePermissions(source);
+            Files.setPosixFilePermissions(target, perms);
+            return;
+        } catch (UnsupportedOperationException ignore) {
+            // Windows
+        }
+        File srcFile = source.toFile();
+        File dstFile = target.toFile();
+        if (!dstFile.setExecutable(srcFile.canExecute()) || !dstFile.setReadable(srcFile.canRead())
+            || !dstFile.setWritable(srcFile.canWrite())) {
+            LOGGER.warn("set permission failed");
+        }
     }
 }

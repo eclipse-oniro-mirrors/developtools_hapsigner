@@ -70,6 +70,7 @@ bool SignElf::Sign(SignerConfig& signerConfig, std::map<std::string, std::string
         unlink(tmpOutputFile.c_str());
         return false;
     }
+    FileUtils::CopyPermissions(inputFile, tmpOutputFile);
     return FileUtils::CopyTmpFileAndDel(tmpOutputFile, outputFile);
 }
 

@@ -32,14 +32,16 @@ import com.ohos.hapsigntool.hap.config.SignerConfig;
 import com.ohos.hapsigntool.profile.ProfileSignTool;
 import com.ohos.hapsigntool.signer.ISigner;
 import com.ohos.hapsigntool.utils.CompareElf;
+import com.ohos.hapsigntool.utils.FileUtils;
 import com.ohos.hapsigntool.utils.LogUtils;
 
 import java.io.File;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
 import java.nio.channels.FileChannel;
 import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.util.Map;
 
@@ -81,13 +83,13 @@ public class SignElf {
     private static class SigningContext {
         private final File inputFile;
 
-        private final String inputPath;
+        private final Path inputPath;
 
-        private final String outputPath;
+        private final Path outputPath;
 
         private final File tmpOutputFile;
 
-        SigningContext(File inputFile, String inputPath, String outputPath, File tmpOutputFile) {
+        SigningContext(File inputFile, Path inputPath, Path outputPath, File tmpOutputFile) {
             this.inputFile = inputFile;
             this.inputPath = inputPath;
             this.outputPath = outputPath;
@@ -109,12 +111,13 @@ public class SignElf {
      */
     public boolean sign(SignerConfig signerConfig, Map<String, String> signParams) {
         boolean isSuccess = false;
-        SigningContext context = createSigningContext(signParams);
-        if (context == null) {
-            return false;
-        }
-        File tmpOutputFile = context.tmpOutputFile;
+        File tmpOutputFile = null;
         try {
+            SigningContext context = createSigningContext(signParams);
+            if (context == null) {
+                return false;
+            }
+            tmpOutputFile = context.tmpOutputFile;
             LOGGER.info("Start signing ELF file...");
             isSuccess = executeSignWorkflow(context, signerConfig, signParams);
         } catch (FsVerityDigestException e) {
@@ -137,22 +140,24 @@ public class SignElf {
                 try {
                     inputFc.close();
                 } catch (IOException e) {
-                    LOGGER.warn("Failed to close input file channel: {}", context.inputPath);
+                    LOGGER.warn("Failed to close input file channel");
                 }
             }
         }
         return isSuccess;
     }
 
-    private SigningContext createSigningContext(Map<String, String> signParams) {
-        String inputPath = signParams.get(ParamConstants.PARAM_BASIC_INPUT_FILE);
-        File inputFile = new File(inputPath);
+    private SigningContext createSigningContext(Map<String, String> signParams) throws IOException {
+        Path inputPath = Paths.get(signParams.get(ParamConstants.PARAM_BASIC_INPUT_FILE));
+        File inputFile = inputPath.toFile();
         if (!inputFile.exists() || !inputFile.isFile()) {
             LOGGER.error("Input file does not exist or is not a file: {}", inputPath);
             return null;
         }
-        String outputPath = signParams.get(ParamConstants.PARAM_BASIC_OUTPUT_FILE);
-        String tmpOutputPath = outputPath.equals(inputPath) ? inputPath + "-tmp-signed" : outputPath;
+        Path outputPath = Paths.get(signParams.get(ParamConstants.PARAM_BASIC_OUTPUT_FILE));
+        String tmpOutputPath = (Files.exists(outputPath) && Files.isSameFile(inputPath, outputPath))
+            ? inputPath + "-tmp-signed"
+            : outputPath.toString();
         return new SigningContext(inputFile, inputPath, outputPath, new File(tmpOutputPath));
     }
 
@@ -250,23 +255,20 @@ public class SignElf {
     }
 
     private boolean moveSignedOutput(SigningContext context) throws IOException {
-        File output = new File(context.outputPath);
-        if (context.outputPath.equals(context.tmpOutputFile.getPath())) {
+        Path tmpOutputFilePath = context.tmpOutputFile.toPath();
+        FileUtils.copyPermissions(context.inputPath, tmpOutputFilePath);
+        Path targetPath = context.outputPath.toRealPath();
+        if (Files.isSameFile(tmpOutputFilePath, targetPath)) {
             return true;
         }
-        try (InputStream in = Files.newInputStream(context.tmpOutputFile.toPath());
-            OutputStream out = Files.newOutputStream(output.toPath())) {
-            // buffered 64k
-            byte[] buffer = new byte[1024 * 64];
-            int bytesRead;
-            while ((bytesRead = in.read(buffer)) != -1) {
-                out.write(buffer, 0, bytesRead);
-            }
-            out.flush();
+        try {
+            Files.move(tmpOutputFilePath, targetPath, StandardCopyOption.REPLACE_EXISTING,
+                StandardCopyOption.ATOMIC_MOVE);
+            return true;
         } catch (IOException e) {
-            throw new IOException("Failed to copy file via stream", e);
+            LOGGER.info("ATOMIC_MOVE not supported : {}", e.getMessage());
         }
-        Files.delete(context.tmpOutputFile.toPath());
+        Files.move(tmpOutputFilePath, targetPath, StandardCopyOption.REPLACE_EXISTING);
         return true;
     }
 

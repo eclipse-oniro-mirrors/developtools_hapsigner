@@ -121,6 +121,7 @@ public:
     static int64_t GetFileLen(const std::string& file);
     static void DelDir(const std::string& file);
     static bool CopyTmpFileAndDel(const std::string& tmpFile, const std::string& output);
+    static bool CopyPermissions(const std::string& srcFile, const std::string& dstFile);
 };
 } // namespace SignatureTools
 } // namespace OHOS

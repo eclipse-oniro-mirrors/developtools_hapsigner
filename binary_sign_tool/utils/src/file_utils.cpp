@@ -351,19 +351,38 @@ bool FileUtils::CopyTmpFileAndDel(const std::string& tmpFile, const std::string&
         PrintErrorNumberMsg("FILE_NOT_FOUND", FILE_NOT_FOUND, "'" + tmpFile + "' open failed");
         return false;
     }
-    std::ofstream dst(output, std::ios::binary);
+    std::ofstream dst(output, std::ios::binary | std::ios::trunc);
     if (!dst) {
         PrintErrorNumberMsg("FILE_NOT_FOUND", FILE_NOT_FOUND, "'" + output + "' open failed");
         return false;
     }
-    SIGNATURE_TOOLS_LOGI("CopyTmpFileAndDel from %s to %s", tmpFile.c_str(), output.c_str());
+    SIGNATURE_TOOLS_LOGI("CopyTmpFileAndDel stream copy");
     dst << src.rdbuf();
+    if (!dst || !src) {
+        PrintErrorNumberMsg("FILE_NOT_FOUND", FILE_NOT_FOUND, "Failed to copy file from '"
+                            + tmpFile + "' to '" + output + "'");
+        return false;
+    }
 
     if (unlink(tmpFile.c_str()) != 0) {
         SIGNATURE_TOOLS_LOGE("Error: remove tmpFile");
-        return false;
     }
     SIGNATURE_TOOLS_LOGI("CopyTmpFileAndDel finish");
+    return true;
+}
+
+bool FileUtils::CopyPermissions(const std::string& srcFile, const std::string& dstFile)
+{
+    struct stat srcStat;
+    if (stat(srcFile.c_str(), &srcStat) != 0) {
+        SIGNATURE_TOOLS_LOGE("Failed to stat source file: %s", srcFile.c_str());
+        return false;
+    }
+    if (chmod(dstFile.c_str(), srcStat.st_mode) != 0) {
+        SIGNATURE_TOOLS_LOGE("Failed to chmod destination file: %s", dstFile.c_str());
+        return false;
+    }
+    SIGNATURE_TOOLS_LOGI("CopyPermissions from %s to %s, mode: %o", srcFile.c_str(), dstFile.c_str(), srcStat.st_mode);
     return true;
 }
 } // namespace SignatureTools

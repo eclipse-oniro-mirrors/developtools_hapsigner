@@ -191,16 +191,15 @@ bool CmdUtil::UpdateParamForCheckOutFile(Options* options, const std::initialize
                                     + ", parameter name '-" + key + "'");
                 return false;
             }
-            std::string charStr(realFilePath);
             std::string fileName = FileUtils::GetFileName(tmpOutFilePath);
             if (fileName.empty()) {
                 PrintErrorNumberMsg("FILE_NOT_FOUND", FILE_NOT_FOUND, "The file name cannot be empty '"
                                     + outFilePath + "', parameter name '-" + key + "'");
                 return false;
-            } else {
-                SIGNATURE_TOOLS_LOGI("UpdateParamForCheckOutFile GetFileName %s", fileName.c_str());
             }
-            (*options)[key] = charStr + "/" + fileName;
+            std::string resolvedPath = std::string(realFilePath) + "/" + fileName;
+            (*options)[key] = resolvedPath;
+            SIGNATURE_TOOLS_LOGI("UpdateParamForCheckOutFile GetFileName : %s", resolvedPath.c_str());
         }
     }
     return true;
