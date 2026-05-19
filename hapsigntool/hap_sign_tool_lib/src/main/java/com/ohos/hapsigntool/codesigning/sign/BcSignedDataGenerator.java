@@ -23,6 +23,7 @@ import com.ohos.hapsigntool.entity.Pair;
 import com.ohos.hapsigntool.entity.ContentDigestAlgorithm;
 import com.ohos.hapsigntool.entity.SignatureAlgorithm;
 import com.ohos.hapsigntool.hap.config.SignerConfig;
+import com.ohos.hapsigntool.signer.ISigner;
 import com.ohos.hapsigntool.utils.LogUtils;
 import org.bouncycastle.asn1.ASN1EncodableVector;
 import org.bouncycastle.asn1.ASN1Encoding;
@@ -129,7 +130,7 @@ public class BcSignedDataGenerator implements SignedDataGenerator {
         SignerConfig signConfig) throws CodeSignException {
         ContentDigestAlgorithm hashAlgorithm = signAlgorithm.getContentDigestAlgorithm();
         byte[] digest = computeDigest(unsignedDataDigest, hashAlgorithm.name());
-        ASN1Set authed = getPKCS9Attributes(digest);
+        ASN1Set authed = getPKCS9Attributes(signConfig.getSigner(), digest);
         byte[] codeAuthed = getEncoded(authed);
         Pair<String, ? extends AlgorithmParameterSpec> signPair = signAlgorithm.getSignatureAlgAndParams();
         byte[] signBytes = signConfig.getSigner().getSignature(codeAuthed, signPair.getFirst(), signPair.getSecond());
@@ -192,10 +193,11 @@ public class BcSignedDataGenerator implements SignedDataGenerator {
         return certificateHolder;
     }
 
-    private ASN1Set getPKCS9Attributes(byte[] digest) {
+    private ASN1Set getPKCS9Attributes(ISigner signer, byte[] digest) {
         ASN1EncodableVector table = new ASN1EncodableVector();
+        Date signTime = signer.getSignTime();
         Attribute signingTimeAttr = new Attribute(PKCSObjectIdentifiers.pkcs_9_at_signingTime,
-            new DERSet(new Time(new Date())));
+            new DERSet(new Time(signTime)));
         Attribute contentTypeAttr = new Attribute(PKCSObjectIdentifiers.pkcs_9_at_contentType,
             new DERSet(PKCSObjectIdentifiers.data));
         Attribute messageDigestAttr = new Attribute(PKCSObjectIdentifiers.pkcs_9_at_messageDigest,

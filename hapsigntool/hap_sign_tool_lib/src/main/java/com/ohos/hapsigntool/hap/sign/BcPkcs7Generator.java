@@ -21,8 +21,9 @@ import com.ohos.hapsigntool.hap.config.SignerConfig;
 import com.ohos.hapsigntool.entity.Pair;
 import com.ohos.hapsigntool.error.SignatureException;
 import com.ohos.hapsigntool.hap.verify.VerifyUtils;
-
+import com.ohos.hapsigntool.signer.ISigner;
 import com.ohos.hapsigntool.utils.LogUtils;
+
 import org.bouncycastle.asn1.ASN1EncodableVector;
 import org.bouncycastle.asn1.ASN1Encoding;
 import org.bouncycastle.asn1.ASN1Integer;
@@ -148,7 +149,7 @@ public class BcPkcs7Generator implements Pkcs7Generator {
         String jcaSignatureAlg = signatureParams.getFirst();
         MessageDigest md = MessageDigest.getInstance(contentDigestAlg.name());
         byte[] digest = md.digest(unsignedHapDigest);
-        ASN1Set authed = generatePKCS9Attributes(digest);
+        ASN1Set authed = generatePKCS9Attributes(signerConfig.getSigner(), digest);
 
         // Get sign data content from sign server
         byte[] signatureBytes = signerConfig.getSigner().getSignature(
@@ -190,15 +191,16 @@ public class BcPkcs7Generator implements Pkcs7Generator {
         }
     }
 
-    private ASN1Set generatePKCS9Attributes(byte[] digest) {
+    private ASN1Set generatePKCS9Attributes(ISigner signer, byte[] digest) {
         Hashtable<ASN1ObjectIdentifier, Attribute> tab = new Hashtable<>();
-        Attribute signTime = new Attribute(PKCSObjectIdentifiers.pkcs_9_at_signingTime,
-            new DERSet(new Time(new Date())));
+        Date signTime = signer.getSignTime();
+        Attribute signTimeAttr = new Attribute(PKCSObjectIdentifiers.pkcs_9_at_signingTime,
+            new DERSet(new Time(signTime)));
         Attribute contentType = new Attribute(PKCSObjectIdentifiers.pkcs_9_at_contentType,
             new DERSet(PKCSObjectIdentifiers.data));
         Attribute digestAtt = new Attribute(PKCSObjectIdentifiers.pkcs_9_at_messageDigest,
             new DERSet(new DEROctetString(digest)));
-        tab.put(signTime.getAttrType(), signTime);
+        tab.put(signTimeAttr.getAttrType(), signTimeAttr);
         tab.put(contentType.getAttrType(), contentType);
         tab.put(digestAtt.getAttrType(), digestAtt);
         return new DERSet(new AttributeTable(tab).toASN1EncodableVector());
