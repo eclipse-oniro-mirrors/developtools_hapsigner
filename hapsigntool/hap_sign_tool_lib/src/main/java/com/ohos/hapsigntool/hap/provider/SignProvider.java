@@ -83,6 +83,7 @@ import java.security.cert.CertificateException;
 import java.security.cert.X509CRL;
 import java.security.cert.X509Certificate;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -355,11 +356,10 @@ public abstract class SignProvider {
                         signParams.get(ParamConstants.PARAM_BASIC_COMPATIBLE_VERSION)));
                 ZipDataInput[] contents = {beforeCentralDir, centralDirectory, eocd};
                 appendCodeSignBlock(signerConfig, tmpOutput, suffix, centralDirectoryOffset, zip);
+                appendPermissionSignBlock(signerConfig, tmpOutput, zip, suffix);
                 byte[] signingBlock = SignHap.sign(contents, signerConfig, optionalBlocks);
                 long newCentralDirectoryOffset = centralDirectoryOffset + signingBlock.length;
-                if (newCentralDirectoryOffset >= UnsignedDecimalUtil.MAX_UNSIGNED_INT_VALUE) {
-                    CustomException.throwException(ERROR.ZIP_ERROR, SignToolErrMsg.SIGNED_APP_SIZE_INVALID.toString());
-                }
+                checkCentralDirectoryOffset(newCentralDirectoryOffset);
                 ZipUtils.setCentralDirectoryOffset(eocdBuffer, newCentralDirectoryOffset);
                 LOGGER.info("Generate signing block success, begin write it to output file");
 
@@ -375,6 +375,12 @@ public abstract class SignProvider {
             printErrorLog(e);
         }
         return doAfterSign(isRet, isPathOverlap, tmpOutput, output);
+    }
+
+    private void checkCentralDirectoryOffset(long centralDirectoryOffset) {
+        if (centralDirectoryOffset >= UnsignedDecimalUtil.MAX_UNSIGNED_INT_VALUE) {
+            CustomException.throwException(ERROR.ZIP_ERROR, SignToolErrMsg.SIGNED_APP_SIZE_INVALID.toString());
+        }
     }
 
     /**
@@ -443,13 +449,16 @@ public abstract class SignProvider {
             ZipDataInput beforeCentralDir = srcHapFile.slice(0, offset);
             ZipDataInput centralDirectory = srcHapFile.slice(zipInfo.getCentralDirectoryOffset(),
                     zipInfo.getCentralDirectorySize());
-            appendResignCodeSignBlock(signerConfig, tmpOutput, "hap", offset, new Zip(tmpOutput));
+            Zip zip = new Zip(tmpOutput);
+            appendResignCodeSignBlock(signerConfig, tmpOutput, "hap", offset, zip);
+            // enterprise resign enable code sign default
+            signParams.put(ParamConstants.PARAM_SIGN_CODE,
+                    ParamConstants.SignCodeFlag.ENABLE_SIGN_CODE.getSignCodeFlag());
+            appendPermissionSignBlock(signerConfig, tmpOutput, zip, "hap");
             ZipDataInput[] contents = {beforeCentralDir, centralDirectory, new ByteBufferZipDataInput(eocd)};
             byte[] reSignEnterpriseAppBytes = SignHap.reSignEnterpriseApp(contents, signerConfig, optionalBlocks);
             long newCentralDirectoryOffset = offset + reSignEnterpriseAppBytes.length;
-            if (newCentralDirectoryOffset >= UnsignedDecimalUtil.MAX_UNSIGNED_INT_VALUE) {
-                CustomException.throwException(ERROR.ZIP_ERROR, SignToolErrMsg.SIGNED_APP_SIZE_INVALID.toString());
-            }
+            checkCentralDirectoryOffset(newCentralDirectoryOffset);
             ZipUtils.setCentralDirectoryOffset(eocd, newCentralDirectoryOffset);
             outputSignedFile(outputHap, offset, reSignEnterpriseAppBytes, centralDirectory, eocd);
         }
@@ -545,6 +554,102 @@ public abstract class SignProvider {
             CustomException.throwException(ERROR.VERIFY_ERROR,
                     SignToolErrMsg.VERIFY_PROFILE_FAILED.toString(e.getMessage()));
         }
+    }
+
+    private void appendPermissionSignBlock(SignerConfig signerConfig, File tmpOutput, Zip zip, String suffix)
+            throws SignatureException, IOException {
+        String permissionSigningFlag = signParams.get(ParamConstants.PARAM_PERMISSION_SIGN);
+        String codeFlag = signParams.get(ParamConstants.PARAM_SIGN_CODE);
+        if (!ParamConstants.PermissionSigningFlag.ENABLE.val().equals(permissionSigningFlag)
+                || !ParamConstants.SignCodeFlag.ENABLE_SIGN_CODE.getSignCodeFlag().equals(codeFlag)) {
+            return;
+        }
+        if (!StringUtils.containsIgnoreCase(CodeSigning.SUPPORT_FILE_FORM, suffix)) {
+            LOGGER.info("no need to sign permission for: {}", suffix);
+            return;
+        }
+        LOGGER.info("Start permission signing.");
+        Pair<byte[], byte[]> moduleAndShareFileFromHap = HapUtils.findModuleAndShareFileFromHap(tmpOutput, zip);
+        byte[] moduleContent = moduleAndShareFileFromHap.getFirst();
+        if (moduleContent == null) {
+            LOGGER.info("Input file is not a stage hap, no need to do permission signing.");
+            return;
+        }
+        if (moduleContent.length == 0) {
+            LOGGER.info("Empty module.json, no need to do permission signing.");
+            return;
+        }
+        byte[] shareFilesContent = moduleAndShareFileFromHap.getSecond();
+        Pair<Integer, SigningBlock> codeSignBlockAndIndex = findCodeSignBlockAndIndex();
+        byte[] codeSignBytes = Optional.ofNullable(codeSignBlockAndIndex).map(Pair::getSecond)
+                .map(block -> {
+                    byte[] value = block.getValue();
+                    return Arrays.copyOfRange(value, HapUtils.OPTIONAL_SUB_BLOCK_HEADER_SIZE, value.length);
+                }).orElse(new byte[0]);
+        SignHap.PermissionSignContent content = new SignHap.PermissionSignContent(
+                profileContent.getBytes(StandardCharsets.UTF_8), codeSignBytes, moduleContent, shareFilesContent);
+        byte[] permissionSigningBytes = SignHap.generatePermissionSigningBlock(signerConfig, content);
+        byte[] permissionSigningBlock = packagePermissionBlock(permissionSigningBytes, codeSignBlockAndIndex);
+        SigningBlock newPropertyBlock;
+        if (codeSignBlockAndIndex != null && codeSignBlockAndIndex.getSecond() != null) {
+            int index = codeSignBlockAndIndex.getFirst();
+            SigningBlock signingBlock = codeSignBlockAndIndex.getSecond();
+            // append permission signing block
+            byte[] codeSign = signingBlock.getValue();
+            byte[] result = new byte[codeSign.length + permissionSigningBlock.length];
+            System.arraycopy(codeSign, 0, result, 0, codeSign.length);
+            System.arraycopy(permissionSigningBlock, 0, result, codeSign.length, permissionSigningBlock.length);
+            newPropertyBlock = new SigningBlock(signingBlock.getType(), result);
+            optionalBlocks.remove(index);
+            optionalBlocks.add(index, newPropertyBlock);
+        } else {
+            newPropertyBlock = new SigningBlock(HapUtils.HAP_PROPERTY_BLOCK_ID, permissionSigningBlock);
+            optionalBlocks.add(0, newPropertyBlock);
+        }
+    }
+
+    private byte[] packagePermissionBlock(byte[] permissionSigningBytes,
+            Pair<Integer, SigningBlock> codeSignBlockAndIndex) {
+        int permissionBlockSize = permissionSigningBytes.length + HapUtils.OPTIONAL_SUB_BLOCK_HEADER_SIZE;
+        int offset = HapUtils.OPTIONAL_SUB_BLOCK_HEADER_SIZE;
+        if (codeSignBlockAndIndex != null && codeSignBlockAndIndex.getSecond() != null) {
+            offset += codeSignBlockAndIndex.getSecond().getValue().length;
+        }
+        ByteBuffer buffer = ByteBuffer.allocate(permissionBlockSize);
+        buffer.order(ByteOrder.LITTLE_ENDIAN);
+        buffer.putInt(HapUtils.HAP_PERMISSION_SIGN_BLOCK_ID);
+        buffer.putInt(permissionSigningBytes.length);
+        buffer.putInt(offset);
+        buffer.put(permissionSigningBytes);
+        byte[] permissionSigningBlock = null;
+        if (buffer.hasArray()) {
+            permissionSigningBlock = buffer.array();
+        } else {
+            buffer.flip();
+            permissionSigningBlock = new byte[buffer.remaining()];
+            buffer.get(permissionSigningBlock);
+        }
+        return permissionSigningBlock;
+    }
+
+    private Pair<Integer, SigningBlock> findCodeSignBlockAndIndex() {
+        // if enterprise code resign block exist, using it first.
+        Pair<Integer, SigningBlock> result = findBlockAndIndexByType(HapUtils.ENTERPRISE_CODE_RE_SIGN_BLOCK_ID);
+        if (result != null) {
+            return result;
+        }
+        return findBlockAndIndexByType(HapUtils.HAP_PROPERTY_BLOCK_ID);
+    }
+
+    private Pair<Integer, SigningBlock> findBlockAndIndexByType(int type) {
+        int size = optionalBlocks.size();
+        for (int i = 0; i < size; i++) {
+            SigningBlock signingBlock = optionalBlocks.get(i);
+            if (signingBlock != null && signingBlock.getType() == type) {
+                return Pair.create(i, signingBlock);
+            }
+        }
+        return null;
     }
 
     /**
@@ -894,6 +999,7 @@ public abstract class SignProvider {
                 ParamConstants.PARAM_LOCAL_PUBLIC_CERT,
                 ParamConstants.PARAM_BASIC_COMPATIBLE_VERSION,
                 ParamConstants.PARAM_SIGN_CODE,
+                ParamConstants.PARAM_PERMISSION_SIGN,
                 ParamConstants.PARAM_IN_FORM
         };
         Set<String> paramSet = ParamProcessUtil.initParamField(paramFileds);
@@ -912,6 +1018,26 @@ public abstract class SignProvider {
         checkSignCode();
         checkSignatureAlg();
         checkSignAlignment();
+        checkPermissionSigning();
+    }
+
+    /**
+     * Check permission signing, if param do not contains permission signing using default value "1".
+     *
+     * @throws InvalidParamsException invalid param
+     */
+    protected void checkPermissionSigning() throws InvalidParamsException {
+        if (!signParams.containsKey(ParamConstants.PARAM_PERMISSION_SIGN)) {
+            signParams.put(ParamConstants.PARAM_PERMISSION_SIGN,
+                    ParamConstants.PermissionSigningFlag.ENABLE.val());
+            return;
+        }
+        String permissionSigning = signParams.get(ParamConstants.PARAM_PERMISSION_SIGN);
+        if (!ParamConstants.PermissionSigningFlag.ENABLE.val().equals(permissionSigning)
+                && !ParamConstants.PermissionSigningFlag.DISABLE.val().equals(permissionSigning)) {
+            throw new InvalidParamsException(SignToolErrMsg.PARAM_CHECK_FAILED
+                    .toString(ParamConstants.PARAM_PERMISSION_SIGN, "Invalid parameter"));
+        }
     }
 
     /**

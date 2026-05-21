@@ -15,32 +15,49 @@
 
 package com.ohos.hapsigntool.hap.utils;
 
+import com.google.gson.JsonObject;
+import com.google.gson.JsonPrimitive;
+import com.google.gson.JsonSyntaxException;
 import com.ohos.hapsigntool.entity.Pair;
+import com.ohos.hapsigntool.error.HapFormatException;
+import com.ohos.hapsigntool.hap.entity.PermissionDigestItem;
 import com.ohos.hapsigntool.hap.entity.SigningBlock;
 import com.ohos.hapsigntool.error.SignatureNotFoundException;
 import com.ohos.hapsigntool.entity.ContentDigestAlgorithm;
+import com.ohos.hapsigntool.hap.sign.SignHap;
+import com.ohos.hapsigntool.utils.FileUtils;
 import com.ohos.hapsigntool.utils.LogUtils;
+import com.ohos.hapsigntool.utils.StringUtils;
 import com.ohos.hapsigntool.zip.MessageDigestZipDataOutput;
+import com.ohos.hapsigntool.zip.Zip;
 import com.ohos.hapsigntool.zip.ZipDataInput;
 import com.ohos.hapsigntool.zip.ZipDataOutput;
+import com.ohos.hapsigntool.zip.ZipEntry;
+import com.ohos.hapsigntool.zip.ZipEntryData;
+import com.ohos.hapsigntool.zip.ZipEntryHeader;
 import com.ohos.hapsigntool.zip.ZipFileInfo;
 
+import com.ohos.hapsigntool.zip.ZipUtils;
 import org.bouncycastle.util.Arrays;
 
 import java.io.ByteArrayOutputStream;
+import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.nio.charset.StandardCharsets;
 import java.security.DigestException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -85,6 +102,11 @@ public class HapUtils {
      * ID of property block
      */
     public static final int HAP_CODE_SIGN_BLOCK_ID = 0x30000001;
+
+    /**
+     * ID of permission signing block
+     */
+    public static final int HAP_PERMISSION_SIGN_BLOCK_ID = 0x30000002;
 
     /**
      * The size of data block used to get digest
@@ -158,6 +180,11 @@ public class HapUtils {
     public static final int HAP_SIG_BLOCK_MIN_SIZE = HAP_SIG_BLOCK_HEADER_SIZE;
 
     /**
+     * Size of optional sub-block header size
+     */
+    public static final int OPTIONAL_SUB_BLOCK_HEADER_SIZE = 12;
+
+    /**
      * hap block size
      */
     public static final int BLOCK_SIZE = 8;
@@ -166,6 +193,16 @@ public class HapUtils {
      * Minimum api version for hap sign schema v3.
      */
     public static final int MIN_COMPATIBLE_VERSION_FOR_SCHEMA_V3 = 8;
+
+    /**
+     * The entry name of module JSON file.
+     */
+    public static final String HAP_MODULE_ENTRY_NAME = "module.json";
+
+    /**
+     * Magic word of hap permission signing block. {0x7d, 0x6a, 0x03, (byte) 0x93, 0x0f, 0x45, (byte) 0xe2, 0x28}
+     */
+    private static final long HAP_PERMISSION_SIGNING_BLOCK_MAGIC = 0x28e2450f93036a7dL;
 
     /**
      * The set of IDs of optional blocks in hap signature block.
@@ -190,6 +227,11 @@ public class HapUtils {
     private static final int BUFFER_LENGTH = 4096;
     private static final char[] HEX_CHAR_ARRAY = "0123456789ABCDEF".toCharArray();
 
+    private static final int PERMISSION_DIGEST_TYPE_PROFILE = 0x01;
+    private static final int PERMISSION_DIGEST_TYPE_MODULE_JSON = 0x02;
+    private static final int PERMISSION_DIGEST_TYPE_CODE_SIGN = 0x03;
+    private static final int PERMISSION_DIGEST_TYPE_SHARE_FILES = 0x04;
+
     /**
      * The set of IDs of optional blocks in hap signature block.
      */
@@ -204,6 +246,15 @@ public class HapUtils {
     }
 
     private HapUtils() {
+    }
+
+    /**
+     * Get magic word of hap permission signing block.
+     *
+     * @return magic word of hap permission signing block
+     */
+    public static long getHapPermissionSigningBlockMagic() {
+        return HAP_PERMISSION_SIGNING_BLOCK_MAGIC;
     }
 
     /**
@@ -532,6 +583,159 @@ public class HapUtils {
                 .order(ByteOrder.LITTLE_ENDIAN);
         LOGGER.info("Find Hap Signing Block success, version: {}, block count: {}", version, blockCount);
         return new HapSignBlockInfo(hapSigningBlockOffset, version, hapSigningBlockByteBuffer);
+    }
+
+    /**
+     * Calculate permission content digest list.
+     *
+     * @param alg digest alg
+     * @param permissionSignContent permission content
+     * @return permission content digest
+     * @throws DigestException if calculating digest error
+     */
+    public static List<PermissionDigestItem> calculatePermissionDigest(ContentDigestAlgorithm alg,
+            SignHap.PermissionSignContent permissionSignContent) throws DigestException {
+        List<PermissionDigestItem> permissionDigestItems = new ArrayList<>();
+        byte[] profileContent = permissionSignContent.getProfileContent();
+        if (profileContent != null && profileContent.length > 0) {
+            permissionDigestItems.add(generateDigestItem(alg.getDigestAlgorithm(),
+                    PERMISSION_DIGEST_TYPE_PROFILE, profileContent));
+        }
+        byte[] moduleJsonContent = permissionSignContent.getModuleJsonContent();
+        if (moduleJsonContent != null && moduleJsonContent.length > 0) {
+            permissionDigestItems.add(generateDigestItem(alg.getDigestAlgorithm(),
+                    PERMISSION_DIGEST_TYPE_MODULE_JSON, moduleJsonContent));
+        }
+        byte[] codeSignContent = permissionSignContent.getCodeSignContent();
+        if (codeSignContent != null && codeSignContent.length > 0) {
+            permissionDigestItems.add(generateDigestItem(alg.getDigestAlgorithm(),
+                    PERMISSION_DIGEST_TYPE_CODE_SIGN, codeSignContent));
+        }
+        byte[] shareFilesContent = permissionSignContent.getShareFilesContent();
+        if (shareFilesContent != null && shareFilesContent.length > 0) {
+            permissionDigestItems.add(generateDigestItem(alg.getDigestAlgorithm(),
+                    PERMISSION_DIGEST_TYPE_SHARE_FILES, shareFilesContent));
+        }
+        return permissionDigestItems;
+    }
+
+    /**
+     * Transfer permission content digest list to binary array.
+     *
+     * @param list permission content digest list
+     * @return permission content digest binary array
+     * @throws IOException if an I/O error occurs
+     */
+    public static byte[] transferPermissionDigestToBytes(List<PermissionDigestItem> list) throws IOException {
+        int size = 0;
+        List<byte[]> bytesList = new ArrayList<>();
+        for (PermissionDigestItem permissionDigestItem : list) {
+            byte[] byteArray = permissionDigestItem.toByteArray();
+            bytesList.add(byteArray);
+            size += byteArray.length;
+        }
+        ByteBuffer byteBuffer = ByteBuffer.allocate(size);
+        for (byte[] bytes : bytesList) {
+            byteBuffer.put(bytes);
+        }
+        if (byteBuffer.hasArray()) {
+            return byteBuffer.array();
+        }
+        byteBuffer.flip();
+        byte[] result = new byte[byteBuffer.remaining()];
+        byteBuffer.get(result);
+        return result;
+    }
+
+    private static PermissionDigestItem generateDigestItem(String digestAlg, int type, byte[] content)
+            throws DigestException {
+        try {
+            MessageDigest messageDigest = MessageDigest.getInstance(digestAlg);
+            byte[] digest = messageDigest.digest(content);
+            return new PermissionDigestItem(type, digest);
+        } catch (NoSuchAlgorithmException e) {
+            throw new DigestException("Digest algorithm not supported", e);
+        }
+    }
+
+    /**
+     * Find module.json or shareFiles content if existed.
+     *
+     * @param inputHap input hap file
+     * @param zip zip file info
+     * @return module.json or shareFiles content if existed
+     * @throws IOException if an I/O error has occurred
+     */
+    public static Pair<byte[], byte[]> findModuleAndShareFileFromHap(File inputHap, Zip zip)
+            throws IOException, HapFormatException {
+        List<ZipEntry> zipEntries = zip.getZipEntries();
+        Optional<ZipEntry> module = zipEntries.stream().filter(zipEntry -> {
+            String fileName = Optional.ofNullable(zipEntry).map(ZipEntry::getZipEntryData)
+                    .map(ZipEntryData::getZipEntryHeader).map(ZipEntryHeader::getFileName).orElse("");
+            return HapUtils.HAP_MODULE_ENTRY_NAME.equals(fileName);
+        }).findAny();
+        if (!module.isPresent()) {
+            LOGGER.info("Can not find module.json in hap");
+            return Pair.create(null, null);
+        }
+        String moduleEntryName = module.get().getZipEntryData().getZipEntryHeader().getFileName();
+        byte[] moduleJsonContent = ZipUtils.getZipEntryContent(moduleEntryName, inputHap);
+        if (moduleJsonContent.length == 0) {
+            throw new HapFormatException("The module.json content is empty");
+        }
+        try {
+            JsonObject jsonObject = FileUtils.GSON.fromJson(new String(moduleJsonContent, StandardCharsets.UTF_8),
+                    JsonObject.class);
+            if (jsonObject == null) {
+                return Pair.create(moduleJsonContent, null);
+            }
+            JsonObject moduleObject = jsonObject.getAsJsonObject("module");
+            if (moduleObject == null) {
+                return Pair.create(moduleJsonContent, null);
+            }
+            JsonPrimitive shareFiles = moduleObject.getAsJsonPrimitive("shareFiles");
+            if (shareFiles == null) {
+                return Pair.create(moduleJsonContent, null);
+            }
+            String shareFilesPath = shareFiles.getAsString();
+            byte[] shareFileContent = getShareFileContentFromHap(inputHap, zip, shareFilesPath);
+            return Pair.create(moduleJsonContent, shareFileContent);
+        } catch (JsonSyntaxException e) {
+            throw new HapFormatException("The module.json content is invalid json string," +
+                    " please check whether the module.json is correct", e);
+        }
+    }
+
+    private static byte[] getShareFileContentFromHap(File inputHap, Zip zip, String shareFilesPath) throws IOException {
+        LOGGER.info("shareFilesPath: {}", shareFilesPath);
+        if (!shareFilesPath.startsWith("$profile:")) {
+            LOGGER.error("invalid shared profile path");
+            return new byte[0];
+        }
+        String shareFileName = shareFilesPath.substring("$profile:".length());
+        String fullName = "resources/base/profile/" + shareFileName;
+        Optional<ZipEntry> shareFileEntry = zip.getZipEntries().stream().filter(zipEntry -> {
+            String fileName = Optional.ofNullable(zipEntry).map(ZipEntry::getZipEntryData)
+                    .map(ZipEntryData::getZipEntryHeader).map(ZipEntryHeader::getFileName).orElse("");
+            if (fileName.isEmpty()) {
+                return false;
+            }
+            if (fullName.equals(fileName)) {
+                return true;
+            }
+            String suffix = FileUtils.getSuffix(fileName);
+            if (StringUtils.isEmpty(suffix)) {
+                return false;
+            }
+            return (fullName + "." + suffix).equals(fileName);
+        }).findAny();
+        if (!shareFileEntry.isPresent()) {
+            LOGGER.warn("can not find shareFiles, path: {}", fullName);
+            return new byte[0];
+        }
+        String shareFileEntryName = shareFileEntry.get().getZipEntryData().getZipEntryHeader().getFileName();
+        LOGGER.info("shareFiles real path: {}", shareFileEntryName);
+        return ZipUtils.getZipEntryContent(shareFileEntryName, inputHap);
     }
 
     private static long verifySignBlock(long hapSigBlockSize, long hapSignBlockMagicLo,

@@ -15,16 +15,20 @@
 
 package com.ohos.hapsigntool.hap.verify;
 
+import com.ohos.hapsigntool.entity.ContentDigestAlgorithm;
 import com.ohos.hapsigntool.entity.Options;
 import com.ohos.hapsigntool.codesigning.exception.FsVerityDigestException;
 import com.ohos.hapsigntool.codesigning.exception.VerifyCodeSignException;
 import com.ohos.hapsigntool.codesigning.sign.VerifyCodeSignature;
 import com.ohos.hapsigntool.entity.Pair;
+import com.ohos.hapsigntool.entity.SignatureAlgorithm;
 import com.ohos.hapsigntool.error.SignToolErrMsg;
+import com.ohos.hapsigntool.hap.entity.PermissionDigestItem;
 import com.ohos.hapsigntool.hap.entity.SigningBlock;
 import com.ohos.hapsigntool.error.HapFormatException;
 import com.ohos.hapsigntool.error.ProfileException;
 import com.ohos.hapsigntool.error.SignatureNotFoundException;
+import com.ohos.hapsigntool.hap.sign.SignHap;
 import com.ohos.hapsigntool.utils.FileUtils;
 import com.ohos.hapsigntool.hap.utils.HapUtils;
 import com.ohos.hapsigntool.entity.ParamConstants;
@@ -33,15 +37,22 @@ import com.ohos.hapsigntool.utils.StringUtils;
 import com.ohos.hapsigntool.zip.ByteBufferZipDataInput;
 import com.ohos.hapsigntool.zip.RandomAccessFileZipDataInput;
 import com.ohos.hapsigntool.zip.UnsignedDecimalUtil;
+import com.ohos.hapsigntool.zip.Zip;
 import com.ohos.hapsigntool.zip.ZipDataInput;
 import com.ohos.hapsigntool.zip.ZipFileInfo;
 import com.ohos.hapsigntool.zip.ZipUtils;
 
+import org.bouncycastle.cert.X509CertificateHolder;
+import org.bouncycastle.cert.jcajce.JcaX509CertificateConverter;
 import org.bouncycastle.cms.CMSException;
 import org.bouncycastle.cms.CMSSignedData;
+import org.bouncycastle.cms.SignerId;
+import org.bouncycastle.cms.SignerInformation;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.bouncycastle.openssl.jcajce.JcaPEMWriter;
 import org.bouncycastle.util.Arrays;
+import org.bouncycastle.util.Store;
+import org.bouncycastle.util.encoders.Hex;
 
 import java.io.File;
 import java.io.FileWriter;
@@ -53,12 +64,24 @@ import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.security.DigestException;
+import java.security.InvalidAlgorithmParameterException;
+import java.security.InvalidKeyException;
+import java.security.NoSuchAlgorithmException;
 import java.security.Security;
+import java.security.Signature;
+import java.security.SignatureException;
+import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
+import java.security.spec.AlgorithmParameterSpec;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.StringJoiner;
 import java.util.stream.Collectors;
 
 /**
@@ -71,6 +94,7 @@ public class VerifyHap {
     private static final int ZIP_HEAD_OF_SIGNING_BLOCK_LENGTH = 32;
     private static final int ZIP_HEAD_OF_SIGNING_BLOCK_COUNT_OFFSET_REVERSE = 28;
     private static final int ZIP_HEAD_OF_SUBSIGNING_BLOCK_LENGTH = 12;
+    private static final int PERMISSION_SIGN_BLOCK_MIN_SIZE = 20;
 
     static {
         Security.addProvider(new BouncyCastleProvider());
@@ -87,6 +111,11 @@ public class VerifyHap {
     }
 
     private static String getProfileContent(byte[] profile) throws ProfileException {
+        byte[] profileContentBytes = getProfileContentBytes(profile);
+        return new String(profileContentBytes, StandardCharsets.UTF_8);
+    }
+
+    private static byte[] getProfileContentBytes(byte[] profile) throws ProfileException {
         try {
             CMSSignedData cmsSignedData = new CMSSignedData(profile);
             if (!VerifyUtils.verifyCmsSignedData(cmsSignedData)) {
@@ -97,12 +126,11 @@ public class VerifyHap {
                 throw new ProfileException(SignToolErrMsg.VERIFY_PROFILE_FAILED
                         .toString("Check profile failed, signed profile content is not byte array!"));
             }
-            return new String((byte[]) contentObj, StandardCharsets.UTF_8);
+            return (byte[]) contentObj;
         } catch (CMSException e) {
-            return new String(profile, StandardCharsets.UTF_8);
+            return profile;
         }
     }
-
 
     /**
      * Check whether parameters are valid
@@ -267,6 +295,11 @@ public class VerifyHap {
             HapVerify verifyEngine = getHapVerify(hapFile, zipInfo, hapSigningBlockAndOffsetInFile,
                     signatureSchemeBlock, optionalBlocks);
             result = verifyEngine.verify();
+            if (result.isVerified() && !verifyPermissionSign(hapFilePath, optionalBlocks, result)) {
+                // verify permission sign
+                return new VerifyResult(false, VerifyResult.RET_PERMISSION_SIGN_ERROR,
+                        "permission sign verify failed");
+            }
             result.setZipInfo(zipInfo);
             result.setHapSignBlockInfo(hapSigningBlockAndOffsetInFile);
             result.setSignBlockVersion(hapSigningBlockAndOffsetInFile.getVersion());
@@ -309,6 +342,263 @@ public class VerifyHap {
                 centralDirectoryBlock, eocdBlock, optionalBlocks);
         verifyEngine.setIsPrintCert(isPrintCert);
         return verifyEngine;
+    }
+
+    private boolean verifyPermissionSign(String hapFilePath, List<SigningBlock> optionalBlocks,
+            VerifyResult verifyResult) throws IOException, ProfileException, HapFormatException {
+        SigningBlock propertyBlock = findPropertyBlock(optionalBlocks);
+        if (propertyBlock == null) {
+            return true;
+        }
+        byte[] permissionSignBytes = findPermissionSignBytes(propertyBlock);
+        if (permissionSignBytes == null) {
+            return true;
+        }
+        ByteBuffer buffer = ByteBuffer.wrap(permissionSignBytes).order(ByteOrder.LITTLE_ENDIAN);
+        PermissionVerifyInfo permissionVerifyInfo = parsePermissionSignBlock(buffer);
+        if (permissionVerifyInfo.getMagic() != HapUtils.getHapPermissionSigningBlockMagic()) {
+            LOGGER.error("verify permission sign failed, invalid magic number: {}",
+                    Long.toString(permissionVerifyInfo.getMagic(), 16));
+            return false;
+        }
+        SignatureAlgorithm signatureAlgorithm = SignatureAlgorithm.findById(permissionVerifyInfo.getSignAlgId());
+        if (signatureAlgorithm == null) {
+            LOGGER.error("verify permission sign failed, unsupported sign alg id: {}",
+                    permissionVerifyInfo.getSignAlgId());
+            return false;
+        }
+        if (!verifyPermissionSignature(permissionVerifyInfo.getUnsignedContent(), permissionVerifyInfo.getSignature(),
+                signatureAlgorithm, verifyResult)) {
+            LOGGER.error("verify permission sign failed.");
+            return false;
+        }
+        File inputHap = new File(hapFilePath);
+        Pair<byte[], byte[]> moduleAndShareFileFromHap = HapUtils.findModuleAndShareFileFromHap(inputHap,
+                new Zip(inputHap));
+        byte[] modelContent = moduleAndShareFileFromHap.getFirst();
+        if (modelContent == null) {
+            LOGGER.error("verify permission sign failed, input file is not a stage hap.");
+            return false;
+        }
+        if (modelContent.length == 0) {
+            LOGGER.info("verify permission sign failed, empty module.json");
+            return false;
+        }
+        SignHap.PermissionSignContent permissionSignContent = generatePermissionContent(moduleAndShareFileFromHap,
+                optionalBlocks, propertyBlock);
+        if (!verifyDigestContents(permissionSignContent, permissionVerifyInfo.getDigestContent(),
+                permissionVerifyInfo.getDigestCount(), signatureAlgorithm)) {
+            LOGGER.error("verify permission sign failed, verify digest items failed.");
+            return false;
+        }
+        LOGGER.info("verify permission sign success.");
+        return true;
+    }
+
+    private PermissionVerifyInfo parsePermissionSignBlock(ByteBuffer buffer) throws HapFormatException {
+        ByteBuffer bufferCopy = buffer.slice();
+        if (buffer.remaining() < PERMISSION_SIGN_BLOCK_MIN_SIZE) {
+            throw new HapFormatException("parse permission failed, invalid permission signing block length: "
+                    + buffer.remaining());
+        }
+        PermissionVerifyInfo permissionVerifyInfo = new PermissionVerifyInfo();
+        long magic = buffer.getLong();
+        permissionVerifyInfo.setMagic(magic);
+        int signAlgId = buffer.getInt();
+        permissionVerifyInfo.setSignAlgId(signAlgId);
+        int digestLength = buffer.getInt();
+        short digestCount = buffer.getShort();
+        if (digestCount < 0) {
+            throw new HapFormatException("parse permission sign block failed, invalid digest count: " + digestCount);
+        }
+        permissionVerifyInfo.setDigestCount(digestCount);
+        if (digestLength < 0 || digestLength > buffer.remaining()) {
+            throw new HapFormatException("parse permission sign block failed, invalid digest length: " + digestLength);
+        }
+        byte[] digests = new byte[digestLength];
+        buffer.get(digests);
+        permissionVerifyInfo.setDigestContent(digests);
+        int position = buffer.position();
+        byte[] signature = getPermissionSignature(buffer);
+        permissionVerifyInfo.setSignature(signature);
+
+        byte[] unsignData = new byte[position];
+        bufferCopy.get(unsignData);
+        permissionVerifyInfo.setUnsignedContent(unsignData);
+        return permissionVerifyInfo;
+    }
+
+    private static byte[] getPermissionSignature(ByteBuffer buffer) throws HapFormatException {
+        if (buffer.remaining() < Integer.BYTES) {
+            throw new HapFormatException("parse permission signature failed, buffer remaining: "
+                    + buffer.remaining() + " is too less");
+        }
+        int signatureLength = buffer.getInt();
+        if (signatureLength < 0 || signatureLength > buffer.remaining()) {
+            throw new HapFormatException("parse permission signature failed, buffer remaining: "
+                    + buffer.remaining() + " less than signature length: " + signatureLength);
+        }
+        byte[] signature = new byte[signatureLength];
+        buffer.get(signature);
+        return signature;
+    }
+
+    private SigningBlock findPropertyBlock(List<SigningBlock> optionalBlocks) {
+        SigningBlock propertyBlock = findBlockByType(optionalBlocks, HapUtils.ENTERPRISE_CODE_RE_SIGN_BLOCK_ID);
+        if (propertyBlock == null) {
+            propertyBlock = findBlockByType(optionalBlocks, HapUtils.HAP_PROPERTY_BLOCK_ID);
+        }
+        return propertyBlock;
+    }
+
+    private SignHap.PermissionSignContent generatePermissionContent(Pair<byte[], byte[]> moduleAndShareFileFromHap,
+            List<SigningBlock> optionalBlocks, SigningBlock propertyBlock) throws IOException, ProfileException {
+        SigningBlock profileBlock = findBlockByType(optionalBlocks, HapUtils.HAP_PROFILE_BLOCK_ID);
+        byte[] profileBytes = Optional.ofNullable(profileBlock).map(SigningBlock::getValue).orElse(new byte[0]);
+        profileBytes = getProfileContentBytes(profileBytes);
+        byte[] codeSignBytes = findCodeSignBytes(propertyBlock);
+        byte[] moduleContent = moduleAndShareFileFromHap.getFirst();
+        byte[] shareFilesContent = moduleAndShareFileFromHap.getSecond();
+        return new SignHap.PermissionSignContent(profileBytes, codeSignBytes, moduleContent, shareFilesContent);
+    }
+
+    private boolean verifyPermissionSignature(byte[] unsignData, byte[] signData,
+            SignatureAlgorithm signatureAlgorithm, VerifyResult verifyResult) {
+        List<SignerInformation> signerInfos = verifyResult.getSignerInfos();
+        Store<X509CertificateHolder> certificateHolderStore = verifyResult.getCertificateHolderStore();
+        for (SignerInformation signerInfo : signerInfos) {
+            SignerId sid = signerInfo.getSID();
+            X509CertificateSelector selector = new X509CertificateSelector(sid);
+            Collection<X509CertificateHolder> matches = certificateHolderStore.getMatches(selector);
+            if (matches.isEmpty()) {
+                continue;
+            }
+            try {
+                X509CertificateHolder next = matches.iterator().next();
+                X509Certificate certificate = new JcaX509CertificateConverter().getCertificate(next);
+                Pair<String, ? extends AlgorithmParameterSpec> signatureAlgAndParams =
+                        signatureAlgorithm.getSignatureAlgAndParams();
+                Signature signature = Signature.getInstance(signatureAlgAndParams.getFirst());
+                AlgorithmParameterSpec second = signatureAlgAndParams.getSecond();
+                if (second != null) {
+                    signature.setParameter(second);
+                }
+                signature.initVerify(certificate);
+                signature.update(unsignData);
+                boolean verify = signature.verify(signData);
+                if (verify) {
+                    return true;
+                }
+            } catch (CertificateException | NoSuchAlgorithmException | InvalidKeyException | SignatureException |
+                     InvalidAlgorithmParameterException e) {
+                LOGGER.error("verify permission signature failed, msg: {}", e.getMessage());
+            }
+        }
+        return false;
+    }
+
+    private byte[] findCodeSignBytes(SigningBlock propertyBlock) throws IOException {
+        byte[] value = propertyBlock.getValue();
+        ByteBuffer buffer = ByteBuffer.wrap(value).order(ByteOrder.LITTLE_ENDIAN);
+        byte[] codeSignBytes = null;
+        while (buffer.remaining() >= HapUtils.OPTIONAL_SUB_BLOCK_HEADER_SIZE) {
+            int subBlockId = buffer.getInt();
+            int length = buffer.getInt();
+            buffer.getInt();
+            if (buffer.remaining() < length) {
+                throw new IOException("find permission sign block failed, block length "
+                        + length + ", out of buffer remaining bytes " + buffer.remaining());
+            }
+            if (subBlockId == HapUtils.HAP_CODE_SIGN_BLOCK_ID) {
+                codeSignBytes = new byte[length];
+                buffer.get(codeSignBytes);
+                break;
+            } else {
+                buffer.position(buffer.position() + length);
+            }
+        }
+        return codeSignBytes;
+    }
+
+    private boolean verifyDigestContents(SignHap.PermissionSignContent permissionSignContent, byte[] digestContents,
+            int digestCount, SignatureAlgorithm signatureAlgorithm) {
+        ContentDigestAlgorithm digestAlgorithm = signatureAlgorithm.getContentDigestAlgorithm();
+        int digestOutputByteSize = digestAlgorithm.getDigestOutputByteSize();
+        ByteBuffer byteBuffer = ByteBuffer.wrap(digestContents).order(ByteOrder.LITTLE_ENDIAN);
+        Map<Integer, byte[]> exceptDigestMap = new HashMap<>();
+        for (int i = 0; i < digestCount; i++) {
+            int digestType = byteBuffer.getInt();
+            byte[] digestBytes = new byte[digestOutputByteSize];
+            byteBuffer.get(digestBytes);
+            exceptDigestMap.put(digestType, digestBytes);
+        }
+        try {
+            List<PermissionDigestItem> permissionDigestItems = HapUtils.calculatePermissionDigest(digestAlgorithm,
+                    permissionSignContent);
+            Map<Integer, byte[]> actualDigestMap = permissionDigestItems.stream()
+                    .collect(Collectors.toMap(PermissionDigestItem::getType, PermissionDigestItem::getDigest));
+
+            for (Map.Entry<Integer, byte[]> entry : actualDigestMap.entrySet()) {
+                Integer realType = entry.getKey();
+                byte[] actualDigest = entry.getValue();
+                if (!exceptDigestMap.containsKey(realType)) {
+                    LOGGER.error("verify permission digest failed, lost digest type: {}",
+                            Integer.toString(realType, 16));
+                    return false;
+                }
+                byte[] exceptDigest = exceptDigestMap.remove(realType);
+                if (!Arrays.areEqual(actualDigest, exceptDigest)) {
+                    LOGGER.error("verify permission digest failed, type: "
+                            + Integer.toString(realType, 16) + ", excepted digest: {}, actual digest: {}",
+                            Hex.toHexString(exceptDigest), Hex.toHexString(actualDigest));
+                    return false;
+                }
+            }
+            if (!exceptDigestMap.isEmpty()) {
+                StringJoiner joiner = new StringJoiner(",");
+                exceptDigestMap.keySet().forEach(type -> {
+                    joiner.add(Integer.toString(type, 16));
+                });
+                LOGGER.error("verify permission digest failed, lost actual digest types: {}", joiner.toString());
+                return false;
+            }
+        } catch (DigestException e) {
+            LOGGER.error("calculate permission digest error, msg: {}", e.getMessage());
+            return false;
+        }
+        return true;
+    }
+
+    private byte[] findPermissionSignBytes(SigningBlock propertyBlock) throws IOException {
+        byte[] value = propertyBlock.getValue();
+        ByteBuffer buffer = ByteBuffer.wrap(value).order(ByteOrder.LITTLE_ENDIAN);
+        byte[] permissionSignBytes = null;
+        while (buffer.remaining() >= HapUtils.OPTIONAL_SUB_BLOCK_HEADER_SIZE) {
+            int subBlockId = buffer.getInt();
+            int length = buffer.getInt();
+            buffer.getInt();
+            if (buffer.remaining() < length) {
+                throw new IOException("find permission sign block failed, block length "
+                        + length + ", out of buffer remaining bytes " + buffer.remaining());
+            }
+            if (subBlockId == HapUtils.HAP_PERMISSION_SIGN_BLOCK_ID) {
+                permissionSignBytes = new byte[length];
+                buffer.get(permissionSignBytes);
+                break;
+            } else {
+                buffer.position(buffer.position() + length);
+            }
+        }
+        return permissionSignBytes;
+    }
+
+    private SigningBlock findBlockByType(List<SigningBlock> optionalBlocks, int type) {
+        for (SigningBlock signingBlock : optionalBlocks) {
+            if (signingBlock != null && signingBlock.getType() == type) {
+                return signingBlock;
+            }
+        }
+        return null;
     }
 
     /**
@@ -410,6 +700,63 @@ public class VerifyHap {
             return Pair.create(hapSigningPkcs7Block, optionalBlocks);
         } finally {
             hapSigningBlock.clear();
+        }
+    }
+
+    private static class PermissionVerifyInfo {
+        private long magic;
+        private int signAlgId;
+        private short digestCount;
+        private byte[] digestContent;
+        private byte[] unsignedContent;
+        private byte[] signature;
+
+        public long getMagic() {
+            return magic;
+        }
+
+        public void setMagic(long magic) {
+            this.magic = magic;
+        }
+
+        public int getSignAlgId() {
+            return signAlgId;
+        }
+
+        public void setSignAlgId(int signAlgId) {
+            this.signAlgId = signAlgId;
+        }
+
+        public byte[] getDigestContent() {
+            return digestContent;
+        }
+
+        public void setDigestContent(byte[] digestContent) {
+            this.digestContent = digestContent;
+        }
+
+        public byte[] getUnsignedContent() {
+            return unsignedContent;
+        }
+
+        public void setUnsignedContent(byte[] unsignedContent) {
+            this.unsignedContent = unsignedContent;
+        }
+
+        public byte[] getSignature() {
+            return signature;
+        }
+
+        public void setSignature(byte[] signature) {
+            this.signature = signature;
+        }
+
+        public short getDigestCount() {
+            return digestCount;
+        }
+
+        public void setDigestCount(short digestCount) {
+            this.digestCount = digestCount;
         }
     }
 }

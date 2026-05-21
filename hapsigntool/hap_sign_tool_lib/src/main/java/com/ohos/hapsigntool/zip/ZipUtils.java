@@ -18,10 +18,14 @@ package com.ohos.hapsigntool.zip;
 import com.ohos.hapsigntool.entity.Pair;
 import com.ohos.hapsigntool.error.HapFormatException;
 import com.ohos.hapsigntool.error.SignToolErrMsg;
+import com.ohos.hapsigntool.utils.FileUtils;
 
+import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.util.zip.ZipFile;
 
 /**
  * Utils functions of zip-files.
@@ -158,6 +162,29 @@ public class ZipUtils {
     public static int getCentralDirectoryCount(ByteBuffer eocd) {
         checkBufferIsLittleEndian(eocd);
         return getUInt16FromBuffer(eocd, eocd.position() + ZIP_CENTRAL_DIR_COUNT_OFFSET_IN_EOCD);
+    }
+
+    /**
+     * Read the specific entry content from zip file.
+     *
+     * @param entryName entry name
+     * @param zipFile input zip file
+     * @return entry content
+     * @throws IOException if an I/O error has occurred
+     */
+    public static byte[] getZipEntryContent(String entryName, File zipFile) throws IOException {
+        try (ZipFile zip = new ZipFile(zipFile)) {
+            java.util.zip.ZipEntry zipEntry = zip.getEntry(entryName);
+            if (zipEntry == null) {
+                return new byte[0];
+            }
+            try (InputStream inputStream = zip.getInputStream(zipEntry)) {
+                if (inputStream == null) {
+                    return new byte[0];
+                }
+                return FileUtils.read(inputStream);
+            }
+        }
     }
 
     private static void checkBufferIsLittleEndian(ByteBuffer buffer) {

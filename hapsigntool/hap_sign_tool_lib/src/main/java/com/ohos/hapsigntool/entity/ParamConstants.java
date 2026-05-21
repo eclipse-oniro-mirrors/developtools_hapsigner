@@ -252,6 +252,11 @@ public class ParamConstants {
     public static final String PARAM_SIGN_CODE = "signCode";
 
     /**
+     * The permission sign parameter
+     */
+    public static final String PARAM_PERMISSION_SIGN = "permSign";
+
+    /**
      * file name split . of min length
      */
     public static final int FILE_NAME_MIN_LENGTH = 2;
@@ -289,6 +294,29 @@ public class ParamConstants {
 
         public String getSignCodeFlag() {
             return signCodeFlag;
+        }
+    }
+
+    /**
+     * Enumerated of enable permission signing.
+     */
+    public enum PermissionSigningFlag {
+        DISABLE("0"),
+        ENABLE("1");
+
+        private final String val;
+
+        PermissionSigningFlag(String val) {
+            this.val = val;
+        }
+
+        /**
+         * Return enumerated value of enable permission signing.
+         *
+         * @return enumerated value of enable permission signing
+         */
+        public String val() {
+            return val;
         }
     }
 }

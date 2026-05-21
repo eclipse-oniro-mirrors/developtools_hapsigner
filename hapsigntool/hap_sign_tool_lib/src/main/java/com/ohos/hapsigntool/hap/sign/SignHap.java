@@ -20,6 +20,8 @@ import com.ohos.hapsigntool.entity.Options;
 import com.ohos.hapsigntool.entity.SignatureAlgorithm;
 import com.ohos.hapsigntool.hap.config.SignerConfig;
 import com.ohos.hapsigntool.entity.Pair;
+import com.ohos.hapsigntool.hap.entity.PermissionDigestItem;
+import com.ohos.hapsigntool.hap.entity.PermissionSignBlock;
 import com.ohos.hapsigntool.hap.entity.SigningBlock;
 import com.ohos.hapsigntool.error.SignatureException;
 import com.ohos.hapsigntool.hap.utils.HapUtils;
@@ -257,5 +259,77 @@ public abstract class SignHap {
             throw new SignatureException("Failed to compute digests of HAP", e);
         }
         return hapSignatureBytes;
+    }
+
+    /**
+     * Generate permission signing block.
+     *
+     * @param signerConfig signer config
+     * @param permissionSignContent permission contents
+     * @return permission signing block
+     * @throws SignatureException if an error occurs when sign hap permission contents.
+     */
+    public static byte[] generatePermissionSigningBlock(SignerConfig signerConfig,
+            PermissionSignContent permissionSignContent) throws SignatureException {
+        try {
+            SignatureAlgorithm signatureAlgorithm = signerConfig.getSignatureAlgorithms().get(0);
+            ContentDigestAlgorithm digestAlgorithm = signatureAlgorithm.getContentDigestAlgorithm();
+            List<PermissionDigestItem> digestList = HapUtils.calculatePermissionDigest(digestAlgorithm,
+                    permissionSignContent);
+            byte[] permissionDigest = HapUtils.transferPermissionDigestToBytes(digestList);
+            String signAlg = signatureAlgorithm.getSignatureAlgAndParams().getFirst();
+            byte[] unsignData = new PermissionSignBlock(signatureAlgorithm.getId(), permissionDigest, digestList.size(),
+                    HapUtils.getHapPermissionSigningBlockMagic()).toByteArray();
+            byte[] signature = signerConfig.getSigner().getSignature(unsignData, signAlg,
+                    signatureAlgorithm.getSignatureAlgAndParams().getSecond());
+            int capacity = unsignData.length + signature.length + OPTIONAL_LENGTH_SIZE;
+            ByteBuffer byteBuffer = ByteBuffer.allocate(capacity).order(ByteOrder.LITTLE_ENDIAN);
+            byteBuffer.put(unsignData);
+            byteBuffer.putInt(signature.length);
+            byteBuffer.put(signature);
+            if (byteBuffer.hasArray()) {
+                return byteBuffer.array();
+            }
+            byteBuffer.flip();
+            byte[] result = new byte[byteBuffer.remaining()];
+            byteBuffer.get(result);
+            return result;
+        } catch (DigestException | IOException e) {
+            throw new SignatureException("Failed to compute permission content digests", e);
+        }
+    }
+
+    /**
+     * Hap permission sign content
+     */
+    public static class PermissionSignContent {
+        private final byte[] profileContent;
+        private final byte[] codeSignContent;
+        private final byte[] moduleJsonContent;
+        private final byte[] shareFilesContent;
+
+        public PermissionSignContent(byte[] profileContent, byte[] codeSignContent, byte[] moduleJsonContent,
+                byte[] shareFilesContent) {
+            this.profileContent = profileContent;
+            this.codeSignContent = codeSignContent;
+            this.moduleJsonContent = moduleJsonContent;
+            this.shareFilesContent = shareFilesContent;
+        }
+
+        public byte[] getProfileContent() {
+            return profileContent;
+        }
+
+        public byte[] getCodeSignContent() {
+            return codeSignContent;
+        }
+
+        public byte[] getModuleJsonContent() {
+            return moduleJsonContent;
+        }
+
+        public byte[] getShareFilesContent() {
+            return shareFilesContent;
+        }
     }
 }
