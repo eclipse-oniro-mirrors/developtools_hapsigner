@@ -40,7 +40,6 @@
                 "hilog"
             ],
             "third_party": [
-                "bzip2",
                 "openssl"
             ]
         },

@@ -63,9 +63,12 @@ public:
     static const std::string PARAM_RESIGN_CONFIG_FILE;
     static const std::string PARAM_IN_FORM;
     static const std::string PARAM_SIGN_CODE;
+    static const std::string PARAM_PERM_MODE;
     static constexpr int FILE_NAME_MIN_LENGTH = 2;
     static const std::string DISABLE_SIGN_CODE;
     static const std::string ENABLE_SIGN_CODE;
+    static const std::string DISABLE_PERM_MODE;
+    static const std::string ENABLE_PERM_MODE;
 };
 } // namespace SignatureTools
 } // namespace OHOS

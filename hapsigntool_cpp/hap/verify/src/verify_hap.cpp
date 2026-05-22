@@ -32,10 +32,16 @@
 #include "param_constants.h"
 #include "file_utils.h"
 #include "cJSON.h"
+#include "digest_common.h"
 #include "verify_hap.h"
+#include "verify_hap_openssl_utils.h"
+#include "pkcs7_context.h"
+#include "profile_verify.h"
+#include "signature_algorithm_helper.h"
 
 namespace OHOS {
 namespace SignatureTools {
+
 const int32_t VerifyHap::HEX_PRINT_LENGTH = 3;
 const int32_t VerifyHap::DIGEST_BLOCK_LEN_OFFSET = 8;
 const int32_t VerifyHap::DIGEST_ALGORITHM_OFFSET = 12;
@@ -470,7 +476,7 @@ int32_t VerifyHap::VerifyResign(RandomAccessFile& hapFile, SignatureInfo& hapSig
         return VERIFY_ERROR;
     }
 
-    if (CheckCodeSign(filePath, hapSignInfo.optionBlocks) == false) {
+    if (CheckCodeSign(filePath, hapSignInfo.optionBlocks, hapSignInfo.hapSignatureBlock) == false) {
         SIGNATURE_TOOLS_LOGE("check code sign failed\n");
         return VERIFY_ERROR;
     }
@@ -562,7 +568,7 @@ int32_t VerifyHap::Verify(RandomAccessFile& hapFile, Options* options, const std
     if (IsVerifyResign(hapSignInfo)) {
         return VerifyResign(hapFile, hapSignInfo, options, filePath);
     }
-    if (CheckCodeSign(filePath, hapSignInfo.optionBlocks) == false) {
+    if (CheckCodeSign(filePath, hapSignInfo.optionBlocks, hapSignInfo.hapSignatureBlock) == false) {
         SIGNATURE_TOOLS_LOGE("check code sign failed\n");
         return VERIFY_ERROR;
     }
@@ -609,7 +615,7 @@ int32_t VerifyHap::VerifyBeforeResign(RandomAccessFile& hapFile, Options* option
         return ZIP_ERROR;
     }
 
-    if (CheckCodeSign(filePath, hapSignInfo.optionBlocks) == false) {
+    if (CheckCodeSign(filePath, hapSignInfo.optionBlocks, hapSignInfo.hapSignatureBlock) == false) {
         SIGNATURE_TOOLS_LOGE("check code sign failed\n");
         return VERIFY_ERROR;
     }
@@ -652,58 +658,499 @@ bool VerifyHap::CheckFileNameAndBlockArray(const std::string& hapFilePath,
 }
 
 bool VerifyHap::CheckCodeSign(const std::string& hapFilePath,
-                              const std::vector<OptionalBlock>& optionalBlocks)const
+                              const std::vector<OptionalBlock>& optionalBlocks,
+                              const ByteBuffer& hapSignatureBlock)const
 {
-    std::unordered_map<int, ByteBuffer> map;
-    for (const OptionalBlock& block : optionalBlocks) {
-        map.emplace(block.optionalType, block.optionalBlockValue);
+    bool codeReSignFlag;
+    bool codeSignFlag;
+    ByteBuffer propertyBlockArray;
+    if (!BuildBlockInfo(hapFilePath, optionalBlocks, codeReSignFlag, codeSignFlag, propertyBlockArray)) {
+        return false;
     }
-    bool codeReSignFlag = map.find(HapUtils::ENTERPRISE_CODE_RE_SIGN_BLOCK_ID) != map.end() &&
-        map[HapUtils::ENTERPRISE_CODE_RE_SIGN_BLOCK_ID].GetCapacity() > 0;
-    bool codeSignFlag = map.find(HapUtils::HAP_PROPERTY_BLOCK_ID) != map.end() &&
-        map[HapUtils::HAP_PROPERTY_BLOCK_ID].GetCapacity() > 0;
-    if (codeReSignFlag || codeSignFlag) {
-        ByteBuffer propertyBlockArray = map[HapUtils::HAP_PROPERTY_BLOCK_ID];
-        if (codeReSignFlag) {
-            propertyBlockArray = map[HapUtils::ENTERPRISE_CODE_RE_SIGN_BLOCK_ID];
-        }
-        if (!CheckFileNameAndBlockArray(hapFilePath, propertyBlockArray))
-            return false;
-
-        std::vector<std::string> fileNameArray = StringUtils::SplitString(hapFilePath, '.');
-        uint32_t blockType;
-        propertyBlockArray.GetUInt32(OFFSET_ZERO, blockType);
-        uint32_t blockLength;
-        propertyBlockArray.GetUInt32(OFFSET_FOUR, blockLength);
-        uint32_t blockOffset;
-        propertyBlockArray.GetUInt32(OFFSET_EIGHT, blockOffset);
-
-        if (blockType != HapUtils::HAP_CODE_SIGN_BLOCK_ID) {
-            PrintErrorNumberMsg("VERIFY_ERROR", VERIFY_ERROR, "code sign data not exist in hap " + hapFilePath);
-            return false;
-        }
-        auto ite = map.find(HapUtils::HAP_PROFILE_BLOCK_ID);
-        if (ite == map.end())
-            return false;
-        ByteBuffer profileArray = ite->second;
-        std::string profileArray_(profileArray.GetBufferPtr(), profileArray.GetCapacity());
-        std::string profileContent;
-        if (GetProfileContent(profileArray_, profileContent) < 0) {
-            SIGNATURE_TOOLS_LOGE("get profile content failed, file: %s", hapFilePath.c_str());
-            return false;
-        }
-        std::string suffix = fileNameArray[fileNameArray.size() - 1];
-        bool isCodeSign = VerifyCodeSignature::VerifyHap(hapFilePath, blockOffset, blockLength,
-                                                         suffix, profileContent);
-        if (!isCodeSign) {
-            SIGNATURE_TOOLS_LOGE("verify codesign failed, file: %s", hapFilePath.c_str());
-            return false;
-        }
-        SIGNATURE_TOOLS_LOGI("verify codesign success.");
+    if (!codeReSignFlag && !codeSignFlag) {
+        SIGNATURE_TOOLS_LOGI("can not find codesign block.");
         return true;
     }
-    SIGNATURE_TOOLS_LOGI("can not find codesign block.");
+    propertyBlockArray.SetPosition(0);
+    if (!CheckFileNameAndBlockArray(hapFilePath, propertyBlockArray)) {
+        return false;
+    }
+
+    std::unordered_map<int, ByteBuffer> blockMap;
+    for (const OptionalBlock& block : optionalBlocks) {
+        blockMap.emplace(block.optionalType, block.optionalBlockValue);
+    }
+    ByteBuffer codeSignBlock;
+    std::string profileContent;
+    if (!ExtractCodeSignBlock(hapFilePath, propertyBlockArray, blockMap, profileContent, codeSignBlock)) {
+        return false;
+    }
+
+    Pkcs7Context profilePkcs7Context;
+    if (!VerifyCodeAndProfile(hapFilePath, profileContent, codeSignBlock, hapSignatureBlock, profilePkcs7Context)) {
+        return false;
+    }
+
+    if (!CheckPermSign(hapFilePath, propertyBlockArray, profileContent, codeSignBlock, profilePkcs7Context)) {
+        SIGNATURE_TOOLS_LOGE("verify perm sign failed, file: %s", hapFilePath.c_str());
+        return false;
+    }
+    SIGNATURE_TOOLS_LOGI("verify perm sign success.");
     return true;
+}
+
+bool VerifyHap::BuildBlockInfo(const std::string& hapFilePath, const std::vector<OptionalBlock>& optionalBlocks,
+                               bool& codeReSignFlag, bool& codeSignFlag, ByteBuffer& propertyBlockArray) const
+{
+    std::unordered_map<int, ByteBuffer> blockMap;
+    for (const OptionalBlock& block : optionalBlocks) {
+        blockMap.emplace(block.optionalType, block.optionalBlockValue);
+    }
+    codeReSignFlag = blockMap.find(HapUtils::ENTERPRISE_CODE_RE_SIGN_BLOCK_ID) != blockMap.end() &&
+        blockMap[HapUtils::ENTERPRISE_CODE_RE_SIGN_BLOCK_ID].GetCapacity() > 0;
+    codeSignFlag = blockMap.find(HapUtils::HAP_PROPERTY_BLOCK_ID) != blockMap.end() &&
+        blockMap[HapUtils::HAP_PROPERTY_BLOCK_ID].GetCapacity() > 0;
+    if (!codeReSignFlag && !codeSignFlag) {
+        return true;
+    }
+    propertyBlockArray = blockMap[HapUtils::HAP_PROPERTY_BLOCK_ID];
+    if (codeReSignFlag) {
+        propertyBlockArray = blockMap[HapUtils::ENTERPRISE_CODE_RE_SIGN_BLOCK_ID];
+    }
+    return true;
+}
+
+bool VerifyHap::ExtractCodeSignBlock(const std::string& hapFilePath, ByteBuffer& propertyBlockArray,
+                                     std::unordered_map<int, ByteBuffer>& blockMap,
+                                     std::string& profileContent, ByteBuffer& codeSignBlock) const
+{
+    std::vector<std::string> fileNameArray = StringUtils::SplitString(hapFilePath, '.');
+    uint32_t blockType;
+    propertyBlockArray.GetUInt32(OFFSET_ZERO, blockType);
+    uint32_t blockLength;
+    propertyBlockArray.GetUInt32(OFFSET_FOUR, blockLength);
+    uint32_t blockOffset;
+    propertyBlockArray.GetUInt32(OFFSET_EIGHT, blockOffset);
+
+    if (blockType != HapUtils::HAP_CODE_SIGN_BLOCK_ID) {
+        PrintErrorNumberMsg("VERIFY_ERROR", VERIFY_ERROR, "code sign data not exist in hap " + hapFilePath);
+        return false;
+    }
+    codeSignBlock.SetCapacity(blockLength);
+    codeSignBlock.PutData(propertyBlockArray.GetBufferPtr() + ZIP_HEAD_OF_SUBSIGNING_BLOCK_LENGTH, blockLength);
+
+    auto ite = blockMap.find(HapUtils::HAP_PROFILE_BLOCK_ID);
+    if (ite == blockMap.end()) {
+        return false;
+    }
+    ByteBuffer profileArray = ite->second;
+    std::string profileArray_(profileArray.GetBufferPtr(), profileArray.GetCapacity());
+    if (GetProfileContent(profileArray_, profileContent) < 0) {
+        SIGNATURE_TOOLS_LOGE("get profile content failed, file: %s", hapFilePath.c_str());
+        return false;
+    }
+    std::string suffix = fileNameArray[fileNameArray.size() - 1];
+    if (!VerifyCodeSignature::VerifyHap(hapFilePath, blockOffset, blockLength, suffix, profileContent)) {
+        SIGNATURE_TOOLS_LOGE("verify codesign failed, file: %s", hapFilePath.c_str());
+        return false;
+    }
+    SIGNATURE_TOOLS_LOGI("verify codesign success.");
+    return true;
+}
+
+bool VerifyHap::VerifyCodeAndProfile(const std::string& hapFilePath, const std::string& profileContent,
+                                     const ByteBuffer& codeSignBlock, const ByteBuffer& hapSignatureBlock,
+                                     Pkcs7Context& profilePkcs7Context) const
+{
+    const unsigned char* profilePkcs7Data = reinterpret_cast<const unsigned char*>(hapSignatureBlock.GetBufferPtr());
+    if (!VerifyHapOpensslUtils::ParsePkcs7Package(profilePkcs7Data,
+        static_cast<uint32_t>(hapSignatureBlock.GetCapacity()), profilePkcs7Context)) {
+        SIGNATURE_TOOLS_LOGE("parse profile PKCS7 failed");
+        return false;
+    }
+    if (!VerifyHapOpensslUtils::GetCertChains(profilePkcs7Context.p7, profilePkcs7Context)) {
+        SIGNATURE_TOOLS_LOGE("get profile cert chains failed");
+        return false;
+    }
+    return true;
+}
+
+bool VerifyHap::ComputeDigest(const std::string& content, std::vector<int8_t>& digest, int32_t signAlgId)
+{
+    if (content.empty()) {
+        return false;
+    }
+
+    const EVP_MD* hash = (signAlgId == ALGORITHM_SHA256_WITH_ECDSA) ? EVP_sha256() : EVP_sha384();
+    int32_t digestLen = (signAlgId == ALGORITHM_SHA256_WITH_ECDSA) ? SHA256_DIGEST_LENGTH : SHA384_DIGEST_LENGTH;
+    unsigned char hashResult[EVP_MAX_MD_SIZE];
+    unsigned int hashLen = 0;
+    if (EVP_Digest(content.c_str(), content.size(), hashResult, &hashLen, hash, nullptr) != 1) {
+        return false;
+    }
+
+    digest.resize(digestLen);
+    for (int i = 0; i < digestLen; i++) {
+        digest[i] = (int8_t)hashResult[i];
+    }
+    return true;
+}
+
+bool VerifyHap::CheckPermSign(const std::string& hapFilePath, ByteBuffer& propertyBlockArray,
+                               const std::string& profileContent, const ByteBuffer& codeSignBlock,
+                               Pkcs7Context& profilePkcs7Context)const
+{
+    int32_t pos = ZIP_HEAD_OF_SUBSIGNING_BLOCK_LENGTH + codeSignBlock.GetCapacity();
+    if (pos >= propertyBlockArray.GetCapacity()) {
+        SIGNATURE_TOOLS_LOGI("no more blocks after code sign block.");
+        return true;
+    }
+    while (pos < propertyBlockArray.GetCapacity()) {
+        uint32_t blockType;
+        uint32_t blockLength;
+        uint32_t blockOffset;
+        if (!propertyBlockArray.GetUInt32(pos, blockType) ||
+            !propertyBlockArray.GetUInt32(pos + OFFSET_FOUR, blockLength) ||
+            !propertyBlockArray.GetUInt32(pos + OFFSET_EIGHT, blockOffset)) {
+            SIGNATURE_TOOLS_LOGE("read block header failed at pos %d", pos);
+            return false;
+        }
+
+        if (blockLength > propertyBlockArray.GetCapacity()) {
+            SIGNATURE_TOOLS_LOGE("invalid block length %u at pos %d, skip", blockLength, pos);
+            pos += ZIP_HEAD_OF_SUBSIGNING_BLOCK_LENGTH;
+            continue;
+        }
+
+        if (blockType == HapUtils::PERMISSION_SIGN_BLOCK_ID) {
+            int32_t dataStartPos = pos;
+            const char* srcBuf = propertyBlockArray.GetBufferPtr();
+            if (srcBuf == nullptr || dataStartPos + blockLength > propertyBlockArray.GetCapacity()) {
+                SIGNATURE_TOOLS_LOGE("perm sign data out of range: start=%d, len=%u, capacity=%d",
+                    dataStartPos, blockLength, propertyBlockArray.GetCapacity());
+                return false;
+            }
+            ByteBuffer permSignBlock;
+            permSignBlock.SetCapacity(blockLength + ZIP_HEAD_OF_SUBSIGNING_BLOCK_LENGTH);
+            permSignBlock.PutData(propertyBlockArray.GetBufferPtr() + dataStartPos,
+                blockLength + ZIP_HEAD_OF_SUBSIGNING_BLOCK_LENGTH);
+            permSignBlock.SetPosition(0);
+            return VerifyPermSignBlock(permSignBlock, profileContent, hapFilePath, codeSignBlock, profilePkcs7Context);
+        }
+        pos += ZIP_HEAD_OF_SUBSIGNING_BLOCK_LENGTH + blockLength;
+    }
+    SIGNATURE_TOOLS_LOGI("can not find perm sign block.");
+    return true;
+}
+
+bool VerifyHap::VerifyPermSignBlock(ByteBuffer& permSignBlock, const std::string& profileContent,
+                                     const std::string& hapFilePath, const ByteBuffer& codeSignBlock,
+                                     Pkcs7Context& profilePkcs7Context)const
+{
+    if (permSignBlock.GetCapacity() < ZIP_HEAD_OF_SUBSIGNING_BLOCK_LENGTH) {
+        SIGNATURE_TOOLS_LOGE("perm sign block size too small.");
+        return false;
+    }
+
+    int32_t signAlgId;
+    if (!GetSignAlgId(permSignBlock, signAlgId)) {
+        return false;
+    }
+
+    const EVP_MD* hash = nullptr;
+    int32_t digestSize = 0;
+    if (!GetHashAlgorithm(signAlgId, hash, digestSize)) {
+        return false;
+    }
+
+    int16_t num;
+    permSignBlock.GetInt16(28, num);
+    std::string storedDigests;
+    if (!ReadStoredDigests(permSignBlock, num, digestSize, storedDigests)) {
+        return false;
+    }
+
+    std::string signature;
+    if (!ReadSignature(permSignBlock, num, digestSize, signature)) {
+        return false;
+    }
+
+    EVP_PKEY* pubKey = GetProfilePubKey(profilePkcs7Context);
+    if (pubKey == nullptr) {
+        return false;
+    }
+
+    if (!VerifyPermSignSignature(signature, storedDigests, hash, pubKey)) {
+        SIGNATURE_TOOLS_LOGE("verify perm sign signature failed.");
+        return false;
+    }
+
+    SIGNATURE_TOOLS_LOGI("verify perm sign block success.");
+    return true;
+}
+
+bool VerifyHap::GetSignAlgId(ByteBuffer& permSignBlock, int32_t& signAlgId)const
+{
+    std::vector<int8_t> magic = HapUtils::GetPermissionSignMagic();
+    for (int i = 0; i < 8; i++) {
+        int8_t val;
+        permSignBlock.GetInt8(12 + i, val);
+        if (val != magic[i]) {
+            SIGNATURE_TOOLS_LOGE("perm sign block magic mismatch at pos %d: expected %02x, got %02x",
+                12 + i, (uint8_t)magic[i], (uint8_t)val);
+            return false;
+        }
+    }
+    permSignBlock.GetInt32(20, signAlgId);
+    return true;
+}
+
+bool VerifyHap::GetHashAlgorithm(int32_t signAlgId, const EVP_MD*& hash, int32_t& digestSize)const
+{
+    if (signAlgId == ALGORITHM_SHA256_WITH_ECDSA) {
+        hash = EVP_sha256();
+        digestSize = 32;
+    } else if (signAlgId == ALGORITHM_SHA384_WITH_ECDSA) {
+        hash = EVP_sha384();
+        digestSize = 48;
+    } else {
+        SIGNATURE_TOOLS_LOGE("unsupported sign algorithm id: 0x%08x", signAlgId);
+        return false;
+    }
+    return true;
+}
+
+bool VerifyHap::ReadStoredDigests(ByteBuffer& permSignBlock, int16_t num, int32_t digestSize,
+                                   std::string& storedDigests)const
+{
+    int32_t digestPos = 30;
+    for (int i = 0; i < num; i++) {
+        digestPos += 4;
+        for (int j = 0; j < digestSize; j++) {
+            uint8_t val;
+            permSignBlock.GetUInt8(digestPos + j, val);
+            storedDigests.push_back((char)val);
+        }
+        digestPos += digestSize;
+    }
+    return true;
+}
+
+bool VerifyHap::ReadSignature(ByteBuffer& permSignBlock, int16_t num, int32_t digestSize,
+                               std::string& signature)const
+{
+    int32_t sigPos = 30 + num * (4 + digestSize);
+    int32_t sigLen;
+    permSignBlock.GetInt32(sigPos, sigLen);
+    int32_t sigOffset = sigPos + 4;
+    for (int i = 0; i < sigLen; i++) {
+        uint8_t val;
+        permSignBlock.GetUInt8(sigOffset + i, val);
+        signature.push_back((char)val);
+    }
+    return true;
+}
+
+EVP_PKEY* VerifyHap::GetProfilePubKey(Pkcs7Context& profilePkcs7Context)const
+{
+    if (profilePkcs7Context.certChain.empty() || profilePkcs7Context.certChain[0].empty()) {
+        SIGNATURE_TOOLS_LOGE("profile cert chain is empty");
+        return nullptr;
+    }
+    X509* pubKeyCert = profilePkcs7Context.certChain[0][0];
+    if (pubKeyCert == nullptr) {
+        SIGNATURE_TOOLS_LOGE("profile pub key cert is null");
+        return nullptr;
+    }
+    EVP_PKEY* pubKey = X509_get0_pubkey(pubKeyCert);
+    if (pubKey == nullptr) {
+        SIGNATURE_TOOLS_LOGE("get profile pub key failed");
+        return nullptr;
+    }
+    return pubKey;
+}
+
+bool VerifyHap::GetFileContentFromHap(const std::string& hapFilePath, const std::string& fileName,
+                                       std::string& content)const
+{
+    unzFile zFile = unzOpen(hapFilePath.c_str());
+    if (zFile == NULL) {
+        SIGNATURE_TOOLS_LOGE("open hap file: %s failed.", hapFilePath.c_str());
+        return false;
+    }
+
+    if (unzLocateFile(zFile, fileName.c_str(), 0) != UNZ_OK) {
+        SIGNATURE_TOOLS_LOGI("locate %s failed.", fileName.c_str());
+        unzClose(zFile);
+        return false;
+    }
+
+    unz_file_info zFileInfo;
+    if (unzGetCurrentFileInfo(zFile, &zFileInfo, NULL, 0, NULL, 0, NULL, 0) != UNZ_OK) {
+        SIGNATURE_TOOLS_LOGE("get %s info failed.", fileName.c_str());
+        unzClose(zFile);
+        return false;
+    }
+
+    if (unzOpenCurrentFile(zFile) != UNZ_OK) {
+        SIGNATURE_TOOLS_LOGE("open %s failed.", fileName.c_str());
+        unzClose(zFile);
+        return false;
+    }
+
+    char buffer[4096] = {0};
+    int readSize = 0;
+    std::stringbuf sb;
+    do {
+        readSize = unzReadCurrentFile(zFile, buffer, sizeof(buffer));
+        if (readSize > 0) {
+            sb.sputn(buffer, readSize);
+        }
+    } while (readSize > 0);
+
+    content = sb.str();
+    unzCloseCurrentFile(zFile);
+    unzClose(zFile);
+    return true;
+}
+
+bool VerifyHap::VerifyPermSignSignature(const std::string& signature, const std::string& storedDigests,
+                                        const EVP_MD* hash, EVP_PKEY* pubKey)const
+{
+    if (signature.empty()) {
+        SIGNATURE_TOOLS_LOGI("no signature data, skip signature verification.");
+        return true;
+    }
+    if (pubKey == nullptr) {
+        SIGNATURE_TOOLS_LOGE("pubKey is null");
+        return false;
+    }
+
+    EVP_MD_CTX* ctx = EVP_MD_CTX_new();
+    if (ctx == nullptr) {
+        SIGNATURE_TOOLS_LOGE("create EVP_MD_CTX failed");
+        return false;
+    }
+    const unsigned char* pSigData = reinterpret_cast<const unsigned char*>(signature.data());
+    bool ret = false;
+    if (EVP_DigestVerifyInit(ctx, nullptr, hash, nullptr, pubKey) == 1 &&
+        EVP_DigestVerifyUpdate(ctx, storedDigests.data(), storedDigests.size()) == 1 &&
+        EVP_DigestVerifyFinal(ctx, pSigData, signature.size()) == 1) {
+        ret = true;
+    }
+    EVP_MD_CTX_free(ctx);
+    if (!ret) {
+        SIGNATURE_TOOLS_LOGE("verify signature failed");
+        return false;
+    }
+    SIGNATURE_TOOLS_LOGI("signature verified successfully.");
+    return true;
+}
+
+std::string VerifyHap::ComputeAllDigests(const std::vector<int32_t>& digestTypes,
+                                          const std::string& profileContent,
+                                          const std::string& hapFilePath,
+                                          const ByteBuffer& codeSignBlock,
+                                          int32_t signAlgId)const
+{
+    std::string allDigests;
+
+    for (int32_t type : digestTypes) {
+        std::vector<int8_t> digest;
+
+        switch (type) {
+            case HapUtils::PERMISSION_SIGN_DIGEST_TYPE_PROVISION:
+                if (!ComputeDigest(profileContent, digest, signAlgId)) {
+                    SIGNATURE_TOOLS_LOGE("compute provision digest failed.");
+                    return "";
+                }
+                break;
+
+            case HapUtils::PERMISSION_SIGN_DIGEST_TYPE_MODULE_JSON: {
+                std::string moduleJsonContent;
+                if (!GetFileContentFromHap(hapFilePath, "module.json", moduleJsonContent)) {
+                    SIGNATURE_TOOLS_LOGI("module.json not found, skip.");
+                    continue;
+                }
+                if (!ComputeDigest(moduleJsonContent, digest, signAlgId)) {
+                    SIGNATURE_TOOLS_LOGE("compute module.json digest failed.");
+                    return "";
+                }
+                break;
+            }
+
+            case HapUtils::PERMISSION_SIGN_DIGEST_TYPE_CODE_SIGN_BLOCK: {
+                std::string codeSignData(codeSignBlock.GetBufferPtr(), codeSignBlock.GetCapacity());
+                if (!ComputeDigest(codeSignData, digest, signAlgId)) {
+                    SIGNATURE_TOOLS_LOGE("compute code sign block digest failed.");
+                    return "";
+                }
+                break;
+            }
+
+            case HapUtils::PERMISSION_SIGN_DIGEST_TYPE_SHARED_FILE: {
+                std::string sharedFileDigest = ComputeSharedFileDigest(hapFilePath, signAlgId);
+                if (sharedFileDigest.empty()) {
+                    continue;
+                }
+                allDigests += sharedFileDigest;
+                continue;
+            }
+
+            default:
+                SIGNATURE_TOOLS_LOGW("unknown digest type: %d", type);
+                continue;
+        }
+
+        allDigests.append(reinterpret_cast<const char*>(digest.data()), digest.size());
+    }
+
+    return allDigests;
+}
+
+std::string VerifyHap::ComputeSharedFileDigest(const std::string& hapFilePath, int32_t signAlgId)const
+{
+    std::string moduleJsonContent;
+    if (!GetFileContentFromHap(hapFilePath, "module.json", moduleJsonContent)) {
+        return "";
+    }
+
+    cJSON* root = cJSON_ParseWithOpts(moduleJsonContent.c_str(), nullptr, 1);
+    if (root == nullptr) {
+        return "";
+    }
+
+    cJSON* moduleObj = cJSON_GetObjectItem(root, "module");
+    if (moduleObj == nullptr) {
+        cJSON_Delete(root);
+        return "";
+    }
+
+    cJSON* shareFilesObj = cJSON_GetObjectItem(moduleObj, "shareFiles");
+    if (shareFilesObj == nullptr || !cJSON_IsString(shareFilesObj)) {
+        cJSON_Delete(root);
+        return "";
+    }
+
+    std::string shareFilePath = shareFilesObj->valuestring;
+    cJSON_Delete(root);
+
+    std::string actualFilePath = shareFilePath;
+    if (shareFilePath.find("$profile:") == 0) {
+        actualFilePath = "resources/base/profile/" + shareFilePath.substr(9) + ".json";
+    }
+
+    std::string shareFileContent;
+    if (!GetFileContentFromHap(hapFilePath, actualFilePath, shareFileContent)) {
+        return "";
+    }
+
+    std::vector<int8_t> digest;
+    if (!ComputeDigest(shareFileContent, digest, signAlgId)) {
+        return "";
+    }
+
+    return std::string(reinterpret_cast<const char*>(digest.data()), digest.size());
 }
 
 int VerifyHap::GetProfileContent(const std::string profile, std::string& ret)

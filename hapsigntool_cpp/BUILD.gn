@@ -83,7 +83,6 @@ ohos_executable("hap-sign-tool") {
   sources = signature_tools_main_src
 
   deps = [
-    "//third_party/bzip2:libbz2",
     "//third_party/openssl:libcrypto_shared",
     "//third_party/openssl:libssl_shared",
   ]

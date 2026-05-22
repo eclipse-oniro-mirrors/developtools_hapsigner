@@ -24,6 +24,7 @@
 #include <numeric>
 
 #include "cJSON.h"
+#include "digest_common.h"
 #include "string_utils.h"
 #include "file_utils.h"
 #include "pkcs7_data.h"
@@ -348,10 +349,6 @@ bool SignProvider::ReSignHap(Options* options)
         return PrintErrorLog("[ReSignHap] Init Data Source Contents failed", ZIP_ERROR, tmpOutputFilePath);
     }
 
-    if (signParams.find(ParamConstants::PARAM_SIGN_CODE) == signParams.end()) {
-        signParams[ParamConstants::PARAM_SIGN_CODE] = ParamConstants::ENABLE_SIGN_CODE;
-    }
-
     DataSource* contents[] = {dataSrcContents.beforeCentralDir,
         dataSrcContents.centralDir, dataSrcContents.endOfCentralDir};
 
@@ -460,37 +457,383 @@ bool SignProvider::SignBin(Options* options)
 bool SignProvider::AppendCodeSignBlock(SignerConfig* signerConfig, std::string outputFilePath,
                                        const std::string& suffix, int64_t centralDirectoryOffset, ZipSigner& zip)
 {
-    if (signParams.at(ParamConstants::PARAM_SIGN_CODE) == CodeSigning::ENABLE_SIGN_CODE_VALUE) {
+    auto [enableCodeSign, enablePermSign] = CheckSignEnabled();
+    if (!enableCodeSign && !enablePermSign) {
+        return true;
+    }
+
+    std::string suffixTmp = suffix;
+    std::transform(suffixTmp.begin(), suffixTmp.end(), suffixTmp.begin(), ::tolower);
+    if (!IsSignTarget(suffixTmp)) {
+        return true;
+    }
+
+    int64_t baseOffset = ComputeBaseOffset(centralDirectoryOffset);
+    ByteBuffer codeSignSubBlock;
+    ByteBuffer permSignSubBlock;
+    int64_t currentOffset = baseOffset;
+
+    mSignerConfig = signerConfig;
+    mOutputFilePath = outputFilePath;
+
+    if (enableCodeSign) {
         SIGNATURE_TOOLS_LOGI("start code signing.");
-        std::string suffixTmp = suffix;
-        std::transform(suffixTmp.begin(), suffixTmp.end(), suffixTmp.begin(), ::tolower);
-        if (std::find(CodeSigning::SUPPORT_FILE_FORM.begin(), CodeSigning::SUPPORT_FILE_FORM.end(),
-                      suffixTmp) == CodeSigning::SUPPORT_FILE_FORM.end()) {
-            SIGNATURE_TOOLS_LOGI("no need to sign code for %s", suffixTmp.c_str());
-            return true;
-        }
-        // 4 means hap format occupy 4 byte storage location,2 means optional blocks reserve 2 storage location
-        int64_t codeSignOffset = centralDirectoryOffset + ((4 + 4 + 4) * (optionalBlocks.size() + 2 + 1));
-        // create CodeSigning Object
-        CodeSigning codeSigning(signerConfig);
-        std::vector<int8_t> codeSignArray;
-        if (!codeSigning.GetCodeSignBlock(outputFilePath, codeSignOffset, suffixTmp, profileContent, zip,
-                                          codeSignArray)) {
-            SIGNATURE_TOOLS_LOGE("Codesigning getCodeSignBlock Fail.");
+        if (!BuildCodeSignSubBlock(suffixTmp, currentOffset, zip, codeSignSubBlock)) {
+            SIGNATURE_TOOLS_LOGE("BuildCodeSignSubBlock Fail.");
             return false;
         }
-        SIGNATURE_TOOLS_LOGI("generate codeSignArray finished.");
-        std::unique_ptr<ByteBuffer> result =
-            std::make_unique<ByteBuffer>(codeSignArray.size()
-                                         + (FOUR_BYTE + FOUR_BYTE + FOUR_BYTE));
-        result->PutInt32(HapUtils::HAP_CODE_SIGN_BLOCK_ID);
-        result->PutInt32(codeSignArray.size()); // length
-        result->PutInt32((int32_t)codeSignOffset); // offset
-        result->PutData(codeSignArray.data(), codeSignArray.size());
-
-        OptionalBlock tmp = {HapUtils::HAP_PROPERTY_BLOCK_ID, *result};
-        optionalBlocks.insert(optionalBlocks.begin(), tmp);
     }
+
+    if (enablePermSign) {
+        SIGNATURE_TOOLS_LOGI("start permission signing.");
+        if (!BuildPermSignSubBlock(currentOffset, zip, permSignSubBlock)) {
+            SIGNATURE_TOOLS_LOGE("BuildPermSignSubBlock Fail.");
+            return false;
+        }
+    }
+
+    int64_t totalPropertySize = codeSignSubBlock.GetCapacity() + permSignSubBlock.GetCapacity();
+    SIGNATURE_TOOLS_LOGI("propertyBlock: codeSignSize=%d, permSignSize=%d, totalSize=%lld",
+        codeSignSubBlock.GetCapacity(), permSignSubBlock.GetCapacity(), (long long)totalPropertySize);
+    if (totalPropertySize > 0) {
+        ByteBuffer propertyBlock;
+        BuildPropertyBlock(baseOffset, codeSignSubBlock, permSignSubBlock, propertyBlock);
+        OptionalBlock tmp = {HapUtils::HAP_PROPERTY_BLOCK_ID, propertyBlock};
+        optionalBlocks.insert(optionalBlocks.begin(), tmp);
+    } else {
+        SIGNATURE_TOOLS_LOGI("[AppendCodeSignBlock] propertyBlock is empty, skip adding to optionalBlocks");
+    }
+    return true;
+}
+
+std::pair<bool, bool> SignProvider::CheckSignEnabled()
+{
+    bool enableCodeSign = signParams.at(ParamConstants::PARAM_SIGN_CODE) == CodeSigning::ENABLE_SIGN_CODE_VALUE;
+    bool enablePermSign = signParams.at(ParamConstants::PARAM_PERM_MODE) == ParamConstants::ENABLE_PERM_MODE;
+    return {enableCodeSign, enablePermSign};
+}
+
+bool SignProvider::IsSignTarget(const std::string& suffixTmp)
+{
+    if (std::find(CodeSigning::SUPPORT_FILE_FORM.begin(), CodeSigning::SUPPORT_FILE_FORM.end(),
+                  suffixTmp) == CodeSigning::SUPPORT_FILE_FORM.end()) {
+        SIGNATURE_TOOLS_LOGI("no need to sign code for %s", suffixTmp.c_str());
+        return false;
+    }
+    return true;
+}
+
+int64_t SignProvider::ComputeBaseOffset(int64_t centralDirectoryOffset)
+{
+    return centralDirectoryOffset + ((FOUR_BYTE + FOUR_BYTE + FOUR_BYTE) * (optionalBlocks.size() + 2 + 1));
+}
+
+void SignProvider::BuildPropertyBlock(int64_t baseOffset, const ByteBuffer& codeSignSubBlock,
+                                      const ByteBuffer& permSignSubBlock, ByteBuffer& propertyBlock)
+{
+    int64_t totalPropertySize = codeSignSubBlock.GetCapacity() + permSignSubBlock.GetCapacity();
+    propertyBlock.SetCapacity(totalPropertySize);
+    int64_t currentOffset = baseOffset;
+
+    if (codeSignSubBlock.GetCapacity() > 0) {
+        propertyBlock.PutData(codeSignSubBlock.GetBufferPtr(), codeSignSubBlock.GetCapacity());
+        currentOffset += codeSignSubBlock.GetCapacity();
+    }
+    if (permSignSubBlock.GetCapacity() > 0) {
+        propertyBlock.PutData(permSignSubBlock.GetBufferPtr(), permSignSubBlock.GetCapacity());
+    }
+}
+
+bool SignProvider::BuildCodeSignSubBlock(const std::string& suffix, int64_t codeSignOffset, ZipSigner& zip,
+                                         ByteBuffer& subBlock)
+{
+    CodeSigning codeSigning(mSignerConfig);
+    if (!codeSigning.GetCodeSignBlock(mOutputFilePath, codeSignOffset, suffix, profileContent, zip, codeSignArray)) {
+        SIGNATURE_TOOLS_LOGE("Codesigning GetCodeSignBlock Fail.");
+        return false;
+    }
+    SIGNATURE_TOOLS_LOGI("generate codeSignArray finished.");
+
+    subBlock.SetCapacity(codeSignArray.size() + (FOUR_BYTE + FOUR_BYTE + FOUR_BYTE));
+    subBlock.PutInt32(HapUtils::HAP_CODE_SIGN_BLOCK_ID);
+    subBlock.PutInt32(codeSignArray.size());
+    subBlock.PutInt32((int32_t)codeSignOffset);
+    subBlock.PutData((const char*)codeSignArray.data(), codeSignArray.size());
+    return true;
+}
+
+bool SignProvider::HasModuleJson(ZipSigner& zip)
+{
+    for (const auto& entry : zip.GetZipEntries()) {
+        std::string fileName = entry->GetZipEntryData()->GetZipEntryHeader()->GetFileName();
+        if (fileName == "module.json") {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool SignProvider::GetModuleJsonContent(const std::string& hapFilePath, std::string& content)
+{
+    return GetFileContentFromHap(hapFilePath, "module.json", content);
+}
+
+bool SignProvider::GetFileContentFromHap(const std::string& hapFilePath, const std::string& fileName, std::string& content)
+{
+    unzFile zFile = unzOpen(hapFilePath.c_str());
+    if (zFile == NULL) {
+        SIGNATURE_TOOLS_LOGE("open hap file: %s failed.", hapFilePath.c_str());
+        return false;
+    }
+
+    if (unzLocateFile(zFile, fileName.c_str(), 0) != UNZ_OK) {
+        SIGNATURE_TOOLS_LOGI("locate %s failed.", fileName.c_str());
+        unzClose(zFile);
+        return false;
+    }
+
+    unz_file_info zFileInfo;
+    if (unzGetCurrentFileInfo(zFile, &zFileInfo, NULL, 0, NULL, 0, NULL, 0) != UNZ_OK) {
+        SIGNATURE_TOOLS_LOGE("get %s info failed.", fileName.c_str());
+        unzClose(zFile);
+        return false;
+    }
+
+    if (unzOpenCurrentFile(zFile) != UNZ_OK) {
+        SIGNATURE_TOOLS_LOGE("open %s failed.", fileName.c_str());
+        unzClose(zFile);
+        return false;
+    }
+
+    char buffer[4096] = {0};
+    int readSize = 0;
+    std::stringbuf sb;
+    do {
+        readSize = unzReadCurrentFile(zFile, buffer, sizeof(buffer));
+        if (readSize > 0) {
+            sb.sputn(buffer, readSize);
+        }
+    } while (readSize > 0);
+
+    content = sb.str();
+    unzCloseCurrentFile(zFile);
+    unzClose(zFile);
+    return true;
+}
+
+bool SignProvider::ComputeDigest(const std::string& content, std::vector<int8_t>& digest, int32_t signAlgId)
+{
+    if (content.empty()) {
+        SIGNATURE_TOOLS_LOGE("content is empty.");
+        return false;
+    }
+
+    const EVP_MD* hash = (signAlgId == ALGORITHM_SHA256_WITH_ECDSA) ? EVP_sha256() : EVP_sha384();
+    int32_t digestLen = (signAlgId == ALGORITHM_SHA256_WITH_ECDSA) ? SHA256_DIGEST_LENGTH : SHA384_DIGEST_LENGTH;
+    unsigned char hashResult[EVP_MAX_MD_SIZE];
+    unsigned int hashLen = 0;
+    if (EVP_Digest(content.c_str(), content.size(), hashResult, &hashLen, hash, nullptr) != 1) {
+        return false;
+    }
+
+    digest.resize(digestLen);
+    for (int i = 0; i < digestLen; i++) {
+        digest[i] = (int8_t)hashResult[i];
+    }
+    return true;
+}
+
+bool SignProvider::ComputeDigest(const std::vector<int8_t>& data, std::vector<int8_t>& digest, int32_t signAlgId)
+{
+    if (data.empty()) {
+        SIGNATURE_TOOLS_LOGE("data is empty.");
+        return false;
+    }
+
+    const EVP_MD* hash = (signAlgId == ALGORITHM_SHA256_WITH_ECDSA) ? EVP_sha256() : EVP_sha384();
+    int32_t digestLen = (signAlgId == ALGORITHM_SHA256_WITH_ECDSA) ? SHA256_DIGEST_LENGTH : SHA384_DIGEST_LENGTH;
+    unsigned char hashResult[EVP_MAX_MD_SIZE];
+    unsigned int hashLen = 0;
+    if (EVP_Digest(reinterpret_cast<const char*>(data.data()), data.size(), hashResult, &hashLen, hash, nullptr) != 1) {
+        return false;
+    }
+
+    digest.resize(digestLen);
+    for (int i = 0; i < digestLen; i++) {
+        digest[i] = (int8_t)hashResult[i];
+    }
+    return true;
+}
+
+bool SignProvider::GetShareFilesFromModuleJson(const std::string& moduleJsonContent, std::vector<std::string>& shareFiles)
+{
+    cJSON* root = cJSON_ParseWithOpts(moduleJsonContent.c_str(), nullptr, 1);
+    if (root == nullptr) {
+        SIGNATURE_TOOLS_LOGE("parse module.json failed.");
+        return false;
+    }
+
+    cJSON* moduleObj = cJSON_GetObjectItem(root, "module");
+    if (moduleObj == nullptr || !cJSON_IsObject(moduleObj)) {
+        cJSON_Delete(root);
+        return true;
+    }
+
+    cJSON* shareFilesObj = cJSON_GetObjectItem(moduleObj, "shareFiles");
+    if (shareFilesObj == nullptr || !cJSON_IsString(shareFilesObj)) {
+        cJSON_Delete(root);
+        return true;
+    }
+
+    std::string shareFile = shareFilesObj->valuestring;
+    if (!shareFile.empty()) {
+        shareFiles.push_back(shareFile);
+    }
+    cJSON_Delete(root);
+    return true;
+}
+
+bool SignProvider::BuildPermSignSubBlock(int64_t permSignOffset, ZipSigner& zip, ByteBuffer& subBlock)
+{
+    if (!HasModuleJson(zip)) {
+        SIGNATURE_TOOLS_LOGI("no module.json found, skip permission signing.");
+        return true;
+    }
+
+    int32_t signAlgId;
+    std::string signAlg;
+    if (!GetSignAlgorithmInfo(mSignerConfig, signAlgId, signAlg)) {
+        return false;
+    }
+
+    std::string moduleJsonContent;
+    if (!GetModuleJsonContent(mOutputFilePath, moduleJsonContent)) {
+        SIGNATURE_TOOLS_LOGE("get module.json content failed.");
+        return false;
+    }
+
+    std::vector<std::pair<int, std::vector<int8_t>>> digestItems;
+    if (!ComputePermissionDigests(mOutputFilePath, moduleJsonContent, digestItems, signAlgId)) {
+        return false;
+    }
+
+    int32_t digestSize = (signAlgId == ALGORITHM_SHA256_WITH_ECDSA) ? 32 : 48;
+
+    std::string allDigests;
+    for (const auto& item : digestItems) {
+        allDigests.append(reinterpret_cast<const char*>(item.second.data()), item.second.size());
+    }
+
+    std::shared_ptr<Signer> signer = mSignerConfig->GetSigner();
+    if (signer == nullptr) {
+        SIGNATURE_TOOLS_LOGE("get signer failed.");
+        return false;
+    }
+
+    std::string signature = signer->GetSignature(allDigests, signAlg);
+    if (signature.empty()) {
+        SIGNATURE_TOOLS_LOGE("generate permission signature failed.");
+        return false;
+    }
+
+    PermSignData signData = {signAlgId, signAlg, digestSize, digestItems, signature};
+    return BuildPermSignBlock(permSignOffset, signData, subBlock);
+}
+
+bool SignProvider::ComputePermissionDigests(const std::string& outputFilePath,
+                                            const std::string& moduleJsonContent,
+                                            std::vector<std::pair<int, std::vector<int8_t>>>& digestItems,
+                                            int32_t signAlgId)
+{
+    std::vector<int8_t> provisionDigest;
+    if (!ComputeDigest(profileContent, provisionDigest, signAlgId)) {
+        SIGNATURE_TOOLS_LOGE("compute provision digest failed.");
+        return false;
+    }
+    digestItems.push_back({HapUtils::PERMISSION_SIGN_DIGEST_TYPE_PROVISION, provisionDigest});
+
+    std::vector<int8_t> moduleJsonDigest;
+    if (!ComputeDigest(moduleJsonContent, moduleJsonDigest, signAlgId)) {
+        SIGNATURE_TOOLS_LOGE("compute module.json digest failed.");
+        return false;
+    }
+    digestItems.push_back({HapUtils::PERMISSION_SIGN_DIGEST_TYPE_MODULE_JSON, moduleJsonDigest});
+
+    if (!codeSignArray.empty()) {
+        std::vector<int8_t> codeSignDigest;
+        if (!ComputeDigest(codeSignArray, codeSignDigest, signAlgId)) {
+            SIGNATURE_TOOLS_LOGE("compute code sign block digest failed.");
+            return false;
+        }
+        digestItems.push_back({HapUtils::PERMISSION_SIGN_DIGEST_TYPE_CODE_SIGN_BLOCK, codeSignDigest});
+    }
+
+    std::vector<std::string> shareFiles;
+    if (GetShareFilesFromModuleJson(moduleJsonContent, shareFiles)) {
+        for (const auto& shareFile : shareFiles) {
+            std::string actualFilePath = shareFile;
+            if (shareFile.find("$profile:") == 0) {
+                actualFilePath = "resources/base/profile/" + shareFile.substr(9) + ".json";
+            }
+            std::string shareFileContent;
+            if (GetFileContentFromHap(outputFilePath, actualFilePath, shareFileContent)) {
+                std::vector<int8_t> shareFileDigest;
+                if (!ComputeDigest(shareFileContent, shareFileDigest, signAlgId)) {
+                    SIGNATURE_TOOLS_LOGW("compute %s digest failed.", actualFilePath.c_str());
+                    continue;
+                }
+                digestItems.push_back({HapUtils::PERMISSION_SIGN_DIGEST_TYPE_SHARED_FILE, shareFileDigest});
+            }
+        }
+    }
+    return true;
+}
+
+bool SignProvider::GetSignAlgorithmInfo(SignerConfig* signerConfig, int32_t& signAlgId, std::string& signAlg)
+{
+    std::vector<SignatureAlgorithmHelper> sigs = signerConfig->GetSignatureAlgorithms();
+    if (sigs.size() != 1) {
+        SIGNATURE_TOOLS_LOGE("get signature algorithm failed.");
+        return false;
+    }
+    signAlgId = static_cast<int32_t>(sigs[0].m_id);
+    if (signAlgId == static_cast<int32_t>(SignatureAlgorithmId::ECDSA_WITH_SHA256)) {
+        signAlg = SIGN_ALG_SHA256;
+    } else if (signAlgId == static_cast<int32_t>(SignatureAlgorithmId::ECDSA_WITH_SHA384)) {
+        signAlg = SIGN_ALG_SHA384;
+    } else {
+        SIGNATURE_TOOLS_LOGE("unsupported sign algorithm id: 0x%08x", signAlgId);
+        return false;
+    }
+    return true;
+}
+
+bool SignProvider::BuildPermSignBlock(int64_t permSignOffset, const PermSignData& signData, ByteBuffer& subBlock)
+{
+    int digestItemsCount = signData.digestItems.size();
+    int digestLen = digestItemsCount * (4 + signData.digestSize);
+    int sigLen = signData.signature.size();
+    int permSignDataLen = 8 + 4 + 4 + 2 + digestLen + 4 + sigLen;
+    int totalSize = FOUR_BYTE + FOUR_BYTE + FOUR_BYTE + permSignDataLen;
+
+    subBlock.SetCapacity(totalSize);
+    subBlock.PutInt32(HapUtils::PERMISSION_SIGN_BLOCK_ID);
+    subBlock.PutInt32(permSignDataLen);
+    subBlock.PutInt32((int32_t)permSignOffset);
+
+    std::vector<int8_t> magic = HapUtils::GetPermissionSignMagic();
+    subBlock.PutData(magic.data(), magic.size());
+    subBlock.PutInt32(signData.signAlgId);
+    subBlock.PutInt32(digestLen);
+    subBlock.PutInt16((int16_t)digestItemsCount);
+
+    for (const auto& item : signData.digestItems) {
+        subBlock.PutInt32(item.first);
+        subBlock.PutData((const char*)item.second.data(), signData.digestSize);
+    }
+
+    subBlock.PutInt32(sigLen);
+    subBlock.PutData((const char*)signData.signature.data(), sigLen);
     return true;
 }
 
@@ -500,31 +843,59 @@ bool SignProvider::AppendReCodeSignBlock(SignerConfig* signerConfig, std::string
     SIGNATURE_TOOLS_LOGI("start re code signing.");
     std::string suffixTmp = suffix;
     std::transform(suffixTmp.begin(), suffixTmp.end(), suffixTmp.begin(), ::tolower);
-    int64_t optionalBlockSize = std::accumulate(optionalBlocks.begin(), optionalBlocks.end(), 0,
-        [](int64_t sum, const auto& elem) { return sum + elem.optionalBlockValue.GetCapacity(); });
-    // 4 means hap format occupy 4 byte storage location,2 means optional blocks reserve 2 storage location
-    // 12 byte before codeSignArray
-    int64_t appendOptionalBlocksHeaderSize = (4 + 4 + 4) * (optionalBlocks.size() + 2) + 12;
-    int64_t codeSignOffset = centralDirectoryOffset + optionalBlockSize + appendOptionalBlocksHeaderSize;
-    // create CodeSigning Object
+
+    bool enablePermSign = signParams.at(ParamConstants::PARAM_PERM_MODE) == ParamConstants::ENABLE_PERM_MODE;
+    int64_t codeSignOffset = ComputeCodeSignOffset(centralDirectoryOffset);
+
     CodeSigning codeSigning(signerConfig);
-    std::vector<int8_t> codeSignArray;
-    if (!codeSigning.GetCodeSignBlock(outputFilePath, codeSignOffset, suffixTmp, profileContent, zip, codeSignArray)) {
+    std::vector<int8_t> localCodeSignArray;
+    if (!codeSigning.GetCodeSignBlock(outputFilePath, codeSignOffset, suffixTmp, profileContent, zip, localCodeSignArray)) {
         SIGNATURE_TOOLS_LOGE("Codesigning getCodeSignBlock Fail.");
         return false;
     }
     SIGNATURE_TOOLS_LOGI("generate codeSignArray finished.");
-    std::unique_ptr<ByteBuffer> result =
-        std::make_unique<ByteBuffer>(codeSignArray.size()
-                                        + (FOUR_BYTE + FOUR_BYTE + FOUR_BYTE));
-    result->PutInt32(HapUtils::HAP_CODE_SIGN_BLOCK_ID); //type
-    result->PutInt32(codeSignArray.size()); // length
-    result->PutInt32((int32_t)codeSignOffset); // offset
-    result->PutData(codeSignArray.data(), codeSignArray.size());
+
+    auto codeSignResult = std::make_unique<ByteBuffer>(localCodeSignArray.size() + (FOUR_BYTE + FOUR_BYTE + FOUR_BYTE));
+    codeSignResult->PutInt32(HapUtils::HAP_CODE_SIGN_BLOCK_ID);
+    codeSignResult->PutInt32(localCodeSignArray.size());
+    codeSignResult->PutInt32((int32_t)codeSignOffset);
+    codeSignResult->PutData(localCodeSignArray.data(), localCodeSignArray.size());
+    codeSignArray = localCodeSignArray;
+    mSignerConfig = signerConfig;
+    mOutputFilePath = outputFilePath;
+
+    int64_t permSignOffset = codeSignOffset + codeSignResult->GetCapacity();
+    std::unique_ptr<ByteBuffer> permSignResult;
+    if (enablePermSign) {
+        SIGNATURE_TOOLS_LOGI("start re permission signing.");
+        ByteBuffer permSignSubBlock;
+        if (!BuildPermSignSubBlock(permSignOffset, zip, permSignSubBlock)) {
+            SIGNATURE_TOOLS_LOGE("BuildPermSignSubBlock for re-sign Fail.");
+            return false;
+        }
+        if (permSignSubBlock.GetCapacity() > 0) {
+            permSignResult = std::make_unique<ByteBuffer>(permSignSubBlock.GetCapacity());
+            permSignResult->PutData(permSignSubBlock.GetBufferPtr(), permSignSubBlock.GetCapacity());
+        }
+    }
+
+    int64_t totalSize = codeSignResult->GetCapacity() + (permSignResult ? permSignResult->GetCapacity() : 0);
+    auto result = std::make_unique<ByteBuffer>(totalSize);
+    result->PutData(codeSignResult->GetBufferPtr(), codeSignResult->GetCapacity());
+    if (permSignResult) {
+        result->PutData(permSignResult->GetBufferPtr(), permSignResult->GetCapacity());
+    }
 
     OptionalBlock tmp = {HapUtils::ENTERPRISE_CODE_RE_SIGN_BLOCK_ID, *result};
     optionalBlocks.push_back(tmp);
     return true;
+}
+
+int64_t SignProvider::ComputeCodeSignOffset(int64_t centralDirectoryOffset)
+{
+    int64_t optionalBlockSize = std::accumulate(optionalBlocks.begin(), optionalBlocks.end(), 0,
+        [](int64_t sum, const auto& elem) { return sum + elem.optionalBlockValue.GetCapacity(); });
+    return centralDirectoryOffset + optionalBlockSize + (FOUR_BYTE + FOUR_BYTE + FOUR_BYTE) * (optionalBlocks.size() + 2) + 12;
 }
 
 bool SignProvider::CreateSignerConfigs(STACK_OF(X509)* certificates, const std::optional<X509_CRL*>& crl,
@@ -746,6 +1117,7 @@ bool SignProvider::CheckParams(Options* options)
     paramFileds.emplace_back(ParamConstants::PARAM_LOCAL_PUBLIC_CERT);
     paramFileds.emplace_back(ParamConstants::PARAM_BASIC_COMPATIBLE_VERSION);
     paramFileds.emplace_back(ParamConstants::PARAM_SIGN_CODE);
+    paramFileds.emplace_back(ParamConstants::PARAM_PERM_MODE);
     paramFileds.emplace_back(ParamConstants::PARAM_IN_FORM);
 
     std::unordered_set<std::string> paramSet = Params::InitParamField(paramFileds);
@@ -761,6 +1133,10 @@ bool SignProvider::CheckParams(Options* options)
     }
     if (!CheckSignCode()) {
         SIGNATURE_TOOLS_LOGE("signCode Parameter check error, signCode must is 0 or 1");
+        return false;
+    }
+    if (!CheckPermMode()) {
+        SIGNATURE_TOOLS_LOGE("permSign Parameter check error, permSign must is 0 or 1");
         return false;
     }
     if (!CheckSignatureAlg()) {
@@ -781,6 +1157,21 @@ bool SignProvider::CheckSignCode()
     if ((codeSign != ParamConstants::ENABLE_SIGN_CODE) && (codeSign != ParamConstants::DISABLE_SIGN_CODE)) {
         PrintErrorNumberMsg("COMMAND_PARAM_ERROR", COMMAND_PARAM_ERROR,
                             "signCode Parameter must 0 or 1, you put is " + codeSign);
+        return false;
+    }
+    return true;
+}
+
+bool SignProvider::CheckPermMode()
+{
+    if (signParams.find(ParamConstants::PARAM_PERM_MODE) == signParams.end()) {
+        signParams.insert(std::make_pair(ParamConstants::PARAM_PERM_MODE, ParamConstants::ENABLE_PERM_MODE));
+        return true;
+    }
+    std::string permMode = signParams[ParamConstants::PARAM_PERM_MODE];
+    if ((permMode != ParamConstants::ENABLE_PERM_MODE) && (permMode != ParamConstants::DISABLE_PERM_MODE)) {
+        PrintErrorNumberMsg("COMMAND_PARAM_ERROR", COMMAND_PARAM_ERROR,
+                            "permSign Parameter must 0 or 1, you put is " + permMode);
         return false;
     }
     return true;

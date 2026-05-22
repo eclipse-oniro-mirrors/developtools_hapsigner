@@ -54,6 +54,14 @@
 typedef std::tuple<std::shared_ptr<std::ifstream>, std::shared_ptr<std::ofstream>, std::string> fileIOTuple;
 namespace OHOS {
 namespace SignatureTools {
+struct PermSignData {
+    int32_t signAlgId;
+    std::string signAlg;
+    int32_t digestSize;
+    std::vector<std::pair<int, std::vector<int8_t>>> digestItems;
+    std::string signature;
+};
+
 class SignProvider {
 public:
     SignProvider() = default;
@@ -91,6 +99,7 @@ protected:
     int CheckProfileValid(STACK_OF(X509)* inputCerts);
     int CheckProfileInfo(const ProfileInfo& info, STACK_OF(X509)* inputCerts)const;
     bool CheckSignCode();
+    bool CheckPermMode();
     int LoadOptionalBlocks();
     bool CheckCompatibleVersion();
     std::vector<OptionalBlock> optionalBlocks;
@@ -128,17 +137,42 @@ private:
 
     bool AppendCodeSignBlock(SignerConfig* signerConfig, std::string outputFilePath,
                              const std::string& suffix, int64_t centralDirectoryOffset, ZipSigner& zip);
+    bool BuildCodeSignSubBlock(const std::string& suffix, int64_t codeSignOffset, ZipSigner& zip,
+                               ByteBuffer& subBlock);
+    bool BuildPermSignSubBlock(int64_t permSignOffset, ZipSigner& zip, ByteBuffer& subBlock);
+
+    bool ComputePermissionDigests(const std::string& outputFilePath, const std::string& moduleJsonContent,
+                                  std::vector<std::pair<int, std::vector<int8_t>>>& digestItems,
+                                  int32_t signAlgId);
+    bool GetSignAlgorithmInfo(SignerConfig* signerConfig, int32_t& signAlgId, std::string& signAlg);
+    bool BuildPermSignBlock(int64_t permSignOffset, const PermSignData& signData, ByteBuffer& subBlock);
+    bool HasModuleJson(ZipSigner& zip);
+    bool GetModuleJsonContent(const std::string& hapFilePath, std::string& content);
+    bool GetFileContentFromHap(const std::string& hapFilePath, const std::string& fileName, std::string& content);
+    bool ComputeDigest(const std::string& content, std::vector<int8_t>& digest, int32_t signAlgId);
+    bool ComputeDigest(const std::vector<int8_t>& data, std::vector<int8_t>& digest, int32_t signAlgId);
+    bool GetShareFilesFromModuleJson(const std::string& moduleJsonContent, std::vector<std::string>& shareFiles);
+    std::string GetSharedFilePathFromModuleJson(const std::string& moduleJsonContent);
+
+    void BuildPropertyBlock(int64_t baseOffset, const ByteBuffer& codeSignSubBlock,
+                            const ByteBuffer& permSignSubBlock, ByteBuffer& propertyBlock);
+    std::pair<bool, bool> CheckSignEnabled();
+    bool IsSignTarget(const std::string& suffixTmp);
+    int64_t ComputeBaseOffset(int64_t centralDirectoryOffset);
     bool AppendReCodeSignBlock(SignerConfig* signerConfig, std::string outputFilePath,
                              const std::string& suffix, int64_t centralDirectoryOffset, ZipSigner& zip);
+    int64_t ComputeCodeSignOffset(int64_t centralDirectoryOffset);
     bool OutputSignedFile(RandomAccessFile* outputHap, long centralDirectoryOffset,
                           ByteBuffer& signingBlock, ByteBufferDataSource* centralDirectory, ByteBuffer& eocdBuffer);
 
     bool InitDataSourceContents(RandomAccessFile& outputHap, DataSourceContents& dataSrcContents);
 
-private:
     static std::vector<std::string> VALID_SIGN_ALG_NAME;
     static constexpr int FOUR_BYTE = 4;
     std::string profileContent;
+    std::vector<int8_t> codeSignArray;
+    SignerConfig* mSignerConfig;
+    std::string mOutputFilePath;
 };
 } // namespace SignatureTools
 } // namespace OHOS

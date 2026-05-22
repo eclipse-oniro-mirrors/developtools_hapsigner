@@ -78,7 +78,26 @@ public:
 
     bool CheckFileNameAndBlockArray(const std::string& hapFilePath, const ByteBuffer& propertyBlockArray)const;
 
-    bool CheckCodeSign(const std::string& hapFilePath, const std::vector<OptionalBlock>& optionalBlocks)const;
+    bool CheckCodeSign(const std::string& hapFilePath, const std::vector<OptionalBlock>& optionalBlocks,
+                       const ByteBuffer& hapSignatureBlock)const;
+    bool BuildBlockInfo(const std::string& hapFilePath, const std::vector<OptionalBlock>& optionalBlocks,
+                         bool& codeReSignFlag, bool& codeSignFlag, ByteBuffer& propertyBlockArray)const;
+    bool ExtractCodeSignBlock(const std::string& hapFilePath, ByteBuffer& propertyBlockArray,
+                              std::unordered_map<int, ByteBuffer>& blockMap,
+                              std::string& profileContent, ByteBuffer& codeSignBlock)const;
+    bool VerifyCodeAndProfile(const std::string& hapFilePath, const std::string& profileContent,
+                              const ByteBuffer& codeSignBlock, const ByteBuffer& hapSignatureBlock,
+                              Pkcs7Context& profilePkcs7Context)const;
+    bool CheckPermSign(const std::string& hapFilePath, ByteBuffer& propertyBlockArray,
+                       const std::string& profileContent, const ByteBuffer& codeSignBlock,
+                       Pkcs7Context& profilePkcs7Context)const;
+    bool VerifyPermSignBlock(ByteBuffer& permSignBlock, const std::string& profileContent,
+                             const std::string& hapFilePath, const ByteBuffer& codeSignBlock,
+                             Pkcs7Context& profilePkcs7Context)const;
+    bool GetFileContentFromHap(const std::string& hapFilePath, const std::string& fileName, 
+                               std::string& content)const;
+    bool VerifyPermSignSignature(const std::string& signature, const std::string& storedDigests,
+                                 const EVP_MD* hash, EVP_PKEY* pubKey)const;
     static int GetProfileContent(const std::string profile, std::string& ret);
 
     bool VerifyAppPkcs7(Pkcs7Context& pkcs7Context, const ByteBuffer& hapSignatureBlock);
@@ -88,6 +107,20 @@ public:
 private:
     bool VerifyCRL(Pkcs7Context& pkcs7Context);
     int32_t VerifyBeforeResign(RandomAccessFile& hapFile, Options* options, const std::string& filePath);
+    bool GetSignAlgId(ByteBuffer& permSignBlock, int32_t& signAlgId)const;
+    bool GetHashAlgorithm(int32_t signAlgId, const EVP_MD*& hash, int32_t& digestSize)const;
+    bool ReadStoredDigests(ByteBuffer& permSignBlock, int16_t num, int32_t digestSize,
+                           std::string& storedDigests)const;
+    bool ReadSignature(ByteBuffer& permSignBlock, int16_t num, int32_t digestSize,
+                       std::string& signature)const;
+    static bool ComputeDigest(const std::string& content, std::vector<int8_t>& digest, int32_t signAlgId);
+    EVP_PKEY* GetProfilePubKey(Pkcs7Context& profilePkcs7Context)const;
+    std::string ComputeAllDigests(const std::vector<int32_t>& digestTypes,
+                                  const std::string& profileContent,
+                                  const std::string& hapFilePath,
+                                  const ByteBuffer& codeSignBlock,
+                                  int32_t signAlgId)const;
+    std::string ComputeSharedFileDigest(const std::string& hapFilePath, int32_t signAlgId)const;
 
 private:
     bool isPrintCert;

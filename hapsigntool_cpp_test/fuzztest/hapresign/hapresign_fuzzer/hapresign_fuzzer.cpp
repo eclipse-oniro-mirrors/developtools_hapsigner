@@ -311,7 +311,7 @@ bool HapReSignFuzzTest009(const uint8_t* data, size_t size)
     std::string inFile = "./hapReSign/test-signed.hap";
     (*params)["inFile"] = inFile;
 
-    bool ret = signProvider->GetResignBlocks(params.get());
+    bool ret = signProvider->PrepareReSignBlocks(params.get());
     return ret;
 }
 
@@ -326,7 +326,7 @@ bool HapReSignFuzzTest010(const uint8_t* data, size_t size)
     std::string inFile(reinterpret_cast<const char*>(data), size);
     (*params)["inFile"] = inFile;
 
-    bool ret = signProvider->GetResignBlocks(params.get());
+    bool ret = signProvider->PrepareReSignBlocks(params.get());
     return ret;
 }
 

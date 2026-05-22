@@ -501,7 +501,8 @@ HWTEST_F(VerifyCodeSignatureTest, CheckCodeSign001, testing::ext::TestSize.Level
     optionalBlocks.push_back(block);
 
     VerifyHap hapVerify;
-    int32_t ret = hapVerify.CheckCodeSign(file, optionalBlocks);
+    ByteBuffer hapSignatureBlock;
+    int32_t ret = hapVerify.CheckCodeSign(file, optionalBlocks, hapSignatureBlock);
 
     EXPECT_EQ(ret, 0);
 }
@@ -526,7 +527,8 @@ HWTEST_F(VerifyCodeSignatureTest, CheckCodeSign002, testing::ext::TestSize.Level
     optionalBlocks.push_back(block);
 
     VerifyHap hapVerify;
-    int32_t ret = hapVerify.CheckCodeSign(file, optionalBlocks);
+    ByteBuffer hapSignatureBlock;
+    int32_t ret = hapVerify.CheckCodeSign(file, optionalBlocks, hapSignatureBlock);
 
     EXPECT_EQ(ret, 0);
 }
@@ -551,7 +553,8 @@ HWTEST_F(VerifyCodeSignatureTest, CheckCodeSign003, testing::ext::TestSize.Level
     optionalBlocks.push_back(block);
 
     VerifyHap hapVerify;
-    int32_t ret = hapVerify.CheckCodeSign(file, optionalBlocks);
+    ByteBuffer hapSignatureBlock;
+    int32_t ret = hapVerify.CheckCodeSign(file, optionalBlocks, hapSignatureBlock);
 
     EXPECT_EQ(ret, 0);
 }

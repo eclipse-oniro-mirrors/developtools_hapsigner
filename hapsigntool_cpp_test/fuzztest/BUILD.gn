@@ -21,6 +21,7 @@ group("hapsigntool_pc_fuzztest") {
     "${signature_tools_test}/fuzztest/generate_csr:generate_csr_fuzztest",
     "${signature_tools_test}/fuzztest/hapsign:hapsign_fuzzer_fuzztest",
     "${signature_tools_test}/fuzztest/hapresign:hapresign_fuzzer_fuzztest",
+    "${signature_tools_test}/fuzztest/permSign:permSign_fuzztest",
     "${signature_tools_test}/fuzztest/process_cmd:process_cmd_fuzztest",
     "${signature_tools_test}/fuzztest/profile:profile_fuzztest",
     "${signature_tools_test}/fuzztest/utils:utils_fuzztest",

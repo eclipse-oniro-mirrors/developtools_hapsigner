@@ -29,6 +29,8 @@ const std::vector<int8_t> HapUtils::HAP_SIGNING_BLOCK_MAGIC_V2 =
 const std::vector<int8_t> HapUtils::HAP_SIGNING_BLOCK_MAGIC_V3 =
     std::vector<int8_t>{ 0x3c, 0x68, 0x61, 0x70, 0x20, 0x73, 0x69, 0x67, 0x6e,
     0x20, 0x62, 0x6c, 0x6f, 0x63, 0x6b, 0x3e };
+const std::vector<int8_t> HapUtils::PERMISSION_SIGN_MAGIC =
+    std::vector<int8_t>{ 0x7d, 0x6a, 0x03, 0x93, 0x0f, 0x45, 0xe2, 0x28 };
 const std::string HapUtils::HEX_CHAR_ARRAY = "0123456789ABCDEF";
 const std::string HapUtils::HAP_DEBUG_OWNER_ID = "DEBUG_LIB_ID";
 std::set<int> HapUtils::HAP_SIGNATURE_OPTIONAL_BLOCK_IDS;
@@ -92,6 +94,11 @@ std::vector<int8_t> HapUtils::GetHapSigningBlockMagic(int compatibleVersion)
 std::vector<int8_t> HapUtils::GetHapSigningBlockMagicV3()
 {
     return HAP_SIGNING_BLOCK_MAGIC_V3;
+}
+
+std::vector<int8_t> HapUtils::GetPermissionSignMagic()
+{
+    return PERMISSION_SIGN_MAGIC;
 }
 
 int HapUtils::GetHapSigningBlockVersion(int compatibleVersion)

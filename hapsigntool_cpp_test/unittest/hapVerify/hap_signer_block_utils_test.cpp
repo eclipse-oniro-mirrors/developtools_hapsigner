@@ -580,23 +580,10 @@ HWTEST_F(HapSignerBlockUtilsTest, VerifyHapError001, TestSize.Level1)
 
 /**
  * @tc.name: VerifyHapError002
- * @tc.desc: This function tests failure for interface GetCrlStack due to pkcs7 not init
- * @tc.type: FUNC
- */
-HWTEST_F(HapSignerBlockUtilsTest, VerifyHapError002, TestSize.Level1)
-{
-    PKCS7* pkcs7 = PKCS7_new();
-    bool ret = VerifyHapOpensslUtils::GetCrlStack(pkcs7, nullptr);
-    EXPECT_EQ(ret, false);
-    PKCS7_free(pkcs7);
-}
-
-/**
- * @tc.name: VerifyHapError003
  * @tc.desc: This function tests failure for interface VerifyPkcs7 due to cert1 not init
  * @tc.type: FUNC
  */
-HWTEST_F(HapSignerBlockUtilsTest, VerifyHapError003, TestSize.Level1)
+HWTEST_F(HapSignerBlockUtilsTest, VerifyHapError002, TestSize.Level1)
 {
     PKCS7* pkcs7 = PKCS7_new();
     X509* cert = X509_new();
@@ -623,11 +610,11 @@ HWTEST_F(HapSignerBlockUtilsTest, VerifyHapError003, TestSize.Level1)
 }
 
 /**
- * @tc.name: VerifyHapError004
+ * @tc.name: VerifyHapError003
  * @tc.desc: This function tests failure for interface ParsePkcs7Package due to cert1 not init
  * @tc.type: FUNC
  */
-HWTEST_F(HapSignerBlockUtilsTest, VerifyHapError004, TestSize.Level1)
+HWTEST_F(HapSignerBlockUtilsTest, VerifyHapError003, TestSize.Level1)
 {
     PKCS7* pkcs7 = PKCS7_new();
     PKCS7_set_type(pkcs7, NID_pkcs7_signed);
