@@ -144,8 +144,12 @@ private:
     bool ComputePermissionDigests(const std::string& outputFilePath, const std::string& moduleJsonContent,
                                   std::vector<std::pair<int, std::vector<int8_t>>>& digestItems,
                                   int32_t signAlgId);
+    void ProcessShareFileDigests(const std::string& outputFilePath,
+                                 const std::vector<std::string>& shareFiles, int32_t signAlgId,
+                                 std::vector<std::pair<int, std::vector<int8_t>>>& digestItems);
     bool GetSignAlgorithmInfo(SignerConfig* signerConfig, int32_t& signAlgId, std::string& signAlg);
     bool BuildPermSignBlock(int64_t permSignOffset, const PermSignData& signData, ByteBuffer& subBlock);
+    std::string BuildPermSignDataToSign(const PermSignData& signData);
     bool HasModuleJson(ZipSigner& zip);
     bool GetModuleJsonContent(const std::string& hapFilePath, std::string& content);
     bool GetFileContentFromHap(const std::string& hapFilePath, const std::string& fileName, std::string& content);
@@ -171,6 +175,8 @@ private:
     static constexpr int FOUR_BYTE = 4;
     static constexpr int PERMISSION_SIGN_PROFILE_PREFIX_LEN = 9;
     static constexpr int PROPERTY_BLOCK_HEADER_SIZE = 12;
+    static constexpr int PROPERTY_BLOCK_COUNT = 2;
+    static constexpr int ADDITIONAL_BLOCK_COUNT = 1;
     std::string profileContent;
     std::vector<int8_t> codeSignArray;
     SignerConfig* mSignerConfig;

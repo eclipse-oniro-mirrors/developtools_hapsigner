@@ -527,7 +527,8 @@ bool SignProvider::IsSignTarget(const std::string& suffixTmp)
 
 int64_t SignProvider::ComputeBaseOffset(int64_t centralDirectoryOffset)
 {
-    return centralDirectoryOffset + (PROPERTY_BLOCK_HEADER_SIZE * (optionalBlocks.size() + 2 + 1));
+    return centralDirectoryOffset +
+        (PROPERTY_BLOCK_HEADER_SIZE * (optionalBlocks.size() + PROPERTY_BLOCK_COUNT + ADDITIONAL_BLOCK_COUNT));
 }
 
 void SignProvider::BuildPropertyBlock(int64_t baseOffset, const ByteBuffer& codeSignSubBlock,
@@ -724,9 +725,11 @@ bool SignProvider::BuildPermSignSubBlock(int64_t permSignOffset, ZipSigner& zip,
 
     int32_t digestSize = (signAlgId == ALGORITHM_SHA256_WITH_ECDSA) ? 32 : 48;
 
-    std::string allDigests;
-    for (const auto& item : digestItems) {
-        allDigests.append(reinterpret_cast<const char*>(item.second.data()), item.second.size());
+    PermSignData signData = {signAlgId, signAlg, digestSize, digestItems, ""};
+    std::string dataToSign = BuildPermSignDataToSign(signData);
+    if (dataToSign.empty()) {
+        SIGNATURE_TOOLS_LOGE("build permission sign data to sign failed.");
+        return false;
     }
 
     std::shared_ptr<Signer> signer = mSignerConfig->GetSigner();
@@ -735,13 +738,13 @@ bool SignProvider::BuildPermSignSubBlock(int64_t permSignOffset, ZipSigner& zip,
         return false;
     }
 
-    std::string signature = signer->GetSignature(allDigests, signAlg);
+    std::string signature = signer->GetSignature(dataToSign, signAlg);
     if (signature.empty()) {
         SIGNATURE_TOOLS_LOGE("generate permission signature failed.");
         return false;
     }
 
-    PermSignData signData = {signAlgId, signAlg, digestSize, digestItems, signature};
+    signData.signature = signature;
     return BuildPermSignBlock(permSignOffset, signData, subBlock);
 }
 
@@ -775,24 +778,31 @@ bool SignProvider::ComputePermissionDigests(const std::string& outputFilePath,
 
     std::vector<std::string> shareFiles;
     if (GetShareFilesFromModuleJson(moduleJsonContent, shareFiles)) {
-        for (const auto& shareFile : shareFiles) {
-            std::string actualFilePath = shareFile;
-            if (shareFile.find("$profile:") == 0) {
-                actualFilePath =
-                    "resources/base/profile/" + shareFile.substr(PERMISSION_SIGN_PROFILE_PREFIX_LEN) + ".json";
-            }
-            std::string shareFileContent;
-            if (GetFileContentFromHap(outputFilePath, actualFilePath, shareFileContent)) {
-                std::vector<int8_t> shareFileDigest;
-                if (!ComputeDigest(shareFileContent, shareFileDigest, signAlgId)) {
-                    SIGNATURE_TOOLS_LOGW("compute %s digest failed.", actualFilePath.c_str());
-                    continue;
-                }
-                digestItems.push_back({HapUtils::PERMISSION_SIGN_DIGEST_TYPE_SHARED_FILE, shareFileDigest});
-            }
-        }
+        ProcessShareFileDigests(outputFilePath, shareFiles, signAlgId, digestItems);
     }
     return true;
+}
+
+void SignProvider::ProcessShareFileDigests(const std::string& outputFilePath,
+    const std::vector<std::string>& shareFiles, int32_t signAlgId,
+    std::vector<std::pair<int, std::vector<int8_t>>>& digestItems)
+{
+    for (const auto& shareFile : shareFiles) {
+        std::string actualFilePath = shareFile;
+        if (shareFile.find("$profile:") == 0) {
+            actualFilePath =
+                "resources/base/profile/" + shareFile.substr(PERMISSION_SIGN_PROFILE_PREFIX_LEN) + ".json";
+        }
+        std::string shareFileContent;
+        if (GetFileContentFromHap(outputFilePath, actualFilePath, shareFileContent)) {
+            std::vector<int8_t> shareFileDigest;
+            if (!ComputeDigest(shareFileContent, shareFileDigest, signAlgId)) {
+                SIGNATURE_TOOLS_LOGW("compute %s digest failed.", actualFilePath.c_str());
+                continue;
+            }
+            digestItems.push_back({HapUtils::PERMISSION_SIGN_DIGEST_TYPE_SHARED_FILE, shareFileDigest});
+        }
+    }
 }
 
 bool SignProvider::GetSignAlgorithmInfo(SignerConfig* signerConfig, int32_t& signAlgId, std::string& signAlg)
@@ -812,6 +822,25 @@ bool SignProvider::GetSignAlgorithmInfo(SignerConfig* signerConfig, int32_t& sig
         return false;
     }
     return true;
+}
+
+std::string SignProvider::BuildPermSignDataToSign(const PermSignData& signData)
+{
+    std::vector<int8_t> magic = HapUtils::GetPermissionSignMagic();
+    int digestItemsCount = signData.digestItems.size();
+    int digestLen = digestItemsCount * (4 + signData.digestSize);
+
+    std::string signDataBytes;
+    signDataBytes.append(reinterpret_cast<const char*>(magic.data()), magic.size());
+    signDataBytes.append(reinterpret_cast<const char*>(&signData.signAlgId), sizeof(signData.signAlgId));
+    signDataBytes.append(reinterpret_cast<const char*>(&digestLen), sizeof(digestLen));
+    int16_t num = static_cast<int16_t>(digestItemsCount);
+    signDataBytes.append(reinterpret_cast<const char*>(&num), sizeof(num));
+    for (const auto& item : signData.digestItems) {
+        signDataBytes.append(reinterpret_cast<const char*>(&item.first), sizeof(item.first));
+        signDataBytes.append(reinterpret_cast<const char*>(item.second.data()), signData.digestSize);
+    }
+    return signDataBytes;
 }
 
 bool SignProvider::BuildPermSignBlock(int64_t permSignOffset, const PermSignData& signData, ByteBuffer& subBlock)
@@ -906,7 +935,7 @@ int64_t SignProvider::ComputeCodeSignOffset(int64_t centralDirectoryOffset)
             return sum + elem.optionalBlockValue.GetCapacity();
         });
     return centralDirectoryOffset + optionalBlockSize +
-        PROPERTY_BLOCK_HEADER_SIZE * (optionalBlocks.size() + 2) + PROPERTY_BLOCK_HEADER_SIZE;
+        PROPERTY_BLOCK_HEADER_SIZE * (optionalBlocks.size() + PROPERTY_BLOCK_COUNT) + PROPERTY_BLOCK_HEADER_SIZE;
 }
 
 bool SignProvider::CreateSignerConfigs(STACK_OF(X509)* certificates,

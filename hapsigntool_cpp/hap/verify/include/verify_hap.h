@@ -113,12 +113,14 @@ public:
 private:
     bool VerifyCRL(Pkcs7Context& pkcs7Context);
     int32_t VerifyBeforeResign(RandomAccessFile& hapFile, Options* options, const std::string& filePath);
-    bool GetSignAlgId(ByteBuffer& permSignBlock, int32_t& signAlgId)const;
+    bool GetSignAlgIdAndVerifyMagic(ByteBuffer& permSignBlock, int32_t& signAlgId)const;
     bool GetHashAlgorithm(int32_t signAlgId, const EVP_MD*& hash, int32_t& digestSize)const;
     bool ReadStoredDigests(ByteBuffer& permSignBlock, int16_t num, int32_t digestSize,
                            std::string& storedDigests)const;
     bool ReadSignature(ByteBuffer& permSignBlock, int16_t num, int32_t digestSize,
                        std::string& signature)const;
+    bool BuildPermSignDataToVerify(ByteBuffer& permSignBlock, int32_t signAlgId, int16_t num,
+                                   int32_t digestSize, std::string& dataToVerify)const;
     static bool ComputeDigest(const std::string& content, std::vector<int8_t>& digest, int32_t signAlgId);
     EVP_PKEY* GetProfilePubKey(Pkcs7Context& profilePkcs7Context)const;
     std::string ComputeAllDigests(const std::vector<int32_t>& digestTypes,

@@ -45,6 +45,7 @@ static constexpr int PERMISSION_SIGN_BLOCK_MIN_SIZE = 12;
 static constexpr int PERMISSION_SIGN_MAGIC_OFFSET = 12;
 static constexpr int PERMISSION_SIGN_SIGN_ALG_ID_OFFSET = 20;
 static constexpr int PERMISSION_SIGN_DIGEST_COUNT_OFFSET = 28;
+static constexpr int PERMISSION_SIGN_MAGIC_LENGTH = 8;
 static constexpr int PERMISSION_SIGN_DIGEST_TYPE_OFFSET = 30;
 static constexpr int PERMISSION_SIGN_BLOCK_TYPE_OFFSET = 0;
 static constexpr int PERMISSION_SIGN_BLOCK_LENGTH_OFFSET = 4;
@@ -98,12 +99,12 @@ void PermSignBlockMagicCheck(const uint8_t* data, size_t size)
 {
     std::vector<int8_t> magic = HapUtils::GetPermissionSignMagic();
     ByteBuffer permSignBlock = CreatePermSignBlockFromFuzzData(data, size);
-    if (permSignBlock.GetCapacity() < PERMISSION_SIGN_BLOCK_MIN_SIZE + 8) {
+    if (permSignBlock.GetCapacity() < PERMISSION_SIGN_BLOCK_MIN_SIZE + PERMISSION_SIGN_MAGIC_LENGTH) {
         return;
     }
     
     permSignBlock.SetPosition(PERMISSION_SIGN_MAGIC_OFFSET);
-    for (int i = 0; i < 8 && i < static_cast<int>(size); i++) {
+    for (int i = 0; i < PERMISSION_SIGN_MAGIC_LENGTH && i < static_cast<int>(size); i++) {
         int8_t val;
         permSignBlock.GetInt8(PERMISSION_SIGN_MAGIC_OFFSET + i, val);
     }
@@ -217,7 +218,8 @@ void PermSignProfileContentCheck(const uint8_t* data, size_t size)
     std::string profile(reinterpret_cast<const char*>(data), size);
     std::string cleanContent;
 
-    cJSON* obj = cJSON_ParseWithOpts(const_cast<char*>(profile.c_str()), nullptr, 1);
+    std::string parseBuffer = profile;
+    cJSON* obj = cJSON_ParseWithOpts(parseBuffer.data(), nullptr, 1);
     if (obj != nullptr && (cJSON_IsObject(obj) || cJSON_IsArray(obj))) {
         cleanContent = profile;
         cJSON_Delete(obj);
@@ -232,7 +234,8 @@ void PermSignModuleJsonParse(const uint8_t* data, size_t size)
 {
     std::string moduleJsonContent(reinterpret_cast<const char*>(data), size);
 
-    cJSON* root = cJSON_ParseWithOpts(const_cast<char*>(moduleJsonContent.c_str()), nullptr, 1);
+    std::string parseBuffer = moduleJsonContent;
+    cJSON* root = cJSON_ParseWithOpts(parseBuffer.data(), nullptr, 1);
     if (root == nullptr) {
         return;
     }
@@ -300,7 +303,8 @@ void PermSignSignatureBufferCheck(const uint8_t* data, size_t size)
         permSignBlock.PutData(reinterpret_cast<const char*>(data), size);
     }
     
-    std::string signature(reinterpret_cast<const char*>(data), std::min(size, static_cast<size_t>(PERMISSION_SIGN_SIG_CHECK_CAPACITY)));
+    std::string signature(reinterpret_cast<const char*>(data),
+        std::min(size, static_cast<size_t>(PERMISSION_SIGN_SIG_CHECK_CAPACITY)));
 }
 
 void PermSignDigestItemsBuild(const uint8_t* data, size_t size)

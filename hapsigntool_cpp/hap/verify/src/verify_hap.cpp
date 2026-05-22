@@ -52,6 +52,9 @@ const std::string VerifyHap::HQF_APP_PATTERN = "[^]*.hqf$";
 const std::string VerifyHap::HSP_APP_PATTERN = "[^]*.hsp$";
 const std::string VerifyHap::APP_APP_PATTERN = "[^]*.app$";
 static constexpr int ZIP_HEAD_OF_SUBSIGNING_BLOCK_LENGTH = 12;
+static constexpr int PERMISSION_SIGN_DIGEST_COUNT_OFFSET = 28;
+static constexpr int PERMISSION_SIGN_DIGEST_TYPE_SIZE = 4;
+static constexpr int PERMISSION_SIGN_MAGIC_LENGTH = 8;
 
 VerifyHap::VerifyHap() : isPrintCert(true)
 {
@@ -853,7 +856,7 @@ bool VerifyHap::VerifyPermSignBlock(ByteBuffer& permSignBlock, const std::string
     }
 
     int32_t signAlgId;
-    if (!GetSignAlgId(permSignBlock, signAlgId)) {
+    if (!GetSignAlgIdAndVerifyMagic(permSignBlock, signAlgId)) {
         return false;
     }
 
@@ -864,11 +867,7 @@ bool VerifyHap::VerifyPermSignBlock(ByteBuffer& permSignBlock, const std::string
     }
 
     int16_t num;
-    permSignBlock.GetInt16(28, num);
-    std::string storedDigests;
-    if (!ReadStoredDigests(permSignBlock, num, digestSize, storedDigests)) {
-        return false;
-    }
+    permSignBlock.GetInt16(PERMISSION_SIGN_DIGEST_COUNT_OFFSET, num);
 
     std::string signature;
     if (!ReadSignature(permSignBlock, num, digestSize, signature)) {
@@ -880,7 +879,12 @@ bool VerifyHap::VerifyPermSignBlock(ByteBuffer& permSignBlock, const std::string
         return false;
     }
 
-    if (!VerifyPermSignSignature(signature, storedDigests, hash, pubKey)) {
+    std::string dataToVerify;
+    if (!BuildPermSignDataToVerify(permSignBlock, signAlgId, num, digestSize, dataToVerify)) {
+        return false;
+    }
+
+    if (!VerifyPermSignSignature(signature, dataToVerify, hash, pubKey)) {
         SIGNATURE_TOOLS_LOGE("verify perm sign signature failed.");
         return false;
     }
@@ -889,10 +893,10 @@ bool VerifyHap::VerifyPermSignBlock(ByteBuffer& permSignBlock, const std::string
     return true;
 }
 
-bool VerifyHap::GetSignAlgId(ByteBuffer& permSignBlock, int32_t& signAlgId)const
+bool VerifyHap::GetSignAlgIdAndVerifyMagic(ByteBuffer& permSignBlock, int32_t& signAlgId)const
 {
     std::vector<int8_t> magic = HapUtils::GetPermissionSignMagic();
-    for (int i = 0; i < 8; i++) {
+    for (int i = 0; i < PERMISSION_SIGN_MAGIC_LENGTH; i++) {
         int8_t val;
         permSignBlock.GetInt8(PERMISSION_SIGN_MAGIC_OFFSET + i, val);
         if (val != magic[i]) {
@@ -920,12 +924,40 @@ bool VerifyHap::GetHashAlgorithm(int32_t signAlgId, const EVP_MD*& hash, int32_t
     return true;
 }
 
+bool VerifyHap::BuildPermSignDataToVerify(ByteBuffer& permSignBlock, int32_t signAlgId, int16_t num,
+                                          int32_t digestSize, std::string& dataToVerify)const
+{
+    std::vector<int8_t> magic = HapUtils::GetPermissionSignMagic();
+    int32_t digestDataLen = num * (PERMISSION_SIGN_DIGEST_TYPE_SIZE + digestSize);
+
+    dataToVerify.append(reinterpret_cast<const char*>(magic.data()), magic.size());
+    dataToVerify.append(reinterpret_cast<const char*>(&signAlgId), sizeof(signAlgId));
+    dataToVerify.append(reinterpret_cast<const char*>(&digestDataLen), sizeof(digestDataLen));
+    int16_t numValue = num;
+    dataToVerify.append(reinterpret_cast<const char*>(&numValue), sizeof(numValue));
+
+    int32_t digestPos = PERMISSION_SIGN_DIGEST_DATA_OFFSET;
+    for (int i = 0; i < num; i++) {
+        int32_t digestType;
+        permSignBlock.GetInt32(digestPos, digestType);
+        dataToVerify.append(reinterpret_cast<const char*>(&digestType), sizeof(digestType));
+        digestPos += PERMISSION_SIGN_DIGEST_TYPE_SIZE;
+        for (int j = 0; j < digestSize; j++) {
+            uint8_t val;
+            permSignBlock.GetUInt8(digestPos + j, val);
+            dataToVerify.push_back((char)val);
+        }
+        digestPos += digestSize;
+    }
+    return true;
+}
+
 bool VerifyHap::ReadStoredDigests(ByteBuffer& permSignBlock, int16_t num, int32_t digestSize,
     							  std::string& storedDigests)const
 {
     int32_t digestPos = PERMISSION_SIGN_DIGEST_DATA_OFFSET;
     for (int i = 0; i < num; i++) {
-        digestPos += 4;
+        digestPos += PERMISSION_SIGN_DIGEST_TYPE_SIZE;
         for (int j = 0; j < digestSize; j++) {
             uint8_t val;
             permSignBlock.GetUInt8(digestPos + j, val);

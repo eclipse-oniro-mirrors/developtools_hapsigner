@@ -79,6 +79,8 @@ public:
     static constexpr int HAP_SIG_BLOCK_HEADER_SIZE = 32;
     static constexpr int HAP_SIG_BLOCK_MIN_SIZE = HAP_SIG_BLOCK_HEADER_SIZE;
     static constexpr int BLOCK_SIZE = 8;
+    static constexpr int PERMISSION_SIGN_DIGEST_TYPE_SIZE = 4;
+    static constexpr int PERMISSION_SIGN_MAGIC_LENGTH = 8;
 
 public:
     static std::string GetAppIdentifier(const std::string& profileContent);
