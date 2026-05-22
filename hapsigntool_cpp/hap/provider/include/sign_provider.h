@@ -169,6 +169,8 @@ private:
 
     static std::vector<std::string> VALID_SIGN_ALG_NAME;
     static constexpr int FOUR_BYTE = 4;
+    static constexpr int PERMISSION_SIGN_PROFILE_PREFIX_LEN = 9;
+    static constexpr int PROPERTY_BLOCK_HEADER_SIZE = 12;
     std::string profileContent;
     std::vector<int8_t> codeSignArray;
     SignerConfig* mSignerConfig;

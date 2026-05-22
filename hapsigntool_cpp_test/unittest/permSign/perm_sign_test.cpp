@@ -39,6 +39,14 @@ namespace SignatureTools {
 static constexpr int PERMISSION_SIGN_BLOCK_MIN_SIZE = 12;
 static constexpr int TEST_ALGORITHM_SHA256_WITH_ECDSA = 0x10101;
 static constexpr int TEST_ALGORITHM_SHA384_WITH_ECDSA = 0x10201;
+static constexpr int PERMISSION_SIGN_MAGIC_OFFSET = 12;
+static constexpr int PERMISSION_SIGN_SIGN_ALG_ID_OFFSET = 20;
+static constexpr int PERMISSION_SIGN_DIGEST_LEN_OFFSET = 24;
+static constexpr int PERMISSION_SIGN_DIGEST_COUNT_OFFSET = 28;
+static constexpr int PERMISSION_SIGN_DIGEST_DATA_OFFSET = 30;
+static constexpr int PERMISSION_SIGN_HEADER_SIZE = 12;
+static constexpr int PERMISSION_SIGN_FIXED_HEADER_SIZE = 12 + 8 + 4 + 4 + 2;
+static constexpr int PERMISSION_SIGN_SIG_LEN_SIZE = 4;
 
 void PermSignTest::SetUpTestCase(void)
 {
@@ -56,11 +64,11 @@ static bool ComputeDigestForTest(const std::string& content, std::vector<int8_t>
     }
 
     unsigned char hash[SHA256_DIGEST_LENGTH];
-    SHA256((const unsigned char*)content.c_str(), content.size(), hash);
+    SHA256(reinterpret_cast<const unsigned char*>(content.c_str()), content.size(), hash);
 
     digest.resize(SHA256_DIGEST_LENGTH);
     for (int i = 0; i < SHA256_DIGEST_LENGTH; i++) {
-        digest[i] = (int8_t)hash[i];
+        digest[i] = static_cast<int8_t>(hash[i]);
     }
     return true;
 }
@@ -72,21 +80,21 @@ static ByteBuffer CreateMockPermSignBlock(int32_t signAlgId, int16_t digestCount
     
     int32_t digestLen = digestCount * (4 + HapUtils::PERMISSION_SIGN_DIGEST_SIZE);
     int32_t sigLen = signature.size();
-    int32_t totalSize = 12 + 8 + 4 + 4 + 2 + digestLen + 4 + sigLen;
+    int32_t totalSize = PERMISSION_SIGN_FIXED_HEADER_SIZE + digestLen + 4 + sigLen;
     
-    permSignBlock.SetCapacity(totalSize + 12);
+    permSignBlock.SetCapacity(totalSize + PERMISSION_SIGN_HEADER_SIZE);
     permSignBlock.SetPosition(0);
     
     permSignBlock.PutInt32(0, HapUtils::PERMISSION_SIGN_BLOCK_ID);
     permSignBlock.PutInt32(4, totalSize);
     permSignBlock.PutInt32(8, 0);
     
-    permSignBlock.PutData(12, magic.data(), magic.size());
-    permSignBlock.PutInt32(20, signAlgId);
-    permSignBlock.PutInt32(24, digestLen);
-    permSignBlock.PutInt16(28, digestCount);
+    permSignBlock.PutData(PERMISSION_SIGN_MAGIC_OFFSET, magic.data(), magic.size());
+    permSignBlock.PutInt32(PERMISSION_SIGN_SIGN_ALG_ID_OFFSET, signAlgId);
+    permSignBlock.PutInt32(PERMISSION_SIGN_DIGEST_LEN_OFFSET, digestLen);
+    permSignBlock.PutInt16(PERMISSION_SIGN_DIGEST_COUNT_OFFSET, digestCount);
     
-    int curOffset = 30;
+    int curOffset = PERMISSION_SIGN_DIGEST_DATA_OFFSET;
     std::vector<int8_t> mockDigest(HapUtils::PERMISSION_SIGN_DIGEST_SIZE, 0x01);
     for (int i = 0; i < digestCount; i++) {
         permSignBlock.PutInt32(curOffset, HapUtils::PERMISSION_SIGN_DIGEST_TYPE_PROVISION);
@@ -96,7 +104,7 @@ static ByteBuffer CreateMockPermSignBlock(int32_t signAlgId, int16_t digestCount
     }
     
     permSignBlock.PutInt32(curOffset, sigLen);
-    curOffset += 4;
+    curOffset += PERMISSION_SIGN_SIG_LEN_SIZE;
     if (sigLen > 0) {
         permSignBlock.PutData(curOffset, signature.data(), sigLen);
     }

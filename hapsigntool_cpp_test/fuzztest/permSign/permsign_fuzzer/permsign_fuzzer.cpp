@@ -42,6 +42,23 @@ namespace SignatureTools {
 static constexpr int ALGORITHM_SHA256_WITH_ECDSA = 0x10101;
 static constexpr int ALGORITHM_SHA384_WITH_ECDSA = 0x10201;
 static constexpr int PERMISSION_SIGN_BLOCK_MIN_SIZE = 12;
+static constexpr int PERMISSION_SIGN_MAGIC_OFFSET = 12;
+static constexpr int PERMISSION_SIGN_SIGN_ALG_ID_OFFSET = 20;
+static constexpr int PERMISSION_SIGN_DIGEST_COUNT_OFFSET = 28;
+static constexpr int PERMISSION_SIGN_DIGEST_TYPE_OFFSET = 30;
+static constexpr int PERMISSION_SIGN_BLOCK_TYPE_OFFSET = 0;
+static constexpr int PERMISSION_SIGN_BLOCK_LENGTH_OFFSET = 4;
+static constexpr int PERMISSION_SIGN_BLOCK_OFFSET_OFFSET = 8;
+static constexpr int SHA256_DIGEST_SIZE = 32;
+static constexpr int SHA384_DIGEST_SIZE = 48;
+static constexpr int MAX_DIGEST_ITEMS_LOOP = 4;
+static constexpr int PERMISSION_SIGN_BLOCK_MIN_CAPACITY = 24;
+static constexpr int PERMISSION_SIGN_MIN_CAPACITY = 30;
+static constexpr int PERMISSION_SIGN_MIN_CAPACITY_FOR_DIGEST = 34;
+static constexpr int PERMISSION_SIGN_SIG_CHECK_CAPACITY = 100;
+static constexpr int PERMISSION_SIGN_SIG_LEN_SIZE = 4;
+static constexpr int PERMISSION_SIGN_DIGEST_DATA_OFFSET = 30;
+static constexpr int PERMISSION_SIGN_PROFILE_PREFIX_LEN = 9;
 
 static bool ComputeDigestForFuzz(const std::string& content, std::vector<int8_t>& digest)
 {
@@ -50,11 +67,11 @@ static bool ComputeDigestForFuzz(const std::string& content, std::vector<int8_t>
     }
 
     unsigned char hash[SHA256_DIGEST_LENGTH];
-    SHA256((const unsigned char*)content.c_str(), content.size(), hash);
+    SHA256(reinterpret_cast<const unsigned char*>(content.c_str()), content.size(), hash);
 
     digest.resize(SHA256_DIGEST_LENGTH);
     for (int i = 0; i < SHA256_DIGEST_LENGTH; i++) {
-        digest[i] = (int8_t)hash[i];
+        digest[i] = static_cast<int8_t>(hash[i]);
     }
     return true;
 }
@@ -69,13 +86,11 @@ static ByteBuffer CreatePermSignBlockFromFuzzData(const uint8_t* data, size_t si
         permSignBlock.PutInt32(0);
         return permSignBlock;
     }
-    
-    permSignBlock.SetCapacity(size + 12);
+    permSignBlock.SetCapacity(size + PERMISSION_SIGN_BLOCK_MIN_SIZE);
     permSignBlock.PutInt32(HapUtils::PERMISSION_SIGN_BLOCK_ID);
     permSignBlock.PutInt32(static_cast<int32_t>(size));
     permSignBlock.PutInt32(0);
     permSignBlock.PutData(reinterpret_cast<const char*>(data), size);
-    
     return permSignBlock;
 }
 
@@ -83,15 +98,14 @@ void PermSignBlockMagicCheck(const uint8_t* data, size_t size)
 {
     std::vector<int8_t> magic = HapUtils::GetPermissionSignMagic();
     ByteBuffer permSignBlock = CreatePermSignBlockFromFuzzData(data, size);
-    
     if (permSignBlock.GetCapacity() < PERMISSION_SIGN_BLOCK_MIN_SIZE + 8) {
         return;
     }
     
-    permSignBlock.SetPosition(12);
+    permSignBlock.SetPosition(PERMISSION_SIGN_MAGIC_OFFSET);
     for (int i = 0; i < 8 && i < static_cast<int>(size); i++) {
         int8_t val;
-        permSignBlock.GetInt8(12 + i, val);
+        permSignBlock.GetInt8(PERMISSION_SIGN_MAGIC_OFFSET + i, val);
     }
 }
 
@@ -107,42 +121,38 @@ void PermSignBlockTypeCheck(const uint8_t* data, size_t size)
     ByteBuffer permSignBlock = CreatePermSignBlockFromFuzzData(data, size);
     
     uint32_t blockType;
-    if (permSignBlock.GetCapacity() >= 4) {
-        permSignBlock.GetUInt32(0, blockType);
+    if (permSignBlock.GetCapacity() >= PERMISSION_SIGN_BLOCK_MIN_SIZE) {
+        permSignBlock.GetUInt32(PERMISSION_SIGN_BLOCK_TYPE_OFFSET, blockType);
     }
 }
 
 void PermSignBlockLengthCheck(const uint8_t* data, size_t size)
 {
     ByteBuffer permSignBlock = CreatePermSignBlockFromFuzzData(data, size);
-    
     uint32_t blockLength;
-    if (permSignBlock.GetCapacity() >= 8) {
-        permSignBlock.GetUInt32(4, blockLength);
+    if (permSignBlock.GetCapacity() >= PERMISSION_SIGN_BLOCK_MIN_SIZE) {
+        permSignBlock.GetUInt32(PERMISSION_SIGN_BLOCK_LENGTH_OFFSET, blockLength);
     }
 }
 
 void PermSignBlockOffsetCheck(const uint8_t* data, size_t size)
 {
     ByteBuffer permSignBlock = CreatePermSignBlockFromFuzzData(data, size);
-    
     uint32_t blockOffset;
-    if (permSignBlock.GetCapacity() >= 12) {
-        permSignBlock.GetUInt32(8, blockOffset);
+    if (permSignBlock.GetCapacity() >= PERMISSION_SIGN_BLOCK_MIN_SIZE) {
+        permSignBlock.GetUInt32(PERMISSION_SIGN_BLOCK_OFFSET_OFFSET, blockOffset);
     }
 }
 
 void PermSignAlgorithmIdCheck(const uint8_t* data, size_t size)
 {
     ByteBuffer permSignBlock = CreatePermSignBlockFromFuzzData(data, size);
-    
-    if (permSignBlock.GetCapacity() < 24) {
+    if (permSignBlock.GetCapacity() < PERMISSION_SIGN_BLOCK_MIN_CAPACITY) {
         return;
     }
     
     int32_t signAlgId;
-    permSignBlock.GetInt32(20, signAlgId);
-    
+    permSignBlock.GetInt32(PERMISSION_SIGN_SIGN_ALG_ID_OFFSET, signAlgId);
     const EVP_MD* hash = nullptr;
     if (signAlgId == ALGORITHM_SHA256_WITH_ECDSA) {
         hash = EVP_sha256();
@@ -154,39 +164,34 @@ void PermSignAlgorithmIdCheck(const uint8_t* data, size_t size)
 void PermSignDigestCountCheck(const uint8_t* data, size_t size)
 {
     ByteBuffer permSignBlock = CreatePermSignBlockFromFuzzData(data, size);
-    
-    if (permSignBlock.GetCapacity() < 30) {
+    if (permSignBlock.GetCapacity() < PERMISSION_SIGN_MIN_CAPACITY) {
         return;
     }
     
     int16_t num;
-    permSignBlock.GetInt16(28, num);
+    permSignBlock.GetInt16(PERMISSION_SIGN_DIGEST_COUNT_OFFSET, num);
 }
 
 void PermSignDigestTypeCheck(const uint8_t* data, size_t size)
 {
     ByteBuffer permSignBlock = CreatePermSignBlockFromFuzzData(data, size);
-    
-    if (permSignBlock.GetCapacity() < 34) {
+    if (permSignBlock.GetCapacity() < PERMISSION_SIGN_MIN_CAPACITY_FOR_DIGEST) {
         return;
     }
-    
     int32_t digestType;
-    permSignBlock.GetInt32(30, digestType);
+    permSignBlock.GetInt32(PERMISSION_SIGN_DIGEST_TYPE_OFFSET, digestType);
 }
 
 void PermSignSignatureLengthCheck(const uint8_t* data, size_t size)
 {
     ByteBuffer permSignBlock = CreatePermSignBlockFromFuzzData(data, size);
-    
-    if (permSignBlock.GetCapacity() < 100) {
+    if (permSignBlock.GetCapacity() < PERMISSION_SIGN_SIG_CHECK_CAPACITY) {
         return;
     }
-    
     int16_t num = 1;
-    int32_t sigPos = 30 + num * 36;
+    int32_t sigPos = PERMISSION_SIGN_DIGEST_DATA_OFFSET + num * 36;
     int32_t sigLen;
-    if (sigPos + 4 <= permSignBlock.GetCapacity()) {
+    if (sigPos + PERMISSION_SIGN_SIG_LEN_SIZE <= permSignBlock.GetCapacity()) {
         permSignBlock.GetInt32(sigPos, sigLen);
     }
 }
@@ -211,8 +216,8 @@ void PermSignProfileContentCheck(const uint8_t* data, size_t size)
 {
     std::string profile(reinterpret_cast<const char*>(data), size);
     std::string cleanContent;
-    
-    cJSON* obj = cJSON_ParseWithOpts(profile.c_str(), nullptr, 1);
+
+    cJSON* obj = cJSON_ParseWithOpts(const_cast<char*>(profile.c_str()), nullptr, 1);
     if (obj != nullptr && (cJSON_IsObject(obj) || cJSON_IsArray(obj))) {
         cleanContent = profile;
         cJSON_Delete(obj);
@@ -226,8 +231,8 @@ void PermSignProfileContentCheck(const uint8_t* data, size_t size)
 void PermSignModuleJsonParse(const uint8_t* data, size_t size)
 {
     std::string moduleJsonContent(reinterpret_cast<const char*>(data), size);
-    
-    cJSON* root = cJSON_ParseWithOpts(moduleJsonContent.c_str(), nullptr, 1);
+
+    cJSON* root = cJSON_ParseWithOpts(const_cast<char*>(moduleJsonContent.c_str()), nullptr, 1);
     if (root == nullptr) {
         return;
     }
@@ -251,8 +256,8 @@ void PermSignSharedFilePathProcess(const uint8_t* data, size_t size)
     std::string shareFilePath(reinterpret_cast<const char*>(data), size);
     std::string actualFilePath = shareFilePath;
     
-    if (shareFilePath.find("$profile:") == 0 && shareFilePath.size() > 9) {
-        actualFilePath = "resources/base/profile/" + shareFilePath.substr(9) + ".json";
+    if (shareFilePath.find("$profile:") == 0 && shareFilePath.size() > PERMISSION_SIGN_PROFILE_PREFIX_LEN) {
+        actualFilePath = "resources/base/profile/" + shareFilePath.substr(PERMISSION_SIGN_PROFILE_PREFIX_LEN) + ".json";
     }
 }
 
@@ -271,7 +276,7 @@ void PermSignVerifyBlockCheck(const uint8_t* data, size_t size)
     VerifyHap verify;
     ByteBuffer propertyBlockArray;
     
-    propertyBlockArray.SetCapacity(size + 12);
+    propertyBlockArray.SetCapacity(size + PERMISSION_SIGN_BLOCK_MIN_SIZE);
     if (size > 0) {
         propertyBlockArray.PutData(reinterpret_cast<const char*>(data), size);
     }
@@ -286,7 +291,7 @@ void PermSignVerifyBlockCheck(const uint8_t* data, size_t size)
 void PermSignSignatureBufferCheck(const uint8_t* data, size_t size)
 {
     ByteBuffer permSignBlock;
-    permSignBlock.SetCapacity(size + 12);
+    permSignBlock.SetCapacity(size + PERMISSION_SIGN_BLOCK_MIN_SIZE);
     permSignBlock.PutInt32(HapUtils::PERMISSION_SIGN_BLOCK_ID);
     permSignBlock.PutInt32(static_cast<int32_t>(size));
     permSignBlock.PutInt32(0);
@@ -295,7 +300,7 @@ void PermSignSignatureBufferCheck(const uint8_t* data, size_t size)
         permSignBlock.PutData(reinterpret_cast<const char*>(data), size);
     }
     
-    std::string signature(reinterpret_cast<const char*>(data), std::min(size, static_cast<size_t>(100)));
+    std::string signature(reinterpret_cast<const char*>(data), std::min(size, static_cast<size_t>(PERMISSION_SIGN_SIG_CHECK_CAPACITY)));
 }
 
 void PermSignDigestItemsBuild(const uint8_t* data, size_t size)
@@ -304,7 +309,7 @@ void PermSignDigestItemsBuild(const uint8_t* data, size_t size)
     
     std::vector<int8_t> mockDigest(SHA256_DIGEST_LENGTH, 0x01);
     if (size > 0) {
-        for (size_t i = 0; i < std::min(size, static_cast<size_t>(4)); i++) {
+        for (size_t i = 0; i < std::min(size, static_cast<size_t>(MAX_DIGEST_ITEMS_LOOP)); i++) {
             mockDigest[i % SHA256_DIGEST_LENGTH] = static_cast<int8_t>(data[i]);
         }
     }
@@ -369,24 +374,24 @@ void PermSignHashAlgorithmCheck(const uint8_t* data, size_t size)
     
     if (signAlgId == ALGORITHM_SHA256_WITH_ECDSA) {
         hash = EVP_sha256();
-        digestSize = 32;
+        digestSize = SHA256_DIGEST_SIZE;
     } else if (signAlgId == ALGORITHM_SHA384_WITH_ECDSA) {
         hash = EVP_sha384();
-        digestSize = 48;
+        digestSize = SHA384_DIGEST_SIZE;
     }
 }
 
 void PermSignByteBufferPutData(const uint8_t* data, size_t size)
 {
     ByteBuffer buffer;
-    buffer.SetCapacity(size + 100);
+    buffer.SetCapacity(size + PERMISSION_SIGN_SIG_CHECK_CAPACITY);
     
     if (size > 0) {
         buffer.PutData(reinterpret_cast<const char*>(data), size);
     }
     
     buffer.PutInt32(static_cast<int32_t>(size));
-    buffer.PutInt16(static_cast<int16_t>(size % 100));
+    buffer.PutInt16(static_cast<int16_t>(size % PERMISSION_SIGN_SIG_CHECK_CAPACITY));
 }
 
 void PermSignPkcs7ContextCheck(const uint8_t* data, size_t size)

@@ -797,8 +797,8 @@ bool VerifyHap::ComputeDigest(const std::string& content, std::vector<int8_t>& d
 }
 
 bool VerifyHap::CheckPermSign(const std::string& hapFilePath, ByteBuffer& propertyBlockArray,
-                               const std::string& profileContent, const ByteBuffer& codeSignBlock,
-                               Pkcs7Context& profilePkcs7Context)const
+							  const std::string& profileContent, const ByteBuffer& codeSignBlock,
+    						  Pkcs7Context& profilePkcs7Context)const
 {
     int32_t pos = ZIP_HEAD_OF_SUBSIGNING_BLOCK_LENGTH + codeSignBlock.GetCapacity();
     if (pos >= propertyBlockArray.GetCapacity()) {
@@ -844,8 +844,8 @@ bool VerifyHap::CheckPermSign(const std::string& hapFilePath, ByteBuffer& proper
 }
 
 bool VerifyHap::VerifyPermSignBlock(ByteBuffer& permSignBlock, const std::string& profileContent,
-                                     const std::string& hapFilePath, const ByteBuffer& codeSignBlock,
-                                     Pkcs7Context& profilePkcs7Context)const
+    								const std::string& hapFilePath, const ByteBuffer& codeSignBlock,
+    								Pkcs7Context& profilePkcs7Context)const
 {
     if (permSignBlock.GetCapacity() < ZIP_HEAD_OF_SUBSIGNING_BLOCK_LENGTH) {
         SIGNATURE_TOOLS_LOGE("perm sign block size too small.");
@@ -894,14 +894,14 @@ bool VerifyHap::GetSignAlgId(ByteBuffer& permSignBlock, int32_t& signAlgId)const
     std::vector<int8_t> magic = HapUtils::GetPermissionSignMagic();
     for (int i = 0; i < 8; i++) {
         int8_t val;
-        permSignBlock.GetInt8(12 + i, val);
+        permSignBlock.GetInt8(PERMISSION_SIGN_MAGIC_OFFSET + i, val);
         if (val != magic[i]) {
             SIGNATURE_TOOLS_LOGE("perm sign block magic mismatch at pos %d: expected %02x, got %02x",
-                12 + i, (uint8_t)magic[i], (uint8_t)val);
+                PERMISSION_SIGN_MAGIC_OFFSET + i, (uint8_t)magic[i], (uint8_t)val);
             return false;
         }
     }
-    permSignBlock.GetInt32(20, signAlgId);
+    permSignBlock.GetInt32(PERMISSION_SIGN_SIGN_ALG_ID_OFFSET, signAlgId);
     return true;
 }
 
@@ -909,10 +909,10 @@ bool VerifyHap::GetHashAlgorithm(int32_t signAlgId, const EVP_MD*& hash, int32_t
 {
     if (signAlgId == ALGORITHM_SHA256_WITH_ECDSA) {
         hash = EVP_sha256();
-        digestSize = 32;
+        digestSize = SHA256_DIGEST_SIZE;
     } else if (signAlgId == ALGORITHM_SHA384_WITH_ECDSA) {
         hash = EVP_sha384();
-        digestSize = 48;
+        digestSize = SHA384_DIGEST_SIZE;
     } else {
         SIGNATURE_TOOLS_LOGE("unsupported sign algorithm id: 0x%08x", signAlgId);
         return false;
@@ -921,9 +921,9 @@ bool VerifyHap::GetHashAlgorithm(int32_t signAlgId, const EVP_MD*& hash, int32_t
 }
 
 bool VerifyHap::ReadStoredDigests(ByteBuffer& permSignBlock, int16_t num, int32_t digestSize,
-                                   std::string& storedDigests)const
+    							  std::string& storedDigests)const
 {
-    int32_t digestPos = 30;
+    int32_t digestPos = PERMISSION_SIGN_DIGEST_DATA_OFFSET;
     for (int i = 0; i < num; i++) {
         digestPos += 4;
         for (int j = 0; j < digestSize; j++) {
@@ -937,9 +937,9 @@ bool VerifyHap::ReadStoredDigests(ByteBuffer& permSignBlock, int16_t num, int32_
 }
 
 bool VerifyHap::ReadSignature(ByteBuffer& permSignBlock, int16_t num, int32_t digestSize,
-                               std::string& signature)const
+    						  std::string& signature)const
 {
-    int32_t sigPos = 30 + num * (4 + digestSize);
+    int32_t sigPos = PERMISSION_SIGN_DIGEST_DATA_OFFSET + num * (4 + digestSize);
     int32_t sigLen;
     permSignBlock.GetInt32(sigPos, sigLen);
     int32_t sigOffset = sigPos + 4;
@@ -971,7 +971,7 @@ EVP_PKEY* VerifyHap::GetProfilePubKey(Pkcs7Context& profilePkcs7Context)const
 }
 
 bool VerifyHap::GetFileContentFromHap(const std::string& hapFilePath, const std::string& fileName,
-                                       std::string& content)const
+									  std::string& content)const
 {
     unzFile zFile = unzOpen(hapFilePath.c_str());
     if (zFile == NULL) {
@@ -1048,10 +1048,10 @@ bool VerifyHap::VerifyPermSignSignature(const std::string& signature, const std:
 }
 
 std::string VerifyHap::ComputeAllDigests(const std::vector<int32_t>& digestTypes,
-                                          const std::string& profileContent,
-                                          const std::string& hapFilePath,
-                                          const ByteBuffer& codeSignBlock,
-                                          int32_t signAlgId)const
+    									 const std::string& profileContent,
+    									 const std::string& hapFilePath,
+    									 const ByteBuffer& codeSignBlock,
+    									 int32_t signAlgId)const
 {
     std::string allDigests;
 
@@ -1137,7 +1137,7 @@ std::string VerifyHap::ComputeSharedFileDigest(const std::string& hapFilePath, i
 
     std::string actualFilePath = shareFilePath;
     if (shareFilePath.find("$profile:") == 0) {
-        actualFilePath = "resources/base/profile/" + shareFilePath.substr(9) + ".json";
+        actualFilePath = "resources/base/profile/" + shareFilePath.substr(PERMISSION_SIGN_PROFILE_PREFIX_LEN) + ".json";
     }
 
     std::string shareFileContent;

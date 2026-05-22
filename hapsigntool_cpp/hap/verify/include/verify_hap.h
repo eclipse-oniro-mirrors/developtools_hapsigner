@@ -40,6 +40,12 @@ public:
     static const int OFFSET_ZERO = 0;
     static const int OFFSET_FOUR = 4;
     static const int OFFSET_EIGHT = 8;
+    static const int32_t PERMISSION_SIGN_MAGIC_OFFSET = 12;
+    static const int32_t PERMISSION_SIGN_SIGN_ALG_ID_OFFSET = 20;
+    static const int32_t PERMISSION_SIGN_DIGEST_DATA_OFFSET = 30;
+    static const int32_t SHA256_DIGEST_SIZE = 32;
+    static const int32_t SHA384_DIGEST_SIZE = 48;
+    static const int32_t PERMISSION_SIGN_PROFILE_PREFIX_LEN = 9;
 
     VerifyHap();
     VerifyHap(bool isPrintCert);
@@ -81,23 +87,23 @@ public:
     bool CheckCodeSign(const std::string& hapFilePath, const std::vector<OptionalBlock>& optionalBlocks,
                        const ByteBuffer& hapSignatureBlock)const;
     bool BuildBlockInfo(const std::string& hapFilePath, const std::vector<OptionalBlock>& optionalBlocks,
-                         bool& codeReSignFlag, bool& codeSignFlag, ByteBuffer& propertyBlockArray)const;
+        				bool& codeReSignFlag, bool& codeSignFlag, ByteBuffer& propertyBlockArray)const;
     bool ExtractCodeSignBlock(const std::string& hapFilePath, ByteBuffer& propertyBlockArray,
-                              std::unordered_map<int, ByteBuffer>& blockMap,
-                              std::string& profileContent, ByteBuffer& codeSignBlock)const;
+     						  std::unordered_map<int, ByteBuffer>& blockMap,
+        					  std::string& profileContent, ByteBuffer& codeSignBlock)const;
     bool VerifyCodeAndProfile(const std::string& hapFilePath, const std::string& profileContent,
-                              const ByteBuffer& codeSignBlock, const ByteBuffer& hapSignatureBlock,
-                              Pkcs7Context& profilePkcs7Context)const;
+        					  const ByteBuffer& codeSignBlock, const ByteBuffer& hapSignatureBlock,
+        					  Pkcs7Context& profilePkcs7Context)const;
     bool CheckPermSign(const std::string& hapFilePath, ByteBuffer& propertyBlockArray,
-                       const std::string& profileContent, const ByteBuffer& codeSignBlock,
-                       Pkcs7Context& profilePkcs7Context)const;
+    				   const std::string& profileContent, const ByteBuffer& codeSignBlock,
+        			   Pkcs7Context& profilePkcs7Context)const;
     bool VerifyPermSignBlock(ByteBuffer& permSignBlock, const std::string& profileContent,
-                             const std::string& hapFilePath, const ByteBuffer& codeSignBlock,
-                             Pkcs7Context& profilePkcs7Context)const;
-    bool GetFileContentFromHap(const std::string& hapFilePath, const std::string& fileName, 
-                               std::string& content)const;
+     				   	 	 const std::string& hapFilePath, const ByteBuffer& codeSignBlock,
+        			   	 	 Pkcs7Context& profilePkcs7Context)const;
+    bool GetFileContentFromHap(const std::string& hapFilePath, const std::string& fileName,
+        					   std::string& content)const;
     bool VerifyPermSignSignature(const std::string& signature, const std::string& storedDigests,
-                                 const EVP_MD* hash, EVP_PKEY* pubKey)const;
+        						 const EVP_MD* hash, EVP_PKEY* pubKey)const;
     static int GetProfileContent(const std::string profile, std::string& ret);
 
     bool VerifyAppPkcs7(Pkcs7Context& pkcs7Context, const ByteBuffer& hapSignatureBlock);

@@ -508,8 +508,10 @@ bool SignProvider::AppendCodeSignBlock(SignerConfig* signerConfig, std::string o
 
 std::pair<bool, bool> SignProvider::CheckSignEnabled()
 {
-    bool enableCodeSign = signParams.at(ParamConstants::PARAM_SIGN_CODE) == CodeSigning::ENABLE_SIGN_CODE_VALUE;
-    bool enablePermSign = signParams.at(ParamConstants::PARAM_PERM_MODE) == ParamConstants::ENABLE_PERM_MODE;
+    bool enableCodeSign =
+        signParams.at(ParamConstants::PARAM_SIGN_CODE) == CodeSigning::ENABLE_SIGN_CODE_VALUE;
+    bool enablePermSign =
+        signParams.at(ParamConstants::PARAM_PERM_MODE) == ParamConstants::ENABLE_PERM_MODE;
     return {enableCodeSign, enablePermSign};
 }
 
@@ -525,7 +527,7 @@ bool SignProvider::IsSignTarget(const std::string& suffixTmp)
 
 int64_t SignProvider::ComputeBaseOffset(int64_t centralDirectoryOffset)
 {
-    return centralDirectoryOffset + ((FOUR_BYTE + FOUR_BYTE + FOUR_BYTE) * (optionalBlocks.size() + 2 + 1));
+    return centralDirectoryOffset + (PROPERTY_BLOCK_HEADER_SIZE * (optionalBlocks.size() + 2 + 1));
 }
 
 void SignProvider::BuildPropertyBlock(int64_t baseOffset, const ByteBuffer& codeSignSubBlock,
@@ -554,7 +556,7 @@ bool SignProvider::BuildCodeSignSubBlock(const std::string& suffix, int64_t code
     }
     SIGNATURE_TOOLS_LOGI("generate codeSignArray finished.");
 
-    subBlock.SetCapacity(codeSignArray.size() + (FOUR_BYTE + FOUR_BYTE + FOUR_BYTE));
+    subBlock.SetCapacity(codeSignArray.size() + PROPERTY_BLOCK_HEADER_SIZE);
     subBlock.PutInt32(HapUtils::HAP_CODE_SIGN_BLOCK_ID);
     subBlock.PutInt32(codeSignArray.size());
     subBlock.PutInt32((int32_t)codeSignOffset);
@@ -578,7 +580,9 @@ bool SignProvider::GetModuleJsonContent(const std::string& hapFilePath, std::str
     return GetFileContentFromHap(hapFilePath, "module.json", content);
 }
 
-bool SignProvider::GetFileContentFromHap(const std::string& hapFilePath, const std::string& fileName, std::string& content)
+bool SignProvider::GetFileContentFromHap(const std::string& hapFilePath,
+    const std::string& fileName,
+    std::string& content)
 {
     unzFile zFile = unzOpen(hapFilePath.c_str());
     if (zFile == NULL) {
@@ -665,7 +669,8 @@ bool SignProvider::ComputeDigest(const std::vector<int8_t>& data, std::vector<in
     return true;
 }
 
-bool SignProvider::GetShareFilesFromModuleJson(const std::string& moduleJsonContent, std::vector<std::string>& shareFiles)
+bool SignProvider::GetShareFilesFromModuleJson(const std::string& moduleJsonContent,
+    std::vector<std::string>& shareFiles)
 {
     cJSON* root = cJSON_ParseWithOpts(moduleJsonContent.c_str(), nullptr, 1);
     if (root == nullptr) {
@@ -773,7 +778,8 @@ bool SignProvider::ComputePermissionDigests(const std::string& outputFilePath,
         for (const auto& shareFile : shareFiles) {
             std::string actualFilePath = shareFile;
             if (shareFile.find("$profile:") == 0) {
-                actualFilePath = "resources/base/profile/" + shareFile.substr(9) + ".json";
+                actualFilePath =
+                    "resources/base/profile/" + shareFile.substr(PERMISSION_SIGN_PROFILE_PREFIX_LEN) + ".json";
             }
             std::string shareFileContent;
             if (GetFileContentFromHap(outputFilePath, actualFilePath, shareFileContent)) {
@@ -814,7 +820,7 @@ bool SignProvider::BuildPermSignBlock(int64_t permSignOffset, const PermSignData
     int digestLen = digestItemsCount * (4 + signData.digestSize);
     int sigLen = signData.signature.size();
     int permSignDataLen = 8 + 4 + 4 + 2 + digestLen + 4 + sigLen;
-    int totalSize = FOUR_BYTE + FOUR_BYTE + FOUR_BYTE + permSignDataLen;
+    int totalSize = PROPERTY_BLOCK_HEADER_SIZE + permSignDataLen;
 
     subBlock.SetCapacity(totalSize);
     subBlock.PutInt32(HapUtils::PERMISSION_SIGN_BLOCK_ID);
@@ -844,18 +850,20 @@ bool SignProvider::AppendReCodeSignBlock(SignerConfig* signerConfig, std::string
     std::string suffixTmp = suffix;
     std::transform(suffixTmp.begin(), suffixTmp.end(), suffixTmp.begin(), ::tolower);
 
-    bool enablePermSign = signParams.at(ParamConstants::PARAM_PERM_MODE) == ParamConstants::ENABLE_PERM_MODE;
+    bool enablePermSign =
+        signParams.at(ParamConstants::PARAM_PERM_MODE) == ParamConstants::ENABLE_PERM_MODE;
     int64_t codeSignOffset = ComputeCodeSignOffset(centralDirectoryOffset);
 
     CodeSigning codeSigning(signerConfig);
     std::vector<int8_t> localCodeSignArray;
-    if (!codeSigning.GetCodeSignBlock(outputFilePath, codeSignOffset, suffixTmp, profileContent, zip, localCodeSignArray)) {
+    if (!codeSigning.GetCodeSignBlock(outputFilePath, codeSignOffset, suffixTmp,
+        profileContent, zip, localCodeSignArray)) {
         SIGNATURE_TOOLS_LOGE("Codesigning getCodeSignBlock Fail.");
         return false;
     }
     SIGNATURE_TOOLS_LOGI("generate codeSignArray finished.");
 
-    auto codeSignResult = std::make_unique<ByteBuffer>(localCodeSignArray.size() + (FOUR_BYTE + FOUR_BYTE + FOUR_BYTE));
+    auto codeSignResult = std::make_unique<ByteBuffer>(localCodeSignArray.size() + PROPERTY_BLOCK_HEADER_SIZE);
     codeSignResult->PutInt32(HapUtils::HAP_CODE_SIGN_BLOCK_ID);
     codeSignResult->PutInt32(localCodeSignArray.size());
     codeSignResult->PutInt32((int32_t)codeSignOffset);
@@ -894,12 +902,15 @@ bool SignProvider::AppendReCodeSignBlock(SignerConfig* signerConfig, std::string
 int64_t SignProvider::ComputeCodeSignOffset(int64_t centralDirectoryOffset)
 {
     int64_t optionalBlockSize = std::accumulate(optionalBlocks.begin(), optionalBlocks.end(), 0,
-        [](int64_t sum, const auto& elem) { return sum + elem.optionalBlockValue.GetCapacity(); });
-    return centralDirectoryOffset + optionalBlockSize + (FOUR_BYTE + FOUR_BYTE + FOUR_BYTE) * (optionalBlocks.size() + 2) + 12;
+        [](int64_t sum, const auto& elem) {
+            return sum + elem.optionalBlockValue.GetCapacity();
+        });
+    return centralDirectoryOffset + optionalBlockSize +
+        PROPERTY_BLOCK_HEADER_SIZE * (optionalBlocks.size() + 2) + PROPERTY_BLOCK_HEADER_SIZE;
 }
 
-bool SignProvider::CreateSignerConfigs(STACK_OF(X509)* certificates, const std::optional<X509_CRL*>& crl,
-                                       Options* options, SignerConfig& inOut)
+bool SignProvider::CreateSignerConfigs(STACK_OF(X509)* certificates,
+    const std::optional<X509_CRL*>& crl, Options* options, SignerConfig& inOut)
 {
     inOut.FillParameters(signParams);
     inOut.SetCertificates(certificates);
