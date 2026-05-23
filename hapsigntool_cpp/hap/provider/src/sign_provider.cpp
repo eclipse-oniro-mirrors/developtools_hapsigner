@@ -511,7 +511,7 @@ std::pair<bool, bool> SignProvider::CheckSignEnabled()
     bool enableCodeSign =
         signParams.at(ParamConstants::PARAM_SIGN_CODE) == CodeSigning::ENABLE_SIGN_CODE_VALUE;
     bool enablePermSign =
-        signParams.at(ParamConstants::PARAM_PERM_MODE) == ParamConstants::ENABLE_PERM_MODE;
+        enableCodeSign && signParams.at(ParamConstants::PARAM_PERM_MODE) == ParamConstants::ENABLE_PERM_MODE;
     return {enableCodeSign, enablePermSign};
 }
 
@@ -682,13 +682,13 @@ bool SignProvider::GetShareFilesFromModuleJson(const std::string& moduleJsonCont
     cJSON* moduleObj = cJSON_GetObjectItem(root, "module");
     if (moduleObj == nullptr || !cJSON_IsObject(moduleObj)) {
         cJSON_Delete(root);
-        return true;
+        return false;
     }
 
     cJSON* shareFilesObj = cJSON_GetObjectItem(moduleObj, "shareFiles");
     if (shareFilesObj == nullptr || !cJSON_IsString(shareFilesObj)) {
         cJSON_Delete(root);
-        return true;
+        return false;
     }
 
     std::string shareFile = shareFilesObj->valuestring;
@@ -826,7 +826,7 @@ bool SignProvider::GetSignAlgorithmInfo(SignerConfig* signerConfig, int32_t& sig
 
 std::string SignProvider::BuildPermSignDataToSign(const PermSignData& signData)
 {
-    std::vector<int8_t> magic = HapUtils::GetPermissionSignMagic();
+    const std::vector<int8_t>& magic = HapUtils::GetPermissionSignMagic();
     int digestItemsCount = signData.digestItems.size();
     int digestLen = digestItemsCount * (4 + signData.digestSize);
 
@@ -856,8 +856,8 @@ bool SignProvider::BuildPermSignBlock(int64_t permSignOffset, const PermSignData
     subBlock.PutInt32(permSignDataLen);
     subBlock.PutInt32((int32_t)permSignOffset);
 
-    std::vector<int8_t> magic = HapUtils::GetPermissionSignMagic();
-    subBlock.PutData(magic.data(), magic.size());
+    const std::vector<int8_t>& magic = HapUtils::GetPermissionSignMagic();
+    subBlock.PutData(reinterpret_cast<const char*>(magic.data()), magic.size());
     subBlock.PutInt32(signData.signAlgId);
     subBlock.PutInt32(digestLen);
     subBlock.PutInt16((int16_t)digestItemsCount);
@@ -935,7 +935,7 @@ int64_t SignProvider::ComputeCodeSignOffset(int64_t centralDirectoryOffset)
             return sum + elem.optionalBlockValue.GetCapacity();
         });
     return centralDirectoryOffset + optionalBlockSize +
-        PROPERTY_BLOCK_HEADER_SIZE * (optionalBlocks.size() + PROPERTY_BLOCK_COUNT) + PROPERTY_BLOCK_HEADER_SIZE;
+        PROPERTY_BLOCK_HEADER_SIZE * (optionalBlocks.size() + PROPERTY_BLOCK_COUNT + ADDITIONAL_BLOCK_COUNT);
 }
 
 bool SignProvider::CreateSignerConfigs(STACK_OF(X509)* certificates,

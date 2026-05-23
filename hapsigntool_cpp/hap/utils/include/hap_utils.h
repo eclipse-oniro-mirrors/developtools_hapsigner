@@ -81,13 +81,14 @@ public:
     static constexpr int BLOCK_SIZE = 8;
     static constexpr int PERMISSION_SIGN_DIGEST_TYPE_SIZE = 4;
     static constexpr int PERMISSION_SIGN_MAGIC_LENGTH = 8;
+    static constexpr int MAX_PERMISSION_SIGN_DIGEST_COUNT = 4;
 
 public:
     static std::string GetAppIdentifier(const std::string& profileContent);
     static std::pair<std::string, std::string> ParseAppIdentifier(const std::string& profileContent);
     static std::vector<int8_t> GetHapSigningBlockMagic(int compatibleVersion);
     static std::vector<int8_t> GetHapSigningBlockMagicV3();
-    static std::vector<int8_t> GetPermissionSignMagic();
+    static const std::vector<int8_t>& GetPermissionSignMagic();
     static int GetHapSigningBlockVersion(int compatibleVersion);
     static bool ReadFileToByteBuffer(const std::string& file, ByteBuffer& buffer);
 

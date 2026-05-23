@@ -61,14 +61,14 @@ static constexpr int PERMISSION_SIGN_SIG_LEN_SIZE = 4;
 static constexpr int PERMISSION_SIGN_DIGEST_DATA_OFFSET = 30;
 static constexpr int PERMISSION_SIGN_PROFILE_PREFIX_LEN = 9;
 
-static bool ComputeDigestForFuzz(const std::string& content, std::vector<int8_t>& digest)
+static bool ComputeDigestForFuzz(const std::vector<uint8_t>& content, std::vector<int8_t>& digest)
 {
     if (content.empty()) {
         return false;
     }
 
     unsigned char hash[SHA256_DIGEST_LENGTH];
-    SHA256(reinterpret_cast<const unsigned char*>(content.c_str()), content.size(), hash);
+    SHA256(content.data(), content.size(), hash);
 
     digest.resize(SHA256_DIGEST_LENGTH);
     for (int i = 0; i < SHA256_DIGEST_LENGTH; i++) {
@@ -97,7 +97,7 @@ static ByteBuffer CreatePermSignBlockFromFuzzData(const uint8_t* data, size_t si
 
 void PermSignBlockMagicCheck(const uint8_t* data, size_t size)
 {
-    std::vector<int8_t> magic = HapUtils::GetPermissionSignMagic();
+    const std::vector<int8_t>& magic = HapUtils::GetPermissionSignMagic();
     ByteBuffer permSignBlock = CreatePermSignBlockFromFuzzData(data, size);
     if (permSignBlock.GetCapacity() < PERMISSION_SIGN_BLOCK_MIN_SIZE + PERMISSION_SIGN_MAGIC_LENGTH) {
         return;
@@ -107,12 +107,15 @@ void PermSignBlockMagicCheck(const uint8_t* data, size_t size)
     for (int i = 0; i < PERMISSION_SIGN_MAGIC_LENGTH && i < static_cast<int>(size); i++) {
         int8_t val;
         permSignBlock.GetInt8(PERMISSION_SIGN_MAGIC_OFFSET + i, val);
+        if (val != magic[i]) {
+            return;
+        }
     }
 }
 
 void PermSignDigestComputation(const uint8_t* data, size_t size)
 {
-    std::string content(reinterpret_cast<const char*>(data), size);
+    std::vector<uint8_t> content(data, data + size);
     std::vector<int8_t> digest;
     ComputeDigestForFuzz(content, digest);
 }
@@ -199,7 +202,7 @@ void PermSignSignatureLengthCheck(const uint8_t* data, size_t size)
 
 void PermSignAllDigestsComputation(const uint8_t* data, size_t size)
 {
-    std::string profileContent(reinterpret_cast<const char*>(data), size);
+    std::vector<uint8_t> profileContent(data, data + size);
     std::string hapFilePath = "./permSign/test.hap";
     ByteBuffer codeSignBlock;
     

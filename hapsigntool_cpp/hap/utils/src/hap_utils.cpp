@@ -96,7 +96,7 @@ std::vector<int8_t> HapUtils::GetHapSigningBlockMagicV3()
     return HAP_SIGNING_BLOCK_MAGIC_V3;
 }
 
-std::vector<int8_t> HapUtils::GetPermissionSignMagic()
+const std::vector<int8_t>& HapUtils::GetPermissionSignMagic()
 {
     return PERMISSION_SIGN_MAGIC;
 }

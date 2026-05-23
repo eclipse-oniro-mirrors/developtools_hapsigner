@@ -179,7 +179,7 @@ private:
     static constexpr int ADDITIONAL_BLOCK_COUNT = 1;
     std::string profileContent;
     std::vector<int8_t> codeSignArray;
-    SignerConfig* mSignerConfig;
+    SignerConfig* mSignerConfig = nullptr;
     std::string mOutputFilePath;
 };
 } // namespace SignatureTools

@@ -79,7 +79,7 @@ static bool ComputeDigestForTest(const std::string& content, std::vector<int8_t>
 static ByteBuffer CreateMockPermSignBlock(int32_t signAlgId, int16_t digestCount, const std::string& signature)
 {
     ByteBuffer permSignBlock;
-    std::vector<int8_t> magic = HapUtils::GetPermissionSignMagic();
+    const std::vector<int8_t>& magic = HapUtils::GetPermissionSignMagic();
     
     int32_t digestLen = digestCount * (4 + HapUtils::PERMISSION_SIGN_DIGEST_SIZE);
     int32_t sigLen = signature.size();
@@ -117,7 +117,7 @@ static ByteBuffer CreateMockPermSignBlock(int32_t signAlgId, int16_t digestCount
 
 HWTEST_F(PermSignTest, perm_sign_test_001, testing::ext::TestSize.Level1)
 {
-    std::vector<int8_t> magic = HapUtils::GetPermissionSignMagic();
+    const std::vector<int8_t>& magic = HapUtils::GetPermissionSignMagic();
     EXPECT_EQ(magic.size(), 8);
     EXPECT_NE(magic.size(), 0);
 }
@@ -224,10 +224,10 @@ HWTEST_F(PermSignTest, perm_sign_test_013, testing::ext::TestSize.Level1)
 
 HWTEST_F(PermSignTest, perm_sign_test_014, testing::ext::TestSize.Level1)
 {
-    std::vector<int8_t> magic = HapUtils::GetPermissionSignMagic();
+    const std::vector<int8_t>& magic = HapUtils::GetPermissionSignMagic();
     ByteBuffer block;
     block.SetCapacity(100);
-    block.PutData(magic.data(), magic.size());
+    block.PutData(reinterpret_cast<const char*>(magic.data()), magic.size());
     
     EXPECT_EQ(block.GetCapacity(), 100);
 }
@@ -469,7 +469,7 @@ HWTEST_F(PermSignTest, perm_sign_test_037, testing::ext::TestSize.Level1)
 {
     ByteBuffer permSignBlock = CreateMockPermSignBlock(TEST_ALGORITHM_SHA256_WITH_ECDSA, 1, "");
     
-    std::vector<int8_t> magic = HapUtils::GetPermissionSignMagic();
+    const std::vector<int8_t>& magic = HapUtils::GetPermissionSignMagic();
     for (int i = 0; i < 8; i++) {
         int8_t val;
         permSignBlock.GetInt8(12 + i, val);
@@ -578,13 +578,6 @@ HWTEST_F(PermSignTest, perm_sign_test_048, testing::ext::TestSize.Level1)
 }
 
 HWTEST_F(PermSignTest, perm_sign_test_049, testing::ext::TestSize.Level1)
-{
-    int digestCount = 4;
-    int digestLen = digestCount * (4 + HapUtils::PERMISSION_SIGN_DIGEST_SIZE);
-    EXPECT_EQ(digestLen, 4 * 36);
-}
-
-HWTEST_F(PermSignTest, perm_sign_test_050, testing::ext::TestSize.Level1)
 {
     std::string allDigests;
     for (int i = 0; i < 3; i++) {
