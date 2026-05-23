@@ -23,8 +23,6 @@
 #include <vector>
 #include <string>
 #include <openssl/sha.h>
-#undef SHA256_DIGEST_LENGTH
-static constexpr int SHA256_DIGEST_LENGTH = 32;
 
 #include "sign_provider.h"
 #include "verify_hap.h"

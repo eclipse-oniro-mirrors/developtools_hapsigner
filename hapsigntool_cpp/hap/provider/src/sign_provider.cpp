@@ -482,6 +482,7 @@ bool SignProvider::AppendCodeSignBlock(SignerConfig* signerConfig, std::string o
             SIGNATURE_TOOLS_LOGE("BuildCodeSignSubBlock Fail.");
             return false;
         }
+        currentOffset += codeSignSubBlock.GetCapacity();
     }
 
     if (enablePermSign) {

@@ -30,8 +30,6 @@
 #include "cJSON.h"
 #include <unistd.h>
 #include <openssl/sha.h>
-#undef SHA256_DIGEST_LENGTH
-static constexpr int SHA256_DIGEST_LENGTH = 32;
 
 namespace OHOS {
 namespace SignatureTools {
