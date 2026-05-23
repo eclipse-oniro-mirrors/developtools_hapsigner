@@ -800,7 +800,8 @@ bool VerifyHap::ComputeDigest(const std::string& content, std::vector<int8_t>& d
 }
 
 bool VerifyHap::CheckPermSign(const std::string& hapFilePath, ByteBuffer& propertyBlockArray,
-	const std::string& profileContent, const ByteBuffer& codeSignBlock, Pkcs7Context& profilePkcs7Context)const
+	                          const std::string& profileContent, const ByteBuffer& codeSignBlock,
+                              Pkcs7Context& profilePkcs7Context)const
 {
     int32_t pos = ZIP_HEAD_OF_SUBSIGNING_BLOCK_LENGTH + codeSignBlock.GetCapacity();
     if (pos >= propertyBlockArray.GetCapacity()) {
