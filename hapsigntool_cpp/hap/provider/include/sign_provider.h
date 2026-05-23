@@ -106,6 +106,12 @@ protected:
     std::map<std::string, std::string> signParams = std::map<std::string, std::string>();
 
 private:
+    struct SignContext {
+        SignerConfig* signerConfig = nullptr;
+        std::string outputFilePath;
+        std::vector<int8_t> codeSignArray;
+    };
+
     int CheckParmaAndInitConfig(SignerConfig& config, Options* options, std::string& suffix);
 
     fileIOTuple PrepareIOStreams(const std::string& inputPath, const std::string& outputPath, bool& ret);
@@ -135,33 +141,37 @@ private:
     int GetCertificateChainFromFile(const std::string& certChianFile, STACK_OF(X509)** ret);
     int GetCertListFromFile(const std::string& certsFile, STACK_OF(X509)** ret);
 
-    bool AppendCodeSignBlock(SignerConfig* signerConfig, std::string outputFilePath,
+    bool AppendPropertyBlock(SignerConfig* signerConfig, std::string outputFilePath,
                              const std::string& suffix, int64_t centralDirectoryOffset, ZipSigner& zip);
     bool BuildCodeSignSubBlock(const std::string& suffix, int64_t codeSignOffset, ZipSigner& zip,
-                               ByteBuffer& subBlock);
-    bool BuildPermSignSubBlock(int64_t permSignOffset, ZipSigner& zip, ByteBuffer& subBlock);
+                               ByteBuffer& subBlock, SignContext& signContext);
+    bool BuildPermSignSubBlock(int64_t permSignOffset, ZipSigner& zip, ByteBuffer& subBlock,
+                               SignContext& signContext);
 
     bool ComputePermissionDigests(const std::string& outputFilePath, const std::string& moduleJsonContent,
                                   std::vector<std::pair<int, std::vector<int8_t>>>& digestItems,
-                                  int32_t signAlgId);
+                                  int32_t signAlgId, const std::vector<int8_t>& codeSignArray);
     void ProcessShareFileDigests(const std::string& outputFilePath,
-                                 const std::vector<std::string>& shareFiles, int32_t signAlgId,
+                                 const std::string& shareFile, int32_t signAlgId,
                                  std::vector<std::pair<int, std::vector<int8_t>>>& digestItems);
     bool GetSignAlgorithmInfo(SignerConfig* signerConfig, int32_t& signAlgId, std::string& signAlg);
-    bool BuildPermSignBlock(int64_t permSignOffset, const PermSignData& signData, ByteBuffer& subBlock);
-    std::string BuildPermSignDataToSign(const PermSignData& signData);
+    bool BuildPermSignBlock(int64_t permSignOffset, const std::string& unsignedData,
+                            const std::string& signature, ByteBuffer& subBlock);
+    std::string BuildPermUnsignedData(const PermSignData& signData);
     bool HasModuleJson(ZipSigner& zip);
     bool GetModuleJsonContent(const std::string& hapFilePath, std::string& content);
     bool GetFileContentFromHap(const std::string& hapFilePath, const std::string& fileName, std::string& content);
     bool ComputeDigest(const std::string& content, std::vector<int8_t>& digest, int32_t signAlgId);
     bool ComputeDigest(const std::vector<int8_t>& data, std::vector<int8_t>& digest, int32_t signAlgId);
-    bool GetShareFilesFromModuleJson(const std::string& moduleJsonContent, std::vector<std::string>& shareFiles);
+
+    bool DoComputeDigest(const void* data, size_t len, std::vector<int8_t>& digest, int32_t signAlgId);
+    bool GetShareFilesFromModuleJson(const std::string& moduleJsonContent, std::string& shareFile);
     std::string GetSharedFilePathFromModuleJson(const std::string& moduleJsonContent);
 
-    void BuildPropertyBlock(int64_t baseOffset, const ByteBuffer& codeSignSubBlock,
+    void BuildPropertyBlock(const ByteBuffer& codeSignSubBlock,
                             const ByteBuffer& permSignSubBlock, ByteBuffer& propertyBlock);
     std::pair<bool, bool> CheckSignEnabled();
-    bool IsSignTarget(const std::string& suffixTmp);
+    bool IsCodeSignAndPermSignSupportedFile(const std::string& suffixTmp);
     int64_t ComputeBaseOffset(int64_t centralDirectoryOffset);
     bool AppendReCodeSignBlock(SignerConfig* signerConfig, std::string outputFilePath,
                              const std::string& suffix, int64_t centralDirectoryOffset, ZipSigner& zip);
@@ -173,14 +183,11 @@ private:
 
     static std::vector<std::string> VALID_SIGN_ALG_NAME;
     static constexpr int FOUR_BYTE = 4;
-    static constexpr int PERMISSION_SIGN_PROFILE_PREFIX_LEN = 9;
+    static const std::string PROFILE_PREFIX;
     static constexpr int PROPERTY_BLOCK_HEADER_SIZE = 12;
-    static constexpr int PROPERTY_BLOCK_COUNT = 2;
-    static constexpr int ADDITIONAL_BLOCK_COUNT = 1;
+    static constexpr int PROPERTY_BLOCK_COUNT = 2; // The sum of property block and hap sign block
+    static constexpr int ADDITIONAL_BLOCK_COUNT = 1; // The num of subblock head before codesign block in property block
     std::string profileContent;
-    std::vector<int8_t> codeSignArray;
-    SignerConfig* mSignerConfig = nullptr;
-    std::string mOutputFilePath;
 };
 } // namespace SignatureTools
 } // namespace OHOS

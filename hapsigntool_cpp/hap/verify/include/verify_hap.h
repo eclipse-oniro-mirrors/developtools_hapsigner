@@ -28,7 +28,6 @@ namespace OHOS {
 namespace SignatureTools {
 class VerifyHap {
 public:
-    static const int32_t HEX_PRINT_LENGTH;
     static const int32_t DIGEST_BLOCK_LEN_OFFSET;
     static const int32_t DIGEST_ALGORITHM_OFFSET;
     static const int32_t DIGEST_LEN_OFFSET;
@@ -43,10 +42,6 @@ public:
     static const int32_t PERMISSION_SIGN_MAGIC_OFFSET = 12;
     static const int32_t PERMISSION_SIGN_SIGN_ALG_ID_OFFSET = 20;
     static const int32_t PERMISSION_SIGN_DIGEST_DATA_OFFSET = 30;
-    static const int32_t SHA256_DIGEST_SIZE = 32;
-    static const int32_t SHA384_DIGEST_SIZE = 48;
-    static const int32_t PERMISSION_SIGN_PROFILE_PREFIX_LEN = 9;
-
     VerifyHap();
     VerifyHap(bool isPrintCert);
     void setIsPrintCert(bool printCert);
@@ -100,8 +95,7 @@ public:
     bool VerifyPermSignBlock(ByteBuffer& permSignBlock, const std::string& profileContent,
      				   	 	 const std::string& hapFilePath, const ByteBuffer& codeSignBlock,
         			   	 	 Pkcs7Context& profilePkcs7Context)const;
-    bool GetFileContentFromHap(const std::string& hapFilePath, const std::string& fileName,
-        					   std::string& content)const;
+
     bool VerifyPermSignSignature(const std::string& signature, const std::string& storedDigests,
         						 const EVP_MD* hash, EVP_PKEY* pubKey)const;
     static int GetProfileContent(const std::string profile, std::string& ret);
@@ -115,20 +109,11 @@ private:
     int32_t VerifyBeforeResign(RandomAccessFile& hapFile, Options* options, const std::string& filePath);
     bool GetSignAlgIdAndVerifyMagic(ByteBuffer& permSignBlock, int32_t& signAlgId)const;
     bool GetHashAlgorithm(int32_t signAlgId, const EVP_MD*& hash, int32_t& digestSize)const;
-    bool ReadStoredDigests(ByteBuffer& permSignBlock, int16_t num, int32_t digestSize,
-                           std::string& storedDigests)const;
     bool ReadSignature(ByteBuffer& permSignBlock, int16_t num, int32_t digestSize,
                        std::string& signature)const;
     bool BuildPermSignDataToVerify(ByteBuffer& permSignBlock, int32_t signAlgId, int16_t num,
                                    int32_t digestSize, std::string& dataToVerify)const;
-    static bool ComputeDigest(const std::string& content, std::vector<int8_t>& digest, int32_t signAlgId);
     EVP_PKEY* GetProfilePubKey(Pkcs7Context& profilePkcs7Context)const;
-    std::string ComputeAllDigests(const std::vector<int32_t>& digestTypes,
-                                  const std::string& profileContent,
-                                  const std::string& hapFilePath,
-                                  const ByteBuffer& codeSignBlock,
-                                  int32_t signAlgId)const;
-    std::string ComputeSharedFileDigest(const std::string& hapFilePath, int32_t signAlgId)const;
 
 private:
     bool isPrintCert;
