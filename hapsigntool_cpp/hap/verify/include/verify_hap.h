@@ -79,22 +79,15 @@ public:
 
     bool CheckFileNameAndBlockArray(const std::string& hapFilePath, const ByteBuffer& propertyBlockArray)const;
 
-    bool CheckCodeSign(const std::string& hapFilePath, const std::vector<OptionalBlock>& optionalBlocks,
-                       const ByteBuffer& hapSignatureBlock)const;
-    bool BuildBlockInfo(const std::string& hapFilePath, const std::vector<OptionalBlock>& optionalBlocks,
+    bool CheckCodeSign(const std::string& hapFilePath, const std::vector<OptionalBlock>& optionalBlocks)const;
+    void BuildBlockInfo(const std::vector<OptionalBlock>& optionalBlocks,
+                        std::unordered_map<int, ByteBuffer>& blockMap,
         				bool& codeReSignFlag, bool& codeSignFlag, ByteBuffer& propertyBlockArray)const;
-    bool ExtractCodeSignBlock(const std::string& hapFilePath, ByteBuffer& propertyBlockArray,
-     						  std::unordered_map<int, ByteBuffer>& blockMap,
-        					  std::string& profileContent, ByteBuffer& codeSignBlock)const;
-    bool VerifyCodeAndProfile(const std::string& hapFilePath, const std::string& profileContent,
-        					  const ByteBuffer& codeSignBlock, const ByteBuffer& hapSignatureBlock,
-        					  Pkcs7Context& profilePkcs7Context)const;
-    bool CheckPermSign(const std::string& hapFilePath, ByteBuffer& propertyBlockArray,
-    				   const std::string& profileContent, const ByteBuffer& codeSignBlock,
-        			   Pkcs7Context& profilePkcs7Context)const;
-    bool VerifyPermSignBlock(ByteBuffer& permSignBlock, const std::string& profileContent,
-     				   	 	 const std::string& hapFilePath, const ByteBuffer& codeSignBlock,
-        			   	 	 Pkcs7Context& profilePkcs7Context)const;
+    bool CheckPermSign(const std::string& hapFilePath, const std::vector<OptionalBlock>& optionBlocks,
+    				   Pkcs7Context& pkcs7Context)const;
+    static bool GetBlockHeaderInfo(ByteBuffer& blockArray, int32_t pos,
+    							   uint32_t& blockType, uint32_t& blockLength, uint32_t& blockOffset);
+    bool VerifyPermSignBlock(ByteBuffer& permSignBlock, Pkcs7Context& profilePkcs7Context)const;
 
     bool VerifyPermSignSignature(const std::string& signature, const std::string& storedDigests,
         						 const EVP_MD* hash, EVP_PKEY* pubKey)const;

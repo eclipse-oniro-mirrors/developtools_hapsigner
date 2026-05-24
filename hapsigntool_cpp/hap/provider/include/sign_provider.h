@@ -173,7 +173,7 @@ private:
                             const ByteBuffer& permSignSubBlock, ByteBuffer& propertyBlock);
     std::pair<bool, bool> CheckSignEnabled();
     bool IsCodeSignAndPermSignSupportedFile(const std::string& suffixTmp);
-    int64_t ComputeBaseOffset(int64_t centralDirectoryOffset);
+    int64_t CalCodeSignBlockOffset(int64_t centralDirectoryOffset);
     bool AppendReCodeSignBlock(SignerConfig* signerConfig, std::string outputFilePath,
                              const std::string& suffix, int64_t centralDirectoryOffset, ZipSigner& zip);
     int64_t ComputeCodeSignOffset(int64_t centralDirectoryOffset);

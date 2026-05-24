@@ -470,10 +470,9 @@ bool SignProvider::AppendPropertyBlock(SignerConfig* signerConfig, std::string o
         return true;
     }
 
-    int64_t baseOffset = ComputeBaseOffset(centralDirectoryOffset);
+    int64_t codeSignBlockOffset = CalCodeSignBlockOffset(centralDirectoryOffset);
     ByteBuffer codeSignSubBlock;
     ByteBuffer permSignSubBlock;
-    int64_t currentOffset = baseOffset;
 
     SignContext signContext;
     signContext.signerConfig = signerConfig;
@@ -481,7 +480,7 @@ bool SignProvider::AppendPropertyBlock(SignerConfig* signerConfig, std::string o
 
     if (enableCodeSign) {
         SIGNATURE_TOOLS_LOGI("start code signing.");
-        if (!BuildCodeSignSubBlock(suffixTmp, currentOffset, zip, codeSignSubBlock, signContext)) {
+        if (!BuildCodeSignSubBlock(suffixTmp, codeSignBlockOffset, zip, codeSignSubBlock, signContext)) {
             SIGNATURE_TOOLS_LOGE("BuildCodeSignSubBlock Fail.");
             return false;
         }
@@ -530,7 +529,7 @@ bool SignProvider::IsCodeSignAndPermSignSupportedFile(const std::string& suffixT
     return true;
 }
 
-int64_t SignProvider::ComputeBaseOffset(int64_t centralDirectoryOffset)
+int64_t SignProvider::CalCodeSignBlockOffset(int64_t centralDirectoryOffset)
 {
     size_t blockCount = optionalBlocks.size() + PROPERTY_BLOCK_COUNT + ADDITIONAL_BLOCK_COUNT;
     int64_t blockSize = static_cast<int64_t>(PROPERTY_BLOCK_HEADER_SIZE) * static_cast<int64_t>(blockCount);
@@ -632,7 +631,7 @@ bool SignProvider::GetFileContentFromHap(const std::string& hapFilePath,
         }
     } while (fileLength > 0 && readSize > 0);
 
-    if (fileLength > 0) {
+    if (fileLength != 0) {
         SIGNATURE_TOOLS_LOGE("read %s from zip failed, remaining length: %ld", fileName.c_str(), fileLength);
         unzCloseCurrentFile(zFile);
         unzClose(zFile);
