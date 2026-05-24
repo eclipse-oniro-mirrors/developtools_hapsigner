@@ -91,6 +91,11 @@ public class SignAppParameters implements Parameters {
     private SignCode signCode;
 
     /**
+     * Whether the infile need permission signing, optional fields, default needed permission signing
+     */
+    private PermissionSign permissionSign;
+
+    /**
      * user account for online authentication, required fields on remoteSign mode with account auth mode
      */
     private String userName;
@@ -133,22 +138,10 @@ public class SignAppParameters implements Parameters {
         }
         options.put(Options.KEY_ALIAS, keyAlias);
 
-        if (keyPwd != null) {
-            options.put(Options.KEY_RIGHTS, keyPwd);
-        }
-
         if (profileFile == null) {
             throw new ParamException(Options.PROFILE_FILE);
         }
         options.put(Options.PROFILE_FILE, profileFile);
-
-        if (profileSigned != null) {
-            options.put(Options.PROFILE_SIGNED, profileSigned.getValue());
-        }
-
-        if (inForm != null) {
-            options.put(Options.IN_FORM, inForm.getValue());
-        }
 
         if (inFile == null) {
             throw new ParamException(Options.IN_FILE);
@@ -160,27 +153,40 @@ public class SignAppParameters implements Parameters {
         }
         options.put(Options.SIGN_ALG, signAlg);
 
-        if (keystorePwd != null) {
-            options.put(Options.KEY_STORE_RIGHTS, keystorePwd);
-        }
-
         if (outFile == null) {
             throw new ParamException(Options.OUT_FILE);
         }
         options.put(Options.OUT_FILE, outFile);
 
-        if (signCode != null) {
-            options.put(ParamConstants.PARAM_SIGN_CODE, signCode.getValue());
-        }
-
-        if (compatibleVersion != null) {
-            options.put("compatibleVersion", compatibleVersion);
-        }
-
+        optionalFieldsToOptions(options);
         keyStoreFileToOptions(options);
         appCertFileToOptions(options);
         remoteSignParamToOptions(options);
         return options;
+    }
+
+    private void optionalFieldsToOptions(Options options) {
+        if (keyPwd != null) {
+            options.put(Options.KEY_RIGHTS, keyPwd);
+        }
+        if (profileSigned != null) {
+            options.put(Options.PROFILE_SIGNED, profileSigned.getValue());
+        }
+        if (inForm != null) {
+            options.put(Options.IN_FORM, inForm.getValue());
+        }
+        if (keystorePwd != null) {
+            options.put(Options.KEY_STORE_RIGHTS, keystorePwd);
+        }
+        if (signCode != null) {
+            options.put(ParamConstants.PARAM_SIGN_CODE, signCode.getValue());
+        }
+        if (permissionSign != null) {
+            options.put(ParamConstants.PARAM_PERMISSION_SIGN, permissionSign.getValue());
+        }
+        if (compatibleVersion != null) {
+            options.put("compatibleVersion", compatibleVersion);
+        }
     }
 
     /**
@@ -355,6 +361,14 @@ public class SignAppParameters implements Parameters {
 
     public void setSignCode(SignCode signCode) {
         this.signCode = signCode;
+    }
+
+    public PermissionSign getPermissionSign() {
+        return permissionSign;
+    }
+
+    public void setPermissionSign(PermissionSign permissionSign) {
+        this.permissionSign = permissionSign;
     }
 
     public String getUserName() {
