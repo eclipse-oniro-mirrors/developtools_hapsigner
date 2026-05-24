@@ -192,8 +192,8 @@ HWTEST_F(HapReSignTest, hap_resign_test_005, testing::ext::TestSize.Level1)
     std::string inFile = "./hapReSign/phone-default-signed.hap";
     (*params)["inFile"] = inFile;
 
-    bool ret = signProvider->GetResignBlocks(params.get());
-    EXPECT_NE(ret, false);
+    bool ret = signProvider->PrepareReSignBlocks(params.get());
+    EXPECT_EQ(ret, false);
 }
 
 /*
@@ -210,7 +210,7 @@ HWTEST_F(HapReSignTest, hap_resign_test_006, testing::ext::TestSize.Level1)
     std::string inFile = "./hapSign/entry-default-sign.hap";
     (*params)["inFile"] = inFile;
 
-    bool ret = signProvider->GetResignBlocks(params.get());
+    bool ret = signProvider->PrepareReSignBlocks(params.get());
     EXPECT_EQ(ret, false);
 }
 

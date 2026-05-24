@@ -28,7 +28,6 @@ namespace OHOS {
 namespace SignatureTools {
 class VerifyHap {
 public:
-    static const int32_t HEX_PRINT_LENGTH;
     static const int32_t DIGEST_BLOCK_LEN_OFFSET;
     static const int32_t DIGEST_ALGORITHM_OFFSET;
     static const int32_t DIGEST_LEN_OFFSET;
@@ -40,7 +39,9 @@ public:
     static const int OFFSET_ZERO = 0;
     static const int OFFSET_FOUR = 4;
     static const int OFFSET_EIGHT = 8;
-
+    static const int32_t PERMISSION_SIGN_MAGIC_OFFSET = 12;
+    static const int32_t PERMISSION_SIGN_SIGN_ALG_ID_OFFSET = 20;
+    static const int32_t PERMISSION_SIGN_DIGEST_DATA_OFFSET = 30;
     VerifyHap();
     VerifyHap(bool isPrintCert);
     void setIsPrintCert(bool printCert);
@@ -79,6 +80,17 @@ public:
     bool CheckFileNameAndBlockArray(const std::string& hapFilePath, const ByteBuffer& propertyBlockArray)const;
 
     bool CheckCodeSign(const std::string& hapFilePath, const std::vector<OptionalBlock>& optionalBlocks)const;
+    void BuildBlockInfo(const std::vector<OptionalBlock>& optionalBlocks,
+                        std::unordered_map<int, ByteBuffer>& blockMap,
+        				bool& codeReSignFlag, bool& codeSignFlag, ByteBuffer& propertyBlockArray)const;
+    bool CheckPermSign(const std::string& hapFilePath, const std::vector<OptionalBlock>& optionBlocks,
+    				   Pkcs7Context& pkcs7Context)const;
+    static bool GetBlockHeaderInfo(ByteBuffer& blockArray, int32_t pos,
+    							   uint32_t& blockType, uint32_t& blockLength, uint32_t& blockOffset);
+    bool VerifyPermSignBlock(ByteBuffer& permSignBlock, Pkcs7Context& profilePkcs7Context)const;
+
+    bool VerifyPermSignSignature(const std::string& signature, const std::string& storedDigests,
+        						 const EVP_MD* hash, EVP_PKEY* pubKey)const;
     static int GetProfileContent(const std::string profile, std::string& ret);
 
     bool VerifyAppPkcs7(Pkcs7Context& pkcs7Context, const ByteBuffer& hapSignatureBlock);
@@ -88,6 +100,13 @@ public:
 private:
     bool VerifyCRL(Pkcs7Context& pkcs7Context);
     int32_t VerifyBeforeResign(RandomAccessFile& hapFile, Options* options, const std::string& filePath);
+    bool GetSignAlgIdAndVerifyMagic(ByteBuffer& permSignBlock, int32_t& signAlgId)const;
+    bool GetHashAlgorithm(int32_t signAlgId, const EVP_MD*& hash, int32_t& digestSize)const;
+    bool ReadSignature(ByteBuffer& permSignBlock, int16_t num, int32_t digestSize,
+                       std::string& signature)const;
+    bool BuildPermSignDataToVerify(ByteBuffer& permSignBlock, int32_t signAlgId, int16_t num,
+                                   int32_t digestSize, std::string& dataToVerify)const;
+    EVP_PKEY* GetProfilePubKey(Pkcs7Context& profilePkcs7Context)const;
 
 private:
     bool isPrintCert;

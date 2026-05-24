@@ -57,6 +57,13 @@ public:
     static constexpr int ENTERPRISE_RE_SIGN_BLOCK_ID = 0x20000004;
     static constexpr int ENTERPRISE_CODE_RE_SIGN_BLOCK_ID = 0x20000005;
     static constexpr int HAP_CODE_SIGN_BLOCK_ID = 0x30000001;
+    static constexpr int PERMISSION_SIGN_BLOCK_ID = 0x30000002;
+    static constexpr int PERMISSION_SIGN_DIGEST_SIZE = 32;
+    static constexpr int PERMISSION_SIGN_DIGEST_TYPE_PROVISION = 0x00000001;
+    static constexpr int PERMISSION_SIGN_DIGEST_TYPE_MODULE_JSON = 0x00000002;
+    static constexpr int PERMISSION_SIGN_DIGEST_TYPE_CODE_SIGN_BLOCK = 0x00000003;
+    static constexpr int PERMISSION_SIGN_DIGEST_TYPE_SHARED_FILE = 0x00000004;
+    static const std::vector<int8_t> PERMISSION_SIGN_MAGIC;
     static constexpr int CONTENT_DIGESTED_CHUNK_MAX_SIZE_BYTES = 1024 * 1024;
     static constexpr int CONTENT_VERSION = 2;
     static constexpr int BIT_SIZE = 8;
@@ -72,12 +79,16 @@ public:
     static constexpr int HAP_SIG_BLOCK_HEADER_SIZE = 32;
     static constexpr int HAP_SIG_BLOCK_MIN_SIZE = HAP_SIG_BLOCK_HEADER_SIZE;
     static constexpr int BLOCK_SIZE = 8;
+    static constexpr int PERMISSION_SIGN_DIGEST_TYPE_SIZE = 4;
+    static constexpr int PERMISSION_SIGN_MAGIC_LENGTH = 8;
+    static constexpr int MAX_PERMISSION_SIGN_DIGEST_COUNT = 4;
 
 public:
     static std::string GetAppIdentifier(const std::string& profileContent);
     static std::pair<std::string, std::string> ParseAppIdentifier(const std::string& profileContent);
     static std::vector<int8_t> GetHapSigningBlockMagic(int compatibleVersion);
     static std::vector<int8_t> GetHapSigningBlockMagicV3();
+    static const std::vector<int8_t>& GetPermissionSignMagic();
     static int GetHapSigningBlockVersion(int compatibleVersion);
     static bool ReadFileToByteBuffer(const std::string& file, ByteBuffer& buffer);
 

@@ -285,11 +285,12 @@ const std::string SIGN_APP_HELP_TXT = R"(
         -pwdInputMode : Selecting the password input mode. The value 0 represents entering the password by the
     command line parameter, and the value 1 represents interactive password input. It is an optional parameter, with
     a default value of 0.
+        -permSign : Whether to enable permission signing. The options are as follows: 1:yes; 0:no; default value:1.
 
     EXAMPLE :
-        sign-app-mode localSign -keyAlias "oh-app1-key-v1" -appCertFile "/home/app-release-cert.cer" -signCode "1"
--keystoreFile "/home/app-keypair.jks" -keystorePwd ****** -outFile "/home/app1-signed.hap -compatibleVersion 8"
--profileFile "/home/signed-profile.p7b" -inFile "/home/app1-unsigned.hap" -signAlg SHA256withECDSA
+        sign-app -mode localSign -keyAlias "oh-app1-key-v1" -appCertFile "/home/app-release-cert.cer" -signCode "1"
+-keystoreFile "/home/app-keypair.jks" -keystorePwd ****** -keyPwd ****** -outFile "/home/app1-signed.hap
+-compatibleVersion 8" -profileFile "/home/signed-profile.p7b" -inFile "/home/app1-unsigned.hap" -signAlg SHA256withECDSA
 )";
 
 const std::string RE_SIGN_APP_HELP_TXT = R"(
@@ -313,6 +314,7 @@ const std::string RE_SIGN_APP_HELP_TXT = R"(
         -pwdInputMode : Selecting the password input mode. The value 0 represents entering the password by the
     command line parameter, and the value 1 represents interactive password input. It is an optional parameter, with
     a default value of 0.
+        -permSign : Whether to enable permission signing. The options are as follows: 1:yes; 0:no; default value:1.
 
     EXAMPLE:
         resign-enterprise-app -mode localSign -keyAlias "oh-app1-key-v1" -appCertFile "D:\OH\app-release-cert.cer"

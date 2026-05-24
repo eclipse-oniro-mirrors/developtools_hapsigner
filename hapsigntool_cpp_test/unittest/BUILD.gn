@@ -87,6 +87,7 @@ ohos_unittest("hapsigntool_pc_unittest") {
     "./utils/byte_array_utils_test.cpp",
     "./utils/cert_tools_test.cpp",
     "./utils/file_utils_test.cpp",
+    "./permSign/perm_sign_test.cpp",
     "./zip/random_access_file_input_output_test.cpp",
     "./zip/zip_signer_test.cpp",
   ]
