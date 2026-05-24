@@ -738,8 +738,8 @@ bool VerifyHap::GetBlockHeaderInfo(ByteBuffer& blockArray, int32_t pos,
 }
 
 void VerifyHap::BuildBlockInfo(const std::vector<OptionalBlock>& optionalBlocks,
-                                std::unordered_map<int, ByteBuffer>& blockMap,
-                                bool& codeReSignFlag, bool& codeSignFlag, ByteBuffer& propertyBlockArray) const
+                               std::unordered_map<int, ByteBuffer>& blockMap,
+                               bool& codeReSignFlag, bool& codeSignFlag, ByteBuffer& propertyBlockArray) const
 {
     for (const OptionalBlock& block : optionalBlocks) {
         blockMap.emplace(block.optionalType, block.optionalBlockValue);
