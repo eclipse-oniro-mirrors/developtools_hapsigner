@@ -355,6 +355,7 @@ hap-sign-tool sign-app -keyAlias "openharmony application release" -signAlg "SHA
           ├── -keystorePwd   # 密钥库口令，可选项
           ├── -outFile       # 输出签名后的包文件，必填项
           ├── -signCode      # 是否启用代码签名，1表示开启代码签名，0表示关闭代码签名。可选项。默认对hap、hsp、hqf、elf开启代码签名，通过参数配置为0关闭。
+          ├── -permSign      # 是否启用权限签名，1表示开启权限签名，0表示关闭权限签名。可选项。默认对hap、hsp、hqf开启权限签名，通过参数配置为0关闭。
           ├── -pwdInputMode  # 密码输入模式，0表示密码从命令行参数中获取，1表示通过控制台交互输入密吗，默认为0。可选项
 
 10.应用包和二进制工具文件验签
@@ -378,6 +379,7 @@ hap-sign-tool sign-app -keyAlias "openharmony application release" -signAlg "SHA
           ├── -keystoreFile  # 密钥库文件，localSign模式时为必填项
           ├── -keystorePwd   # 密钥库口令，localSign模式时为必填项
           ├── -outFile       # 输出签名后的包文件，必填项
+          ├── -permSign      # 是否启用权限签名，1表示开启权限签名，0表示关闭权限签名。可选项。默认开启权限签名，通过参数配置为0关闭。
           ├── -pwdInputMode  # 密码输入模式，0表示密码从命令行参数中获取，1表示通过控制台交互输入密吗，默认为0。可选项
 
   

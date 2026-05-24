@@ -192,9 +192,10 @@ USAGE:  <sign-profile|verify-profile|sign-app|verify-app> [options]
         -ext : extend parameters for remote signer plugin, optional fields;
         -signCode : Whether the HAP file is signed code, The options are as follows: 1:yes; 0:no; default value:1. code sign is only enabled for hap, hsp, hqf and elf. optional fields.
         -pwdInputMode : Selecting the password input mode. The value 0 represents entering the password by the command line parameter, and the value 1 represents interactive password input. It is an optional parameter, with a default value of 0.
+        -permSign : Whether to enable permission signing. The options are as follows: 1:yes; 0:no; default value:1.
 
     EXAMPLE:
-        sign-app -mode localSign -keyAlias "oh-app1-key-v1" -appCertFile "D:\OH\app-release-cert.cer" -profileFile "D:\OH\signed-profile.p7b" -inFile "D:\OH\app1-unsigned.hap" -signAlg SHA256withECDSA  -keystoreFile  "D:\OH\app-keypair.jks" -keystorePwd ****** -outFile "D:\OH\app1-signed.hap -compatibleVersion 8" -signCode "1"
+        sign-app -mode localSign -keyAlias "oh-app1-key-v1" -appCertFile "D:\OH\app-release-cert.cer" -profileFile "D:\OH\signed-profile.p7b" -inFile "D:\OH\app1-unsigned.hap" -signAlg SHA256withECDSA  -keystoreFile  "D:\OH\app-keypair.jks" -keystorePwd ****** -keyPwd ****** -outFile "D:\OH\app1-signed.hap -compatibleVersion 8" -signCode "1"
 
     verify-app [options]:
         -inFile : signed application package file, hap or bin format, required fields;
@@ -223,6 +224,7 @@ USAGE:  <sign-profile|verify-profile|sign-app|verify-app> [options]
         -username : user account for online auth, required fields on remoteSign mode with account auth mode;
         -userPwd : user password for online auth, required fields on remoteSign mode with account auth mode;
         -pwdInputMode : Selecting the password input mode. The value 0 represents entering the password by the command line parameter, and the value 1 represents interactive password input. It is an optional parameter, with a default value of 0.
+        -permSign : Whether to enable permission signing. The options are as follows: 1:yes; 0:no; default value:1.
 
     EXAMPLE:
         resign-enterprise-app -mode localSign -keyAlias "oh-app1-key-v1" -appCertFile "D:\OH\app-release-cert.cer"  -inFile "D:\OH\app1-signed.hap" -signAlg SHA256withECDSA  -keystoreFile  "D:\OH\app-keypair.jks" -keystorePwd ****** -keyPwd ****** -outFile "D:\OH\app1-resigned.hap"

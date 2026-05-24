@@ -108,6 +108,11 @@ public class VerifyResult {
      */
     public static final int RET_CODE_RESIGN_PROFILE_CHECK_ERROR = 10014;
 
+    /**
+     * Return code of verify permission sign error.
+     */
+    public static final int RET_PERMISSION_SIGN_ERROR = 10015;
+
     private boolean isResult;
     private int code;
     private String message;
