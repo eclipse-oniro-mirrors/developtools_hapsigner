@@ -148,12 +148,13 @@ private:
     bool BuildPermSignSubBlock(int64_t permSignOffset, ZipSigner& zip, ByteBuffer& subBlock,
                                SignContext& signContext);
 
-    bool ComputePermissionDigests(const std::string& outputFilePath, const std::string& moduleJsonContent,
+    bool ComputePermissionDigests(const SignContext& signContext, const std::string& moduleJsonContent,
                                   std::vector<std::pair<int, std::vector<int8_t>>>& digestItems,
-                                  int32_t signAlgId, const std::vector<int8_t>& codeSignArray);
-    void ProcessShareFileDigests(const std::string& outputFilePath,
+                                  int32_t signAlgId, ZipSigner& zip);
+    void ProcessShareFileDigests(const std::string& outputFilePath, ZipSigner& zip,
                                  const std::string& shareFile, int32_t signAlgId,
                                  std::vector<std::pair<int, std::vector<int8_t>>>& digestItems);
+    std::string FindMatchingFileInZip(ZipSigner& zip, const std::string& basePath);
     bool GetSignAlgorithmInfo(SignerConfig* signerConfig, int32_t& signAlgId, std::string& signAlg);
     bool BuildPermSignBlock(int64_t permSignOffset, const std::string& unsignedData,
                             const std::string& signature, ByteBuffer& subBlock);

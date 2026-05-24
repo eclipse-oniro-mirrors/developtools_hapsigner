@@ -806,7 +806,8 @@ bool VerifyHap::CheckPermSign(const std::string& hapFilePath, ByteBuffer& proper
         if (blockType == HapUtils::PERMISSION_SIGN_BLOCK_ID) {
             int32_t dataStartPos = pos;
             const char* srcBuf = propertyBlockArray.GetBufferPtr();
-            if (srcBuf == nullptr || dataStartPos + static_cast<int32_t>(blockLength) > propertyBlockArray.GetCapacity()) {
+            if (srcBuf == nullptr ||
+                dataStartPos + static_cast<int32_t>(blockLength) > propertyBlockArray.GetCapacity()) {
                 SIGNATURE_TOOLS_LOGE("perm sign data out of range: start=%d, len=%u, capacity=%d",
                     dataStartPos, blockLength, propertyBlockArray.GetCapacity());
                 return false;
@@ -972,8 +973,8 @@ bool VerifyHap::VerifyPermSignSignature(const std::string& signature, const std:
                                         const EVP_MD* hash, EVP_PKEY* pubKey)const
 {
     if (signature.empty()) {
-        SIGNATURE_TOOLS_LOGI("no signature data, skip signature verification.");
-        return true;
+        SIGNATURE_TOOLS_LOGE("permission sign signature is empty");
+        return false;
     }
     if (pubKey == nullptr) {
         SIGNATURE_TOOLS_LOGE("pubKey is null");
