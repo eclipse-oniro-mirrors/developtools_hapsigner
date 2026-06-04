@@ -15,6 +15,9 @@
 #include "file_utils.h"
 #include <chrono>
 #include <climits>
+#include <cerrno>
+#include <cstdio>
+#include <cstring>
 #include <fcntl.h>
 #include <fstream>
 #include <iostream>
@@ -346,24 +349,36 @@ bool FileUtils::CopyTmpFileAndDel(const std::string& tmpFile, const std::string&
     if (tmpFile == output) {
         return true;
     }
+
+    char realOutputBuf[PATH_MAX + 1] = {0};
+    std::string targetPath = output;
+    if (realpath(output.c_str(), realOutputBuf) != nullptr) {
+        targetPath = realOutputBuf;
+    }
+
+    if (rename(tmpFile.c_str(), targetPath.c_str()) == 0) {
+        SIGNATURE_TOOLS_LOGI("CopyTmpFileAndDel rename success");
+        return true;
+    }
+    SIGNATURE_TOOLS_LOGI("rename failed, errno=%d(%s), fall back to stream copy", errno, strerror(errno));
+
     std::ifstream src(tmpFile, std::ios::binary);
     if (!src) {
         PrintErrorNumberMsg("FILE_NOT_FOUND", FILE_NOT_FOUND, "'" + tmpFile + "' open failed");
         return false;
     }
-    std::ofstream dst(output, std::ios::binary | std::ios::trunc);
+    std::ofstream dst(targetPath, std::ios::binary | std::ios::trunc);
     if (!dst) {
-        PrintErrorNumberMsg("FILE_NOT_FOUND", FILE_NOT_FOUND, "'" + output + "' open failed");
+        PrintErrorNumberMsg("FILE_NOT_FOUND", FILE_NOT_FOUND, "'" + targetPath + "' open failed");
         return false;
     }
     SIGNATURE_TOOLS_LOGI("CopyTmpFileAndDel stream copy");
     dst << src.rdbuf();
     if (!dst || !src) {
         PrintErrorNumberMsg("FILE_NOT_FOUND", FILE_NOT_FOUND, "Failed to copy file from '"
-                            + tmpFile + "' to '" + output + "'");
+                            + tmpFile + "' to '" + targetPath + "'");
         return false;
     }
-
     if (unlink(tmpFile.c_str()) != 0) {
         SIGNATURE_TOOLS_LOGE("Error: remove tmpFile");
     }
@@ -371,19 +386,28 @@ bool FileUtils::CopyTmpFileAndDel(const std::string& tmpFile, const std::string&
     return true;
 }
 
-bool FileUtils::CopyPermissions(const std::string& srcFile, const std::string& dstFile)
+void FileUtils::CopyPermissions(const std::string& srcFile, const std::string& dstFile)
 {
     struct stat srcStat;
     if (stat(srcFile.c_str(), &srcStat) != 0) {
         SIGNATURE_TOOLS_LOGE("Failed to stat source file: %s", srcFile.c_str());
-        return false;
+        return;
     }
     if (chmod(dstFile.c_str(), srcStat.st_mode) != 0) {
         SIGNATURE_TOOLS_LOGE("Failed to chmod destination file: %s", dstFile.c_str());
-        return false;
+        return;
     }
     SIGNATURE_TOOLS_LOGI("CopyPermissions from %s to %s, mode: %o", srcFile.c_str(), dstFile.c_str(), srcStat.st_mode);
-    return true;
+}
+
+bool FileUtils::IsSameFile(const std::string& file1, const std::string& file2)
+{
+    struct stat stat1;
+    struct stat stat2;
+    if (stat(file1.c_str(), &stat1) != 0 || stat(file2.c_str(), &stat2) != 0) {
+        return false;
+    }
+    return stat1.st_dev == stat2.st_dev && stat1.st_ino == stat2.st_ino;
 }
 } // namespace SignatureTools
 } // namespace OHOS

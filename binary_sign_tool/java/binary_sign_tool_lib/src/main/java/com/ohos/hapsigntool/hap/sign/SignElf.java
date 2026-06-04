@@ -155,10 +155,11 @@ public class SignElf {
             return null;
         }
         Path outputPath = Paths.get(signParams.get(ParamConstants.PARAM_BASIC_OUTPUT_FILE));
-        String tmpOutputPath = (Files.exists(outputPath) && Files.isSameFile(inputPath, outputPath))
-            ? inputPath + "-tmp-signed"
+        Path realInputPath = inputPath.toRealPath();
+        String tmpOutputPath = (Files.exists(outputPath) && Files.isSameFile(realInputPath, outputPath))
+            ? realInputPath + "-tmp-signed"
             : outputPath.toString();
-        return new SigningContext(inputFile, inputPath, outputPath, new File(tmpOutputPath));
+        return new SigningContext(inputFile, realInputPath, outputPath, new File(tmpOutputPath));
     }
 
     private boolean executeSignWorkflow(SigningContext context, SignerConfig signerConfig,
@@ -266,7 +267,7 @@ public class SignElf {
                 StandardCopyOption.ATOMIC_MOVE);
             return true;
         } catch (IOException e) {
-            LOGGER.info("ATOMIC_MOVE not supported : {}", e.getMessage());
+            LOGGER.info("ATOMIC_MOVE not supported: {}, try to regular copy", e.getMessage());
         }
         Files.move(tmpOutputFilePath, targetPath, StandardCopyOption.REPLACE_EXISTING);
         return true;

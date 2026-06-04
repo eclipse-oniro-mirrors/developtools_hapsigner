@@ -29,7 +29,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.nio.file.attribute.PosixFilePermission;
 import java.util.Set;
 
@@ -201,7 +200,7 @@ public final class FileUtils {
     /**
      * copy permission (cross-filesystem)
      */
-    public static void copyPermissions(Path source, Path target) throws IOException {
+    public static void copyPermissions(Path source, Path target) {
         //  POSIX（Linux/macOS）
         try {
             Set<PosixFilePermission> perms = Files.getPosixFilePermissions(source);
@@ -209,6 +208,9 @@ public final class FileUtils {
             return;
         } catch (UnsupportedOperationException ignore) {
             // Windows
+        } catch (IOException e) {
+            LOGGER.warn("copy permission failed", e);
+            return;
         }
         File srcFile = source.toFile();
         File dstFile = target.toFile();
