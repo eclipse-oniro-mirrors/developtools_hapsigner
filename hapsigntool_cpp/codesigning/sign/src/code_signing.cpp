@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024-2024 Huawei Device Co., Ltd.
+ * Copyright (c) 2024-2026 Huawei Device Co., Ltd.
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -29,6 +29,8 @@ const std::vector<std::string> CodeSigning::SUPPORT_FILE_FORM = { "hap", "hsp", 
 const std::string CodeSigning::HAP_SIGNATURE_ENTRY_NAME = "Hap";
 const std::string CodeSigning::ENABLE_SIGN_CODE_VALUE = "1";
 const std::string CodeSigning::LIBS_PATH_PREFIX = "libs/";
+const std::string CodeSigning::SKILLS_PATH_PREFIX = "skills/";
+const std::string CodeSigning::SCRIPTS_SUFFIX = "/scripts/";
 
 const FsVerityHashAlgorithm FS_SHA256(1, "SHA-256", 256 / 8);
 const FsVerityHashAlgorithm FS_SHA512(2, "SHA-512", 512 / 8);
@@ -65,8 +67,28 @@ bool CodeSigning::GetCodeSignBlock(const std::string &input, int64_t offset,
                                               (int8_t)FsVerityGenerator::GetFsVerityHashAlgorithm(),
                                               (int8_t)FsVerityGenerator::GetLog2BlockSize());
     m_codeSignBlock.SetFsVerityInfoSegment(*(fsVerityInfoSegment.get()));
-    SIGNATURE_TOOLS_LOGI("Sign hap.");
     std::string ownerID = HapUtils::GetAppIdentifier(profileContent);
+    if (!SignAndAddHapSegment(input, dataSize, fsvTreeOffset, ownerID)) {
+        return false;
+    }
+    if (!SignNativeLibs(input, ownerID)) {
+        PrintErrorNumberMsg("SIGN_ERROR", SIGN_ERROR, "Failed to sign the contents in the compressed file.");
+        return false;
+    }
+    if (!SignSkillScripts(input, ownerID)) {
+        PrintErrorNumberMsg("SIGN_ERROR", SIGN_ERROR, "Failed to sign skill scripts.");
+        return false;
+    }
+    UpdateCodeSignBlock();
+    m_codeSignBlock.GenerateCodeSignBlockByte(fsvTreeOffset, ret);
+    SIGNATURE_TOOLS_LOGI("Sign successfully.");
+    return true;
+}
+
+bool CodeSigning::SignAndAddHapSegment(const std::string& input, int64_t dataSize,
+                                       int64_t fsvTreeOffset, const std::string& ownerID)
+{
+    SIGNATURE_TOOLS_LOGI("Sign hap.");
     std::ifstream inputStream;
     inputStream.open(input, std::ios::binary);
     if (!inputStream.is_open()) {
@@ -77,22 +99,14 @@ bool CodeSigning::GetCodeSignBlock(const std::string &input, int64_t offset,
     std::pair<SignInfo, std::vector<int8_t>> hapSignInfoAndMerkleTreeBytesPair;
     bool signFileFlag = SignFile(inputStream, dataSize, true, fsvTreeOffset, ownerID,
                                  hapSignInfoAndMerkleTreeBytesPair);
+    inputStream.close();
     if (!signFileFlag) {
         SIGNATURE_TOOLS_LOGE("SignFile Failed");
-        inputStream.close();
         return false;
     }
-    inputStream.close();
     m_codeSignBlock.GetHapInfoSegment().SetSignInfo(hapSignInfoAndMerkleTreeBytesPair.first);
     m_codeSignBlock.AddOneMerkleTree(HAP_SIGNATURE_ENTRY_NAME,
                                      hapSignInfoAndMerkleTreeBytesPair.second);
-    if (!SignNativeLibs(input, ownerID)) {
-        PrintErrorNumberMsg("SIGN_ERROR", SIGN_ERROR, "Failed to sign the contents in the compressed file.");
-        return false;
-    }
-    UpdateCodeSignBlock();
-    m_codeSignBlock.GenerateCodeSignBlockByte(fsvTreeOffset, ret);
-    SIGNATURE_TOOLS_LOGI("Sign successfully.");
     return true;
 }
 
@@ -237,6 +251,100 @@ bool CodeSigning::SignNativeLibs(const std::string &input, std::string &ownerID)
     return true;
 }
 
+bool CodeSigning::SignSkillScripts(const std::string &input, std::string &ownerID)
+{
+    std::string moduleContent;
+    if (!HapUtils::GetModuleContentFromHap(input, moduleContent)) {
+        SIGNATURE_TOOLS_LOGI("No module.json found or failed to read module.json");
+        return true;
+    }
+    std::vector<std::string> skillNames = HapUtils::GetSkillNamesFromJson(moduleContent);
+    if (skillNames.empty()) {
+        SIGNATURE_TOOLS_LOGI("No skill names found in module.json");
+        return true;
+    }
+    std::vector<std::pair<std::string, SignInfo>> ret;
+    UnzipHandleParam param(ret, ownerID, true);
+    bool scriptFlag = GetScriptEntriesFromHap(input, skillNames, param);
+    if (!scriptFlag) {
+        SIGNATURE_TOOLS_LOGE("%s skill scripts handle failed", input.c_str());
+        return false;
+    }
+    std::vector<std::pair<std::string, SignInfo>>& scriptInfoList = param.GetRet();
+    if (scriptInfoList.empty()) {
+        SIGNATURE_TOOLS_LOGI("No script files found under skill_names/scripts directories");
+        return true;
+    }
+    std::vector<std::pair<std::string, SignInfo>> combinedList;
+    std::vector<std::string>& existingNames = m_codeSignBlock.GetSoInfoSegment().GetFileNameList();
+    std::vector<SignInfo>& existingSigs = m_codeSignBlock.GetSoInfoSegment().GetSignInfoList();
+    for (size_t i = 0; i < existingNames.size() && i < existingSigs.size(); ++i) {
+        combinedList.emplace_back(existingNames[i], existingSigs[i]);
+    }
+    combinedList.insert(combinedList.end(), scriptInfoList.begin(), scriptInfoList.end());
+    m_codeSignBlock.GetSoInfoSegment().SetSoInfoList(combinedList);
+    return true;
+}
+
+bool CodeSigning::GetScriptEntriesFromHap(const std::string& packageName,
+                                          const std::vector<std::string>& skillNames,
+                                          UnzipHandleParam& param)
+{
+    if (skillNames.empty()) {
+        return true;
+    }
+    unzFile zFile = unzOpen(packageName.c_str());
+    if (zFile == nullptr) {
+        PrintErrorNumberMsg("IO_ERROR", IO_ERROR, "zlib open file: " + packageName + " failed.");
+        return false;
+    }
+    unz_global_info zGlobalInfo;
+    int getRet = unzGetGlobalInfo(zFile, &zGlobalInfo);
+    if (getRet != UNZ_OK) {
+        PrintErrorNumberMsg("SIGN_ERROR", SIGN_ERROR, "zlib get global info failed.");
+        unzClose(zFile);
+        return false;
+    }
+    bool ok = IterateScriptsEntries(packageName, zFile, zGlobalInfo.number_entry, skillNames, param);
+    unzClose(zFile);
+    return ok;
+}
+
+bool CodeSigning::IterateScriptsEntries(const std::string& packageName, unzFile& zFile, uLong numberEntry,
+                                        const std::vector<std::string>& skillNames, UnzipHandleParam& param)
+{
+    for (uLong i = 0; i < numberEntry; ++i) {
+        unz_file_info zFileInfo;
+        char fileName[FILE_NAME_SIZE];
+        size_t nameLen = 0;
+        if (memset_s(fileName, FILE_NAME_SIZE, 0, FILE_NAME_SIZE) != 0) {
+            SIGNATURE_TOOLS_LOGE("memory of fileName memset_s failed");
+            return false;
+        }
+        if (!CheckUnzParam(zFile, zFileInfo, fileName, &nameLen)) {
+            return false;
+        }
+        if (CheckFileNameForScripts(fileName, nameLen, skillNames)) {
+            unz_file_pos pos;
+            if (unzGetFilePos(zFile, &pos) != UNZ_OK) {
+                SIGNATURE_TOOLS_LOGE("unzGetFilePos failed, fileName = %s", fileName);
+                return false;
+            }
+            if (!RunParseZipInfo(packageName, param, pos)) {
+                return false;
+            }
+        }
+        if (i != numberEntry - 1) {
+            int ret = unzGoToNextFile(zFile);
+            if (ret != UNZ_OK) {
+                PrintErrorNumberMsg("SIGN_ERROR", SIGN_ERROR, "zlib go to next file failed.");
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
 void CodeSigning::UpdateCodeSignBlock()
 {
     // construct segment header list
@@ -338,10 +446,6 @@ bool CodeSigning::RunParseZipInfo(const std::string& packageName, UnzipHandlePar
     if (!CheckUnzParam(zFile, zFileInfo, fileName, &nameLen)) {
         unzClose(zFile);
         return false;
-    }
-    if (!CheckFileName(fileName, &nameLen)) {
-        unzClose(zFile);
-        return true;
     }
     bool flag = GetSingleFileStreamFromZip(zFile, fileName, zFileInfo, readFileSize, sb);
     unzClose(zFile);
@@ -494,6 +598,21 @@ bool CodeSigning::CheckFileName(char fileName[], size_t* nameLen)
         return false;
     }
     return true;
+}
+
+bool CodeSigning::CheckFileNameForScripts(char fileName[], size_t nameLen, const std::vector<std::string>& skillNames)
+{
+    if (fileName[nameLen - 1] == '/') {
+        return false;
+    }
+    std::string str(fileName);
+    for (const auto& skillName : skillNames) {
+        std::string scriptsPath = SKILLS_PATH_PREFIX + skillName + SCRIPTS_SUFFIX;
+        if (str.compare(0, scriptsPath.size(), scriptsPath) == 0) {
+            return str.find('/', scriptsPath.size()) == std::string::npos;
+        }
+    }
+    return false;
 }
 
 bool CodeSigning::IsNativeFile(const std::string& input)

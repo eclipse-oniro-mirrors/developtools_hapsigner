@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023-2023 Huawei Device Co., Ltd.
+ * Copyright (c) 2023-2026 Huawei Device Co., Ltd.
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -227,6 +227,45 @@ public class HapUtils {
             throw new ProfileException(CodeSignErrMsg.MODULE_JSON_PARSE_ERROR.toString(), e);
         }
         return hnpNameMap;
+    }
+
+    /**
+     * get list of skill names from module.json
+     *
+     * @param inputJar hap file
+     * @return list of skill names
+     * @throws IOException when IO error occurred
+     */
+    public static List<String> getSkillNamesFromJson(JarFile inputJar) throws IOException {
+        List<String> skillNames = new ArrayList<>();
+        JarEntry moduleEntry = inputJar.getJarEntry(HAP_STAGE_MODULE_JSON_FILE);
+        if (moduleEntry == null) {
+            return skillNames;
+        }
+        try (JsonReader reader = new JsonReader(
+            new InputStreamReader(inputJar.getInputStream(moduleEntry), StandardCharsets.UTF_8))) {
+            JsonElement jsonElement = JsonParser.parseReader(reader);
+            JsonObject jsonObject = jsonElement.getAsJsonObject();
+            JsonObject moduleObject = jsonObject.getAsJsonObject("module");
+            if (moduleObject == null) {
+                return skillNames;
+            }
+            JsonArray skillsArray = moduleObject.getAsJsonArray("skillProfiles");
+            if (skillsArray == null || skillsArray.isEmpty()) {
+                LOGGER.debug("module.json has no skillProfiles key or skillProfiles value is empty");
+                return skillNames;
+            }
+            skillsArray.iterator().forEachRemaining((element) -> {
+                JsonObject skillObject = element.getAsJsonObject();
+                JsonPrimitive name = skillObject.getAsJsonPrimitive("name");
+                if (name != null && name.isString() && !name.getAsString().isEmpty()) {
+                    skillNames.add(name.getAsString());
+                }
+            });
+        } catch (JsonParseException | IllegalStateException e) {
+            LOGGER.error("Failed to parse skill names from module.json", e);
+        }
+        return skillNames;
     }
 
     /**
