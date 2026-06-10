@@ -47,7 +47,7 @@ bool SignElf::Sign(SignerConfig& signerConfig, std::map<std::string, std::string
     }
     std::string outputFile = signParams.at(ParamConstants::PARAM_BASIC_OUTPUT_FILE);
     std::string tmpOutputFile = outputFile;
-    if (outputFile == inputFile) {
+    if (access(outputFile.c_str(), F_OK) == 0 && FileUtils::IsSameFile(inputFile, outputFile)) {
         tmpOutputFile = inputFile + "-tmp-signed";
     }
     uint64_t csOffset = 0;
@@ -70,6 +70,7 @@ bool SignElf::Sign(SignerConfig& signerConfig, std::map<std::string, std::string
         unlink(tmpOutputFile.c_str());
         return false;
     }
+    FileUtils::CopyPermissions(inputFile, tmpOutputFile);
     return FileUtils::CopyTmpFileAndDel(tmpOutputFile, outputFile);
 }
 
