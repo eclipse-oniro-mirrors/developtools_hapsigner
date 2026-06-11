@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (c) 2024-2024 Huawei Device Co., Ltd.
+ * Copyright (c) 2024-2026 Huawei Device Co., Ltd.
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -17,12 +17,14 @@
 #include <algorithm>
 #include <stdexcept>
 
+#include "cJSON.h"
+#include "contrib/minizip/unzip.h"
 #include "profile_verify.h"
 #include "hap_utils.h"
 
 namespace OHOS {
 namespace SignatureTools {
-    
+
 const std::vector<int8_t> HapUtils::HAP_SIGNING_BLOCK_MAGIC_V2 =
     std::vector<int8_t>{ 0x48, 0x41, 0x50, 0x20, 0x53, 0x69, 0x67, 0x20, 0x42,
     0x6c, 0x6f, 0x63, 0x6b, 0x20, 0x34, 0x32 };
@@ -118,6 +120,85 @@ bool HapUtils::ReadFileToByteBuffer(const std::string& file, ByteBuffer& buffer)
     }
     buffer.SetCapacity(static_cast<int32_t>(ret.size()));
     buffer.PutData(ret.data(), ret.size());
+    return true;
+}
+
+std::vector<std::string> HapUtils::GetSkillNamesFromJson(const std::string& moduleJson)
+{
+    std::vector<std::string> skillNames;
+    if (moduleJson.empty()) {
+        return skillNames;
+    }
+    cJSON* root = cJSON_ParseWithOpts(moduleJson.c_str(), nullptr, 1);
+    if (root == nullptr) {
+        SIGNATURE_TOOLS_LOGE("Failed to parse module.json");
+        return skillNames;
+    }
+    cJSON* moduleObj = cJSON_GetObjectItemCaseSensitive(root, "module");
+    if (moduleObj == nullptr || !cJSON_IsObject(moduleObj)) {
+        SIGNATURE_TOOLS_LOGE("module.json has no module object");
+        cJSON_Delete(root);
+        return skillNames;
+    }
+    cJSON* skillsArray = cJSON_GetObjectItemCaseSensitive(moduleObj, "skillProfiles");
+    if (skillsArray == nullptr || !cJSON_IsArray(skillsArray)) {
+        SIGNATURE_TOOLS_LOGI("module.json has no skillProfiles key or skillProfiles value is not an array");
+        cJSON_Delete(root);
+        return skillNames;
+    }
+    cJSON* skillItem = nullptr;
+    cJSON_ArrayForEach(skillItem, skillsArray) {
+        if (!cJSON_IsObject(skillItem)) {
+            continue;
+        }
+        cJSON* nameObj = cJSON_GetObjectItemCaseSensitive(skillItem, "name");
+        if (nameObj != nullptr && cJSON_IsString(nameObj) && nameObj->valuestring != nullptr) {
+            std::string name(nameObj->valuestring);
+            if (!name.empty()) {
+                skillNames.push_back(name);
+            }
+        }
+    }
+    cJSON_Delete(root);
+    return skillNames;
+}
+
+bool HapUtils::GetModuleContentFromHap(const std::string& hapPath, std::string& moduleContent)
+{
+    moduleContent.clear();
+    unzFile zFile = unzOpen(hapPath.c_str());
+    if (zFile == nullptr) {
+        SIGNATURE_TOOLS_LOGE("Failed to open HAP file: %s", hapPath.c_str());
+        return false;
+    }
+    if (unzLocateFile(zFile, "module.json", 0) != UNZ_OK) {
+        SIGNATURE_TOOLS_LOGI("module.json not found in HAP");
+        unzClose(zFile);
+        return false;
+    }
+    char fileNameBuffer[512];
+    unz_file_info zFileInfo;
+    if (unzGetCurrentFileInfo(zFile, &zFileInfo, fileNameBuffer, sizeof(fileNameBuffer), nullptr, 0, nullptr, 0)
+        != UNZ_OK) {
+        SIGNATURE_TOOLS_LOGE("Failed to get file info for module.json");
+        unzClose(zFile);
+        return false;
+    }
+    if (unzOpenCurrentFile(zFile) != UNZ_OK) {
+        SIGNATURE_TOOLS_LOGE("Failed to open module.json in HAP");
+        unzClose(zFile);
+        return false;
+    }
+    std::vector<char> buffer(zFileInfo.uncompressed_size + 1);
+    int readSize = unzReadCurrentFile(zFile, buffer.data(), static_cast<unsigned>(zFileInfo.uncompressed_size));
+    unzCloseCurrentFile(zFile);
+    unzClose(zFile);
+    if (readSize <= 0) {
+        SIGNATURE_TOOLS_LOGE("Failed to read module.json from HAP");
+        return false;
+    }
+    buffer[readSize] = '\0';
+    moduleContent = std::string(buffer.data(), readSize);
     return true;
 }
 
