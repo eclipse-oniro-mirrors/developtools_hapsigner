@@ -367,7 +367,7 @@ public class Elfio {
 
     private boolean checkAllocatedSectionVma(Section sec, Segment seg) {
         if ((sec.getFlags() & ElfTypes.SHF_ALLOC) == 0) {
-            return true;
+            return false;
         }
         if (sec.getAddress() < seg.getVirtualAddress()) {
             return false;
@@ -529,7 +529,7 @@ public class Elfio {
             return sec.getOffset() - segStartPos - sizes.filesize;
         }
         if (sec.isAddressInitialized() && sec.getType() != ElfTypes.SHT_NOBITS && sec.getType() != ElfTypes.SHT_NULL
-            && sec.getSize() != 0) {
+            && sec.getSize() != 0 && (sec.getFlags() & ElfTypes.SHF_ALLOC) == ElfTypes.SHF_ALLOC) {
             long reqOffset = sec.getAddress() - seg.getVirtualAddress();
             long curOffset = currentPos - segStartPos;
             if (reqOffset < curOffset) {
