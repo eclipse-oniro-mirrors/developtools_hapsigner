@@ -261,12 +261,19 @@ bool CertTools::SetSubjectForCert(X509_REQ* certReq, X509* cert)
         return false;
     }
 
+    X509_NAME* subjectName = X509_REQ_get_subject_name(certReq);
+    if (subjectName == nullptr) {
+        SIGNATURE_TOOLS_LOGE("X509_REQ_get_subject_name failed");
+        VerifyHapOpensslUtils::GetOpensslErrorMessage();
+        return false;
+    }
+
     do {
-        if (X509_set_subject_name(cert, X509_REQ_get_subject_name(certReq)) != 1) {
+        if (X509_set_subject_name(cert, subjectName) != 1) {
             SIGNATURE_TOOLS_LOGE("X509_set_subject_name failed");
             break;
         }
-        if (X509_set_issuer_name(cert, X509_REQ_get_subject_name(certReq)) != 1) {
+        if (X509_set_issuer_name(cert, subjectName) != 1) {
             SIGNATURE_TOOLS_LOGE("X509_set_issuer_name failed");
             break;
         }
@@ -691,6 +698,11 @@ bool CertTools::SetBasicExt(X509* cert)
 {
     X509_EXTENSION* basicExtension = X509V3_EXT_conf(NULL, NULL, NID_BASIC_CONST.c_str(),
                                                      DEFAULT_BASIC_EXTENSION.c_str());
+    if (basicExtension == nullptr) {
+        VerifyHapOpensslUtils::GetOpensslErrorMessage();
+        SIGNATURE_TOOLS_LOGE("create basicExtension failed");
+        return false;
+    }
     if (X509_add_ext(cert, basicExtension, -1) == 0) {
         VerifyHapOpensslUtils::GetOpensslErrorMessage();
         SIGNATURE_TOOLS_LOGE("set basicExtension information failed");
@@ -705,6 +717,11 @@ bool CertTools::SetkeyUsageExt(X509* cert)
 {
     X509_EXTENSION* keyUsageExtension = X509V3_EXT_conf(NULL, NULL, NID_KEYUSAGE_CONST.c_str(),
                                                         DEFAULT_KEYUSAGE_EXTENSION.c_str());
+    if (keyUsageExtension == nullptr) {
+        VerifyHapOpensslUtils::GetOpensslErrorMessage();
+        SIGNATURE_TOOLS_LOGE("create keyUsageExtension failed");
+        return false;
+    }
     if (X509_add_ext(cert, keyUsageExtension, -1) == 0) {
         VerifyHapOpensslUtils::GetOpensslErrorMessage();
         SIGNATURE_TOOLS_LOGE("set keyUsageExtension information failed");
