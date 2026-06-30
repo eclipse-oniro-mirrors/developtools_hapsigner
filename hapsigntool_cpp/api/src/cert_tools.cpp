@@ -188,8 +188,8 @@ bool CertTools::SignForSubCert(X509* cert, X509_REQ* subcsr, X509_REQ* rootcsr, 
     std::string signAlg = options->GetString(Options::SIGN_ALG);
     EVP_PKEY* pubKey = X509_REQ_get_pubkey(subcsr);
     if (pubKey == nullptr) {
-        VerifyHapOpensslUtils::GetOpensslErrorMessage();
         SIGNATURE_TOOLS_LOGE("X509_REQ_get_pubkey failed");
+        VerifyHapOpensslUtils::GetOpensslErrorMessage();
         return false;
     }
     X509_NAME* issuerName = X509_REQ_get_subject_name(rootcsr);
@@ -264,6 +264,7 @@ bool CertTools::SetSubjectForCert(X509_REQ* certReq, X509* cert)
     X509_NAME* subjectName = X509_REQ_get_subject_name(certReq);
     if (subjectName == nullptr) {
         SIGNATURE_TOOLS_LOGE("X509_REQ_get_subject_name failed");
+        VerifyHapOpensslUtils::GetOpensslErrorMessage();
         return false;
     }
 
@@ -402,13 +403,11 @@ bool CertTools::SetkeyUsageExt(X509* cert, Options* options)
             return false;
         }
         if (X509_EXTENSION_set_critical(ext, crit) == 0) {
-            VerifyHapOpensslUtils::GetOpensslErrorMessage();
             SIGNATURE_TOOLS_LOGE("failed to set critical for extKeyUsage");
             X509_EXTENSION_free(ext);
             return false;
         }
         if (X509_add_ext(cert, ext, -1) == 0) {
-            VerifyHapOpensslUtils::GetOpensslErrorMessage();
             SIGNATURE_TOOLS_LOGE("failed to add extension");
             X509_EXTENSION_free(ext);
             return false;

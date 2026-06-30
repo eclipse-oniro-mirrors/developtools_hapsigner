@@ -246,7 +246,7 @@ bool VerifyElf::GetSignBlockData(std::vector<int8_t>& bytes, BlockData& blockDat
     int32_t intByteLength = 4;
     if (offset < 0 || bytes.size() < static_cast<size_t>(intByteLength) ||
         static_cast<size_t>(offset) > bytes.size() - static_cast<size_t>(intByteLength)) {
-        SIGNATURE_TOOLS_LOGE("Invalid offset for blockSizeByte, offset: %lld, size: %zu",
+        SIGNATURE_TOOLS_LOGE("Invalid offset for blockSizeByte, offset: %ld, size: %zu",
                              offset, bytes.size());
         return false;
     }
@@ -254,7 +254,7 @@ bool VerifyElf::GetSignBlockData(std::vector<int8_t>& bytes, BlockData& blockDat
     offset += intByteLength;
     if (offset < 0 || bytes.size() < static_cast<size_t>(intByteLength) ||
         static_cast<size_t>(offset) > bytes.size() - static_cast<size_t>(intByteLength)) {
-        SIGNATURE_TOOLS_LOGE("Invalid offset for blockNumByte, offset: %lld, size: %zu",
+        SIGNATURE_TOOLS_LOGE("Invalid offset for blockNumByte, offset: %ld, size: %zu",
                              offset, bytes.size());
         return false;
     }
