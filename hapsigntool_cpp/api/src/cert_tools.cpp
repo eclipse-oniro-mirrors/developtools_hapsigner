@@ -188,8 +188,8 @@ bool CertTools::SignForSubCert(X509* cert, X509_REQ* subcsr, X509_REQ* rootcsr, 
     std::string signAlg = options->GetString(Options::SIGN_ALG);
     EVP_PKEY* pubKey = X509_REQ_get_pubkey(subcsr);
     if (pubKey == nullptr) {
-        SIGNATURE_TOOLS_LOGE("X509_REQ_get_pubkey failed");
         VerifyHapOpensslUtils::GetOpensslErrorMessage();
+        SIGNATURE_TOOLS_LOGE("X509_REQ_get_pubkey failed");
         return false;
     }
     X509_NAME* issuerName = X509_REQ_get_subject_name(rootcsr);
@@ -264,7 +264,6 @@ bool CertTools::SetSubjectForCert(X509_REQ* certReq, X509* cert)
     X509_NAME* subjectName = X509_REQ_get_subject_name(certReq);
     if (subjectName == nullptr) {
         SIGNATURE_TOOLS_LOGE("X509_REQ_get_subject_name failed");
-        VerifyHapOpensslUtils::GetOpensslErrorMessage();
         return false;
     }
 
@@ -398,12 +397,18 @@ bool CertTools::SetkeyUsageExt(X509* cert, Options* options)
     if (!options->GetString(Options::EXT_KEY_USAGE).empty()) {
         ext = X509V3_EXT_conf(NULL, NULL, NID_EXT_KEYUSAGE_CONST.c_str(),
                               externKey[options->GetString(Options::EXT_KEY_USAGE)].c_str());
+        if (ext == nullptr) {
+            SIGNATURE_TOOLS_LOGE("create keyUsage Extension failed");
+            return false;
+        }
         if (X509_EXTENSION_set_critical(ext, crit) == 0) {
-            SIGNATURE_TOOLS_LOGE("failed to set  critical for extKeyUsage ");
+            VerifyHapOpensslUtils::GetOpensslErrorMessage();
+            SIGNATURE_TOOLS_LOGE("failed to set critical for extKeyUsage");
             X509_EXTENSION_free(ext);
             return false;
         }
         if (X509_add_ext(cert, ext, -1) == 0) {
+            VerifyHapOpensslUtils::GetOpensslErrorMessage();
             SIGNATURE_TOOLS_LOGE("failed to add extension");
             X509_EXTENSION_free(ext);
             return false;
@@ -699,7 +704,6 @@ bool CertTools::SetBasicExt(X509* cert)
     X509_EXTENSION* basicExtension = X509V3_EXT_conf(NULL, NULL, NID_BASIC_CONST.c_str(),
                                                      DEFAULT_BASIC_EXTENSION.c_str());
     if (basicExtension == nullptr) {
-        VerifyHapOpensslUtils::GetOpensslErrorMessage();
         SIGNATURE_TOOLS_LOGE("create basicExtension failed");
         return false;
     }
@@ -718,7 +722,6 @@ bool CertTools::SetkeyUsageExt(X509* cert)
     X509_EXTENSION* keyUsageExtension = X509V3_EXT_conf(NULL, NULL, NID_KEYUSAGE_CONST.c_str(),
                                                         DEFAULT_KEYUSAGE_EXTENSION.c_str());
     if (keyUsageExtension == nullptr) {
-        VerifyHapOpensslUtils::GetOpensslErrorMessage();
         SIGNATURE_TOOLS_LOGE("create keyUsageExtension failed");
         return false;
     }
@@ -737,7 +740,6 @@ bool CertTools::SetKeyUsageEndExt(X509* cert)
     X509_EXTENSION* keyUsageEndExtension = X509V3_EXT_conf(NULL, NULL, NID_EXT_KEYUSAGE_CONST.c_str(),
                                                            DEFAULT_EXTEND_KEYUSAGE.c_str());
     if (keyUsageEndExtension == nullptr) {
-        VerifyHapOpensslUtils::GetOpensslErrorMessage();
         SIGNATURE_TOOLS_LOGE("create keyUsageEndExtension failed");
         return false;
     }
