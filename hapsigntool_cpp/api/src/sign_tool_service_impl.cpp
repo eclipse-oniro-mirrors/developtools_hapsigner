@@ -42,11 +42,13 @@ bool SignToolServiceImpl::GenerateCA(Options* options)
     EVP_PKEY* subKey = adapter->GetAliasKey(true);
     if (!subKey) {
         SIGNATURE_TOOLS_LOGE("failed to get subKey!");
+        adapter->ResetPwd();
         return false;
     }
     if (isEmpty) {
         if (HandleIssuerKeyAliasEmpty(options) == RET_FAILED) {
             EVP_PKEY_free(subKey);
+            adapter->ResetPwd();
             return false;
         }
         flag = GenerateRootCertToFile(options, subKey);
@@ -55,6 +57,7 @@ bool SignToolServiceImpl::GenerateCA(Options* options)
         EVP_PKEY* rootKey = nullptr;
         if (HandleIsserKeyAliasNotEmpty(options) == RET_FAILED) {
             EVP_PKEY_free(subKey);
+            adapter->ResetPwd();
             return false;
         }
         adapter->SetIssuerKeyStoreFile(true);
@@ -463,6 +466,7 @@ bool SignToolServiceImpl::GetAndOutPutCert(LocalizationAdapter& adapter, X509* c
         successflag = (!(subCaCert = adapter.GetSubCaCertFile()) ||
                        !(rootCaCert = adapter.GetCaCertFile()));
         if (successflag) {
+            adapter.AppAndProfileAssetsRealse({}, {}, {subCaCert, rootCaCert});
             return false;
         }
         certificates.emplace_back(subCaCert); // add sub ca cert

@@ -121,7 +121,7 @@ void KeyStoreHelper::KeyPairFree(STACK_OF(X509)* ocerts, STACK_OF(PKCS12_SAFEBAG
     sk_PKCS12_SAFEBAG_pop_free(bags, PKCS12_SAFEBAG_free);
     bags = nullptr;
 
-    free(name);
+    OPENSSL_free(name);
     name = nullptr;
 }
 
@@ -142,7 +142,7 @@ void KeyStoreHelper::KeyPairFree(STACK_OF(PKCS12_SAFEBAG)* bags, PKCS8_PRIV_KEY_
     PKCS8_PRIV_KEY_INFO_free(p8);
     p8 = nullptr;
 
-    free(name);
+    OPENSSL_free(name);
     name = nullptr;
 }
 
@@ -597,7 +597,7 @@ PKCS12* KeyStoreHelper::CreatePKCS12(const char* keyStorePwd, const char* keyPwd
         certNid = NID_PBE_CBC;
     }
     SetNidMac(keyNid, iter, macStatus);
-    if (!pkey && !cert) {
+    if (!pkey || !cert) {
         PKCS12err(PKCS12_F_PKCS12_CREATE, PKCS12_R_INVALID_NULL_ARGUMENT);
         return NULL;
     }

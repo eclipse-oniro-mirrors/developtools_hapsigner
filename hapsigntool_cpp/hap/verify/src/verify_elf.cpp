@@ -197,7 +197,10 @@ bool VerifyElf::GetFileDigest(std::vector<int8_t>& fileBytes, const std::vector<
     }
     std::vector<int8_t> rawDigest(binDigest.begin(), binDigest.end());
     signBlockInfo.SetRawDigest(rawDigest);
-    GenerateFileDigest(fileBytes, signBlockInfo);
+    if (!GenerateFileDigest(fileBytes, signBlockInfo)) {
+        SIGNATURE_TOOLS_LOGE("generate file digest failed");
+        return false;
+    }
     return true;
 }
 
@@ -241,8 +244,20 @@ bool VerifyElf::GetSignBlockData(std::vector<int8_t>& bytes, BlockData& blockDat
         return false;
     }
     int32_t intByteLength = 4;
+    if (offset < 0 || bytes.size() < static_cast<size_t>(intByteLength) ||
+        static_cast<size_t>(offset) > bytes.size() - static_cast<size_t>(intByteLength)) {
+        SIGNATURE_TOOLS_LOGE("Invalid offset for blockSizeByte, offset: %ld, size: %zu",
+                             offset, bytes.size());
+        return false;
+    }
     std::vector<int8_t> blockSizeByte(bytes.begin() + offset, bytes.begin() + offset + intByteLength);
     offset += intByteLength;
+    if (offset < 0 || bytes.size() < static_cast<size_t>(intByteLength) ||
+        static_cast<size_t>(offset) > bytes.size() - static_cast<size_t>(intByteLength)) {
+        SIGNATURE_TOOLS_LOGE("Invalid offset for blockNumByte, offset: %ld, size: %zu",
+                             offset, bytes.size());
+        return false;
+    }
     std::vector<int8_t> blockNumByte(bytes.begin() + offset, bytes.begin() + offset + intByteLength);
     if (fileType == BIN) {
         std::reverse(blockSizeByte.begin(), blockSizeByte.end());
