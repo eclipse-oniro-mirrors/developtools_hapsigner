@@ -72,6 +72,11 @@ public class HapUtils {
     public static final int HAP_PROPERTY_BLOCK_ID = 0x20000003;
 
     /**
+     * ID of enterprise code re-sign block
+     */
+    public static final int ENTERPRISE_CODE_RE_SIGN_BLOCK_ID = 0x20000005;
+
+    /**
      * ID of property block
      */
     public static final int HAP_CODE_SIGN_BLOCK_ID = 0x30000001;

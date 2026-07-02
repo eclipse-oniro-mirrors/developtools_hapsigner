@@ -408,6 +408,30 @@ public abstract class SignProvider {
         }
     }
 
+    private void appendResignCodeSignBlock(SignerConfig signerConfig, File tmpOutput, String suffix,
+        long centralDirectoryOffset, Zip zip)
+        throws FsVerityDigestException, CodeSignException, IOException, HapFormatException, ProfileException {
+        // 4 means hap format occupy 4 byte storage location,2 means optional blocks reserve 2 storage location
+        // 12 byte before codeSignArray
+        long optionalBlocksHeaderSize = (4 + 4 + 4) * (optionalBlocks.size() + 2) + 12;
+        long optionalBlocksDataSize = 0L;
+        for (SigningBlock block : optionalBlocks) {
+            optionalBlocksDataSize += block.getLength();
+        }
+        long codeSignOffset = centralDirectoryOffset + optionalBlocksHeaderSize + optionalBlocksDataSize;
+        // create CodeSigning Object
+        CodeSigning codeSigning = new CodeSigning(signerConfig);
+        byte[] codeSignArray = codeSigning.getCodeSignBlock(tmpOutput, codeSignOffset, suffix, profileContent, zip);
+        ByteBuffer result = ByteBuffer.allocate(codeSignArray.length + 12); // 12 byte before codeSignArray
+        result.order(ByteOrder.LITTLE_ENDIAN);
+        result.putInt(HapUtils.HAP_CODE_SIGN_BLOCK_ID); // type
+        result.putInt(codeSignArray.length); // length
+        result.putInt((int) codeSignOffset); // offset
+        result.put(codeSignArray);
+        SigningBlock propertyBlock = new SigningBlock(HapUtils.ENTERPRISE_CODE_RE_SIGN_BLOCK_ID, result.array());
+        optionalBlocks.add(propertyBlock);
+    }
+
     /**
      * obtain file name suffix
      *

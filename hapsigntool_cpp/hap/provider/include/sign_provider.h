@@ -126,6 +126,8 @@ private:
 
     bool AppendCodeSignBlock(SignerConfig* signerConfig, std::string outputFilePath,
                              const std::string& suffix, int64_t centralDirectoryOffset, ZipSigner& zip);
+    bool AppendReCodeSignBlock(SignerConfig* signerConfig, std::string outputFilePath,
+                             const std::string& suffix, int64_t centralDirectoryOffset, ZipSigner& zip);
     bool OutputSignedFile(RandomAccessFile* outputHap, long centralDirectoryOffset,
                           ByteBuffer& signingBlock, ByteBufferDataSource* centralDirectory, ByteBuffer& eocdBuffer);
 
