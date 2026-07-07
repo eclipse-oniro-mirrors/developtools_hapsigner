@@ -15,6 +15,7 @@
 #ifndef SIGNATRUETOOLS_NATIVE_LIB_INFO_SEGMENT_H
 #define SIGNATRUETOOLS_NATIVE_LIB_INFO_SEGMENT_H
 
+#include <memory>
 #include <vector>
 #include <string>
 
@@ -48,7 +49,7 @@ public:
     void ToByteArray(std::vector<int8_t> &ret);
 
 private:
-    static bool CheckBuffer(ByteBuffer* bf, int32_t& inMagic,
+    static bool CheckBuffer(std::unique_ptr<ByteBuffer>& bf, int32_t& inMagic,
         int32_t& inSegmentSize, int32_t& inSectionNum);
     void GenerateList();
     int32_t magic;

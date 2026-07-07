@@ -91,7 +91,7 @@ bool CodeSigning::GetElfCodeSignBlock(const std::string &input, uint64_t& csOffs
 bool CodeSigning::GenerateSignature(const std::vector<int8_t>& signedData, const std::string& ownerID,
                                     std::vector<int8_t>& ret)
 {
-    if (m_signConfig->GetSigner() != nullptr) {
+    if (m_signConfig != nullptr && m_signConfig->GetSigner() != nullptr) {
         STACK_OF(X509)* certs = NULL;
         certs = m_signConfig->GetSigner()->GetCertificates();
         if (certs == nullptr) {
@@ -100,6 +100,7 @@ bool CodeSigning::GenerateSignature(const std::vector<int8_t>& signedData, const
         }
         sk_X509_pop_free(certs, X509_free);
     } else {
+        SIGNATURE_TOOLS_LOGE("SignConfig or signer is nulld");
         return false;
     }
     std::unique_ptr<BCSignedDataGenerator> bcSignedDataGenerator =

@@ -89,6 +89,10 @@ bool VerifyElf::ParseSignBlock(const ELFIO::elfio& elfReader)
         return false;
     }
     const char* data = sec->get_data();
+    if (data == nullptr) {
+        SIGNATURE_TOOLS_LOGE("code signature section data is null");
+        return false;
+    }
     uint64_t csBlockSize = sec->get_size();
     if (csBlockSize == 0 || csBlockSize % PAGE_SIZE != 0) {
         SIGNATURE_TOOLS_LOGE("code signature section size is not aligned");

@@ -114,7 +114,7 @@ NativeLibInfoSegment NativeLibInfoSegment::FromByteArray(std::vector<int8_t> &by
     int32_t inMagic = 0;
     int32_t inSegmentSize = 0;
     int32_t inSectionNum = 0;
-    bool checkFlag = CheckBuffer(bf.get(), inMagic, inSegmentSize, inSectionNum);
+    bool checkFlag = CheckBuffer(bf, inMagic, inSegmentSize, inSectionNum);
     if (!checkFlag) {
         return NativeLibInfoSegment();
     }
@@ -155,7 +155,7 @@ NativeLibInfoSegment NativeLibInfoSegment::FromByteArray(std::vector<int8_t> &by
                                 inFileNameList, inSignInfoList, inZeroPadding);
 }
 
-bool NativeLibInfoSegment::CheckBuffer(ByteBuffer* bf, int32_t& inMagic, int32_t& inSegmentSize,
+bool NativeLibInfoSegment::CheckBuffer(std::unique_ptr<ByteBuffer>& bf, int32_t& inMagic, int32_t& inSegmentSize,
     int32_t& inSectionNum)
 {
     bf->GetInt32(inMagic);
