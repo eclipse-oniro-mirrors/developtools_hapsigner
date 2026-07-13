@@ -22,6 +22,7 @@
 
 namespace OHOS {
 namespace SignatureTools {
+
 bool ZipSigner::Init(std::ifstream& inputFile)
 {
     if (!inputFile.good()) {
@@ -275,7 +276,7 @@ void ZipSigner::Alignment(int alignment)
             alignBytes = 4096;
             isFirstUnRunnableFile = false;
         } else if (zipEntryData->GetZipEntryHeader()->GetFileName().find("resources/resfile/") == 0 &&
-                   zipEntryData->GetFileSize() >= 1024 * 1024) {
+                   zipEntryData->GetFileSize() >= ONE_MB) {
             /* resources/resfile/ directory file >= 1MB, align 4096 byte. */
             alignBytes = 4096;
         } else {
