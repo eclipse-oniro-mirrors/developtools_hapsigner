@@ -22,7 +22,6 @@
 
 namespace OHOS {
 namespace SignatureTools {
-
 bool ZipSigner::Init(std::ifstream& inputFile)
 {
     if (!inputFile.good()) {
