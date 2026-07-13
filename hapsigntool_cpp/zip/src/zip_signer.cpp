@@ -274,6 +274,10 @@ void ZipSigner::Alignment(int alignment)
             /* the first file after runnable file, align 4096 byte. */
             alignBytes = 4096;
             isFirstUnRunnableFile = false;
+        } else if (zipEntryData->GetZipEntryHeader()->GetFileName().find("resources/resfile/") == 0 &&
+                   zipEntryData->GetFileSize() >= 1024 * 1024) {
+            /* resources/resfile/ directory file >= 1MB, align 4096 byte. */
+            alignBytes = 4096;
         } else {
             /* normal file align 4 byte. */
             alignBytes = alignment;
