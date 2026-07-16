@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023-2023 Huawei Device Co., Ltd.
+ * Copyright (c) 2023-2026 Huawei Device Co., Ltd.
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -49,6 +49,12 @@ public class Zip {
      * max comment length
      */
     public static final int MAX_COMMENT_LENGTH = 65535;
+
+    private static final int FILE_ALIGNMENT_BYTES_4K = 4096;
+
+    private static final int RES_FILE_ALIGNMENT_THRESHOLD_BYTES = 1024 * 1024;
+
+    private static final String RES_FILE_PRE_FIX = "resources/resfile/";
 
     private List<ZipEntry> zipEntries;
 
@@ -231,19 +237,25 @@ public class Zip {
                 ZipEntryData zipEntryData = entry.getZipEntryData();
                 short method = zipEntryData.getZipEntryHeader().getMethod();
                 if (method != FILE_UNCOMPRESS_METHOD_FLAG && !isFirstUnRunnableFile) {
-                    // only align uncompressed entry and the first compress entry.
+                    // only align uncompressed entry and the first unrunnable entry.
                     break;
                 }
                 int alignBytes;
-                EntryType type = entry.getZipEntryData().getType();
+                EntryType type = Optional.of(zipEntryData).map(ZipEntryData::getType).orElse(null);
+                long fileSize = Optional.of(zipEntryData).map(ZipEntryData::getFileSize).orElse(0L);
+                String fileName = Optional.of(zipEntryData).map(ZipEntryData::getZipEntryHeader)
+                        .map(ZipEntryHeader::getFileName).orElse("");
                 if ((type == EntryType.RUNNABLE_FILE && method == FILE_UNCOMPRESS_METHOD_FLAG) ||
                     type == EntryType.BIT_MAP) {
                     // .abc and .so file align 4096 byte.
-                    alignBytes = 4096;
+                    alignBytes = FILE_ALIGNMENT_BYTES_4K;
                 } else if (isFirstUnRunnableFile) {
                     // the first file after runnable file, align 4096 byte.
-                    alignBytes = 4096;
+                    alignBytes = FILE_ALIGNMENT_BYTES_4K;
                     isFirstUnRunnableFile = false;
+                } else if (fileName.startsWith(RES_FILE_PRE_FIX) && fileSize >= RES_FILE_ALIGNMENT_THRESHOLD_BYTES) {
+                    // resource file whose size larger than or equal to 1MB align 4096 byte.
+                    alignBytes = FILE_ALIGNMENT_BYTES_4K;
                 } else {
                     // normal file align 4 byte.
                     alignBytes = alignment;
