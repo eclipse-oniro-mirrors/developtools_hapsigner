@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright (c) 2024-2026 Huawei Device Co., Ltd.
+ * Copyright (c) 2024-2024 Huawei Device Co., Ltd.
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -91,8 +91,6 @@ public:
     static const std::vector<int8_t>& GetPermissionSignMagic();
     static int GetHapSigningBlockVersion(int compatibleVersion);
     static bool ReadFileToByteBuffer(const std::string& file, ByteBuffer& buffer);
-    static std::vector<std::string> GetSkillNamesFromJson(const std::string& moduleJson);
-    static bool GetModuleContentFromHap(const std::string& hapPath, std::string& moduleContent);
 
 private:
     static const int32_t MAX_APP_ID_LEN = 32;

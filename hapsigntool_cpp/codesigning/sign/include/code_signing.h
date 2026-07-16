@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024-2026 Huawei Device Co., Ltd.
+ * Copyright (c) 2024-2024 Huawei Device Co., Ltd.
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -42,8 +42,6 @@ public:
     static const std::string HAP_SIGNATURE_ENTRY_NAME;
     static const std::string ENABLE_SIGN_CODE_VALUE;
     static const std::string LIBS_PATH_PREFIX;
-    static const std::string SKILLS_PATH_PREFIX;
-    static const std::string SCRIPTS_SUFFIX;
     CodeSigning(SignerConfig* signConfig);
     CodeSigning();
 
@@ -54,8 +52,6 @@ public:
     bool GetCodeSignBlock(const std::string &input, int64_t offset,
                           const std::string &inForm, const std::string &profileContent,
                           ZipSigner& zip, std::vector<int8_t>& ret);
-    bool SignAndAddHapSegment(const std::string& input, int64_t dataSize,
-                              int64_t fsvTreeOffset, const std::string& ownerID);
     bool GetElfCodeSignBlock(const std::string &input, int64_t offset,
                              const std::string &inForm, const std::string &profileContent,
                              std::vector<int8_t> &codesignData);
@@ -65,12 +61,6 @@ public:
     int64_t ComputeDataSize(ZipSigner& zip);
     int64_t GetTimestamp();
     bool SignNativeLibs(const std::string &input, std::string &ownerID);
-    bool SignSkillScripts(const std::string &input, std::string &ownerID);
-    bool GetScriptEntriesFromHap(const std::string& packageName,
-                                 const std::vector<std::string>& skillNames,
-                                 UnzipHandleParam& param);
-    bool IterateScriptsEntries(const std::string& packageName, unzFile& zFile, uLong numberEntry,
-                               const std::vector<std::string>& skillNames, UnzipHandleParam& param);
     void UpdateCodeSignBlock();
     bool GetNativeEntriesFromHap(const std::string& packageName, UnzipHandleParam& param);
     bool GetSingleFileStreamFromZip(unzFile& zFile, char fileName[],
@@ -88,7 +78,6 @@ public:
 private:
     static bool CheckUnzParam(unzFile& zFile, unz_file_info& zFileInfo, char fileName[], size_t* nameLen);
     static bool CheckFileName(char fileName[], size_t* nameLen);
-    static bool CheckFileNameForScripts(char fileName[], size_t nameLen, const std::vector<std::string>& skillNames);
     bool HandleZipGlobalInfo(const std::string& packageName, unzFile& zFile,
                              unz_global_info& zGlobalInfo, UnzipHandleParam& param);
     bool DoNativeLibVerify(std::string fileName, std::stringbuf& sb,

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023-2026 Huawei Device Co., Ltd.
+ * Copyright (c) 2023-2023 Huawei Device Co., Ltd.
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -86,9 +86,6 @@ public class CodeSigning {
     public static final String BUNDLE_TYPE_PLUGIN = "appPlugin";
 
     private static final LogUtils LOGGER = new LogUtils(CodeSigning.class);
-
-    private static final String SKILLS_PATH_PREFIX = "skills/";
-    private static final String SCRIPTS_SUFFIX = "/scripts/";
 
     private final SignerConfig signConfig;
 
@@ -211,7 +208,6 @@ public class CodeSigning {
         List<Pair<String, SignInfo>> nativeLibInfoList = new ArrayList<>();
         nativeLibInfoList.addAll(signNativeLibs(input, ownerID));
         nativeLibInfoList.addAll(signNativeHnps(input, profileContent, ownerID));
-        nativeLibInfoList.addAll(signSkillScripts(input, ownerID));
         // update SoInfoSegment in CodeSignBlock
         this.codeSignBlock.getSoInfoSegment().setSoInfoList(nativeLibInfoList);
 
@@ -272,47 +268,6 @@ public class CodeSigning {
             }
             return signFilesFromJar(entryNames, inputJar, ownerID);
         }
-    }
-
-    private List<Pair<String, SignInfo>> signSkillScripts(File input, String ownerID)
-        throws IOException, FsVerityDigestException, CodeSignException {
-        List<Pair<String, SignInfo>> scriptInfoList = new ArrayList<>();
-        try (JarFile inputJar = new JarFile(input, false)) {
-            List<String> skillNames = HapUtils.getSkillNamesFromJson(inputJar);
-            if (skillNames.isEmpty()) {
-                LOGGER.info("No skill names found in module.json");
-                return scriptInfoList;
-            }
-            List<String> scriptEntries = getScriptEntriesFromHap(inputJar, skillNames);
-            if (scriptEntries.isEmpty()) {
-                LOGGER.info("No script files found under skill_names/scripts directories");
-                return scriptInfoList;
-            }
-            return signFilesFromJar(scriptEntries, inputJar, ownerID);
-        }
-    }
-
-    private List<String> getScriptEntriesFromHap(JarFile hap, List<String> skillNames) {
-        List<String> result = new ArrayList<>();
-        for (String skillName : skillNames) {
-            String scriptsPath = SKILLS_PATH_PREFIX + skillName + SCRIPTS_SUFFIX;
-            for (Enumeration<JarEntry> e = hap.entries(); e.hasMoreElements();) {
-                JarEntry entry = e.nextElement();
-                if (entry.isDirectory()) {
-                    continue;
-                }
-                String entryName = entry.getName();
-                if (!entryName.startsWith(scriptsPath)) {
-                    continue;
-                }
-                String rest = entryName.substring(scriptsPath.length());
-                if (rest.contains("/")) {
-                    continue;
-                }
-                result.add(entryName);
-            }
-        }
-        return result;
     }
 
     private List<Pair<String, SignInfo>> signNativeHnps(File input, String profileContent, String ownerID)
