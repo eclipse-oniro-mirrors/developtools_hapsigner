@@ -262,7 +262,7 @@ void ZipSigner::Alignment(int alignment)
         ZipEntryData* zipEntryData = entry->GetZipEntryData();
         short method = zipEntryData->GetZipEntryHeader()->GetMethod();
         if (method != FILE_UNCOMPRESS_METHOD_FLAG && !isFirstUnRunnableFile) {
-            /* only align uncompressed entry and the first compress entry. */
+            /* only align uncompressed entry and the first unrunnable entry. */
             break;
         }
         int alignBytes;
