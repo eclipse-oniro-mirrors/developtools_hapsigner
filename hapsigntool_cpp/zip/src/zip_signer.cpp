@@ -262,7 +262,7 @@ void ZipSigner::Alignment(int alignment)
         ZipEntryData* zipEntryData = entry->GetZipEntryData();
         short method = zipEntryData->GetZipEntryHeader()->GetMethod();
         if (method != FILE_UNCOMPRESS_METHOD_FLAG && !isFirstUnRunnableFile) {
-            /* only align uncompressed entry and the first compress entry. */
+            /* only align uncompressed entry and the first unrunnable entry. */
             break;
         }
         int alignBytes;
@@ -274,6 +274,10 @@ void ZipSigner::Alignment(int alignment)
             /* the first file after runnable file, align 4096 byte. */
             alignBytes = 4096;
             isFirstUnRunnableFile = false;
+        } else if (zipEntryData->GetZipEntryHeader()->GetFileName().find("resources/resfile/") == 0 &&
+                   zipEntryData->GetFileSize() >= ONE_MB) {
+            /* resources/resfile/ directory file >= 1MB, align 4096 byte. */
+            alignBytes = 4096;
         } else {
             /* normal file align 4 byte. */
             alignBytes = alignment;

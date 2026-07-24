@@ -35,6 +35,9 @@ public:
     /* max comment length */
     static constexpr int MAX_COMMENT_LENGTH = 65535;
 
+    /* 1MB size threshold for resfile alignment */
+    static constexpr int ONE_MB = 1024 * 1024;
+
     ZipSigner()
     {
         m_endOfCentralDirectory = nullptr;
