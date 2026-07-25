@@ -616,7 +616,7 @@ bool SignProvider::GetFileContentFromHap(const std::string& hapFilePath,
 
     char buffer[4096] = {0};
     int readSize = 0;
-    long fileLength = zFileInfo.uncompressed_size;
+    long long fileLength = zFileInfo.uncompressed_size;
     std::stringbuf sb;
     do {
         readSize = unzReadCurrentFile(zFile, buffer, sizeof(buffer));
@@ -632,7 +632,7 @@ bool SignProvider::GetFileContentFromHap(const std::string& hapFilePath,
     } while (fileLength > 0 && readSize > 0);
 
     if (fileLength != 0) {
-        SIGNATURE_TOOLS_LOGE("read %s from zip failed, remaining length: %ld", fileName.c_str(), fileLength);
+        SIGNATURE_TOOLS_LOGE("read %s from zip failed, remaining length: %lld", fileName.c_str(), fileLength);
         unzCloseCurrentFile(zFile);
         unzClose(zFile);
         return false;

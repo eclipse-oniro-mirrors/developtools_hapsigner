@@ -54,6 +54,7 @@ static constexpr int ZIP_HEAD_OF_SUBSIGNING_BLOCK_LENGTH = 12;
 static constexpr int PERMISSION_SIGN_DIGEST_COUNT_OFFSET = 28;
 static constexpr int PERMISSION_SIGN_DIGEST_TYPE_SIZE = 4;
 static constexpr int PERMISSION_SIGN_MAGIC_LENGTH = 8;
+static constexpr int PERMISSION_SIGN_SIGLEN_LENGTH = 4;
 
 VerifyHap::VerifyHap() : isPrintCert(true)
 {
@@ -800,8 +801,8 @@ bool VerifyHap::CheckPermSign(const std::string& hapFilePath, const std::vector<
 
     int32_t dataStartPos = pos;
     const char* srcBuf = propertyBlockArray.GetBufferPtr();
-    if (srcBuf == nullptr ||
-        dataStartPos + static_cast<int32_t>(blockLength) > propertyBlockArray.GetCapacity()) {
+    if (srcBuf == nullptr || ZIP_HEAD_OF_SUBSIGNING_BLOCK_LENGTH > propertyBlockArray.GetCapacity() - dataStartPos ||
+        blockLength > propertyBlockArray.GetCapacity() - dataStartPos - ZIP_HEAD_OF_SUBSIGNING_BLOCK_LENGTH) {
         SIGNATURE_TOOLS_LOGE("perm sign data out of range: start=%d, len=%u, capacity=%d",
             dataStartPos, blockLength, propertyBlockArray.GetCapacity());
         return false;
@@ -908,6 +909,12 @@ bool VerifyHap::BuildPermSignDataToVerify(ByteBuffer& permSignBlock, int32_t sig
 
     int32_t digestPos = PERMISSION_SIGN_DIGEST_DATA_OFFSET;
     for (int i = 0; i < num; i++) {
+        if (permSignBlock.GetCapacity() < digestPos ||
+            permSignBlock.GetCapacity() - digestPos < PERMISSION_SIGN_DIGEST_TYPE_SIZE + digestSize) {
+            SIGNATURE_TOOLS_LOGE("digest data out of bounds at pos %d, capacity=%d",
+                digestPos, permSignBlock.GetCapacity());
+            return false;
+        }
         int32_t digestType;
         permSignBlock.GetInt32(digestPos, digestType);
         dataToVerify.append(reinterpret_cast<const char*>(&digestType), sizeof(digestType));
@@ -925,10 +932,19 @@ bool VerifyHap::BuildPermSignDataToVerify(ByteBuffer& permSignBlock, int32_t sig
 bool VerifyHap::ReadSignature(ByteBuffer& permSignBlock, int16_t num,
                               int32_t digestSize, std::string& signature)const
 {
-    int32_t sigPos = PERMISSION_SIGN_DIGEST_DATA_OFFSET + num * (4 + digestSize);
+    int32_t sigPos = PERMISSION_SIGN_DIGEST_DATA_OFFSET + num * (PERMISSION_SIGN_SIGLEN_LENGTH + digestSize);
+    if (sigPos + PERMISSION_SIGN_SIGLEN_LENGTH > permSignBlock.GetCapacity()) {
+        SIGNATURE_TOOLS_LOGE("signature position out of bounds: %d", sigPos);
+        return false;
+    }
     int32_t sigLen;
     permSignBlock.GetInt32(sigPos, sigLen);
-    int32_t sigOffset = sigPos + 4;
+    if (sigLen < 0 || permSignBlock.GetCapacity() < sigLen ||
+        permSignBlock.GetCapacity() - sigLen < sigPos + PERMISSION_SIGN_SIGLEN_LENGTH) {
+        SIGNATURE_TOOLS_LOGE("signature length out of bounds: %d", sigLen);
+        return false;
+    }
+    int32_t sigOffset = sigPos + PERMISSION_SIGN_SIGLEN_LENGTH;
     for (int i = 0; i < sigLen; i++) {
         uint8_t val;
         permSignBlock.GetUInt8(sigOffset + i, val);
