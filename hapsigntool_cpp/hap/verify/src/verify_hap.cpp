@@ -801,8 +801,7 @@ bool VerifyHap::CheckPermSign(const std::string& hapFilePath, const std::vector<
 
     int32_t dataStartPos = pos;
     const char* srcBuf = propertyBlockArray.GetBufferPtr();
-    if (srcBuf == nullptr ||
-        ZIP_HEAD_OF_SUBSIGNING_BLOCK_LENGTH > propertyBlockArray.GetCapacity() - dataStartPos ||
+    if (srcBuf == nullptr || ZIP_HEAD_OF_SUBSIGNING_BLOCK_LENGTH > propertyBlockArray.GetCapacity() - dataStartPos ||
         blockLength > propertyBlockArray.GetCapacity() - dataStartPos - ZIP_HEAD_OF_SUBSIGNING_BLOCK_LENGTH) {
         SIGNATURE_TOOLS_LOGE("perm sign data out of range: start=%d, len=%u, capacity=%d",
             dataStartPos, blockLength, propertyBlockArray.GetCapacity());
