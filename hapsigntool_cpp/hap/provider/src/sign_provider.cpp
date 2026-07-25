@@ -616,7 +616,7 @@ bool SignProvider::GetFileContentFromHap(const std::string& hapFilePath,
 
     char buffer[4096] = {0};
     int readSize = 0;
-    long fileLength = zFileInfo.uncompressed_size;
+    long long fileLength = zFileInfo.uncompressed_size;
     std::stringbuf sb;
     do {
         readSize = unzReadCurrentFile(zFile, buffer, sizeof(buffer));
