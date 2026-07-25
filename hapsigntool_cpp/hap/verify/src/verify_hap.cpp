@@ -801,8 +801,9 @@ bool VerifyHap::CheckPermSign(const std::string& hapFilePath, const std::vector<
 
     int32_t dataStartPos = pos;
     const char* srcBuf = propertyBlockArray.GetBufferPtr();
-    if (srcBuf == nullptr || dataStartPos + static_cast<int32_t>(blockLength) + ZIP_HEAD_OF_SUBSIGNING_BLOCK_LENGTH >
-            propertyBlockArray.GetCapacity()) {
+    if (srcBuf == nullptr ||
+        ZIP_HEAD_OF_SUBSIGNING_BLOCK_LENGTH > propertyBlockArray.GetCapacity() - dataStartPos ||
+        blockLength > propertyBlockArray.GetCapacity() - dataStartPos - ZIP_HEAD_OF_SUBSIGNING_BLOCK_LENGTH) {
         SIGNATURE_TOOLS_LOGE("perm sign data out of range: start=%d, len=%u, capacity=%d",
             dataStartPos, blockLength, propertyBlockArray.GetCapacity());
         return false;
@@ -909,7 +910,8 @@ bool VerifyHap::BuildPermSignDataToVerify(ByteBuffer& permSignBlock, int32_t sig
 
     int32_t digestPos = PERMISSION_SIGN_DIGEST_DATA_OFFSET;
     for (int i = 0; i < num; i++) {
-        if (digestPos + PERMISSION_SIGN_DIGEST_TYPE_SIZE + digestSize > permSignBlock.GetCapacity()) {
+        if (permSignBlock.GetCapacity() < digestPos ||
+            permSignBlock.GetCapacity() - digestPos < PERMISSION_SIGN_DIGEST_TYPE_SIZE + digestSize) {
             SIGNATURE_TOOLS_LOGE("digest data out of bounds at pos %d, capacity=%d",
                 digestPos, permSignBlock.GetCapacity());
             return false;
@@ -938,7 +940,8 @@ bool VerifyHap::ReadSignature(ByteBuffer& permSignBlock, int16_t num,
     }
     int32_t sigLen;
     permSignBlock.GetInt32(sigPos, sigLen);
-    if (sigLen < 0 || sigLen + sigPos + PERMISSION_SIGN_SIGLEN_LENGTH > permSignBlock.GetCapacity()) {
+    if (sigLen < 0 || permSignBlock.GetCapacity() < sigLen ||
+        permSignBlock.GetCapacity() - sigLen < sigPos + PERMISSION_SIGN_SIGLEN_LENGTH) {
         SIGNATURE_TOOLS_LOGE("signature length out of bounds: %d", sigLen);
         return false;
     }
