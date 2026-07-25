@@ -632,7 +632,7 @@ bool SignProvider::GetFileContentFromHap(const std::string& hapFilePath,
     } while (fileLength > 0 && readSize > 0);
 
     if (fileLength != 0) {
-        SIGNATURE_TOOLS_LOGE("read %s from zip failed, remaining length: %ld", fileName.c_str(), fileLength);
+        SIGNATURE_TOOLS_LOGE("read %s from zip failed, remaining length: %lld", fileName.c_str(), fileLength);
         unzCloseCurrentFile(zFile);
         unzClose(zFile);
         return false;
