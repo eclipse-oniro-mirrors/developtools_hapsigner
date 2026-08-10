@@ -59,6 +59,8 @@ private:
     static void GetBinSignBlock(std::vector<int8_t>& bytes, BlockData& blockData,
         std::unordered_map<int8_t, SigningBlock>& signBlockMap);
     static bool GenerateFileDigest(std::vector<int8_t>& fileBytes, SignBlockInfo& signBlockInfo);
+    static bool ValidateBlockSize(int32_t blockSize, size_t fileSize, const std::string& fileType,
+        int64_t& blockStart);
 };
 } // namespace SignatureTools
 } // namespace OHOS
