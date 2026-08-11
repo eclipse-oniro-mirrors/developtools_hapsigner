@@ -319,7 +319,7 @@ X509* VerifyHap::ExtractCertificateFromProfile(const SignatureInfo& hapSignInfo)
 {
     const ByteBuffer* profileBlock = nullptr;
     for (const auto& block : hapSignInfo.optionBlocks) {
-        if (block.optionalType == HAP_SIGN_BLOB) {
+        if (block.optionalType == PROFILE_BLOB) {
             profileBlock = &block.optionalBlockValue;
             break;
         }
