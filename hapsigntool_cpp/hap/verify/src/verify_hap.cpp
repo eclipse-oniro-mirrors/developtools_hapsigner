@@ -272,7 +272,7 @@ bool VerifyHap::CheckFilePath(const std::string& filePath, std::string& standard
 bool VerifyHap::IsVerifyResign(const SignatureInfo& hapSignInfo)
 {
     for (const OptionalBlock& optionalBlock : hapSignInfo.optionBlocks) {
-        if (optionalBlock.optionalType == ENTERPRISE_CODE_RE_SIGN_BLOB) {
+        if (optionalBlock.optionalType == HapUtils::ENTERPRISE_CODE_RE_SIGN_BLOCK_ID) {
             return true;
         }
     }
@@ -319,7 +319,7 @@ X509* VerifyHap::ExtractCertificateFromProfile(const SignatureInfo& hapSignInfo)
 {
     const ByteBuffer* profileBlock = nullptr;
     for (const auto& block : hapSignInfo.optionBlocks) {
-        if (block.optionalType == PROFILE_BLOB) {
+        if (block.optionalType == HapUtils::HAP_PROFILE_BLOCK_ID) {
             profileBlock = &block.optionalBlockValue;
             break;
         }
