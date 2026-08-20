@@ -273,14 +273,42 @@ bool VerifyElf::GetSignBlockData(std::vector<int8_t>& bytes, BlockData& blockDat
     blockSizeBf->Flip();
     int32_t blockSize = 0;
     blockSizeBf->GetInt32(blockSize);
+    if (blockNum < 0) {
+        SIGNATURE_TOOLS_LOGE("Invalid blockNum: %d", blockNum);
+        return false;
+    }
     int64_t blockStart = 0;
-    if (fileType == BIN) {
-        blockStart = bytes.size() - blockSize;
-    } else {
-        blockStart = bytes.size() - SignHead::SIGN_HEAD_LEN - blockSize;
+    if (!ValidateBlockSize(blockSize, bytes.size(), fileType, blockStart)) {
+        SIGNATURE_TOOLS_LOGE("Invalid blockSize: %d", blockSize);
+        return false;
     }
     blockData.SetBlockNum(blockNum);
     blockData.SetBlockStart(blockStart);
+    return true;
+}
+
+bool VerifyElf::ValidateBlockSize(int32_t blockSize, size_t fileSize, const std::string& fileType,
+    int64_t& blockStart)
+{
+    if (blockSize < 0) {
+        SIGNATURE_TOOLS_LOGE("Invalid blockSize: %d, file size: %zu", blockSize, fileSize);
+        return false;
+    }
+
+    if (fileType == BIN) {
+        if (blockSize > static_cast<int64_t>(fileSize)) {
+            SIGNATURE_TOOLS_LOGE("Invalid blockSize: %d, file size: %zu", blockSize, fileSize);
+            return false;
+        }
+        blockStart = fileSize - blockSize;
+    } else {
+        if (fileSize < SignHead::SIGN_HEAD_LEN ||
+            blockSize > static_cast<int64_t>(fileSize - SignHead::SIGN_HEAD_LEN)) {
+            SIGNATURE_TOOLS_LOGE("Invalid blockSize: %d, file size: %zu", blockSize, fileSize);
+            return false;
+        }
+        blockStart = fileSize - SignHead::SIGN_HEAD_LEN - blockSize;
+    }
     return true;
 }
 

@@ -265,6 +265,43 @@ public class VerifyHap {
         return true;
     }
 
+    private String getErrorMessage(Exception e) {
+        if (e instanceof IOException) {
+            return "Verify Hap has IO error!";
+        } else if (e instanceof SignatureNotFoundException) {
+            return "Verify Hap failed, signature not found.";
+        } else if (e instanceof HapFormatException) {
+            return "Verify Hap failed, unsupported format hap.";
+        } else if (e instanceof FsVerityDigestException) {
+            return "Verify Hap failed, fs-verity digest generate failed.";
+        } else if (e instanceof VerifyCodeSignException) {
+            return "Verify Hap failed, code sign block verify failed.";
+        } else if (e instanceof CMSException) {
+            return "Verify Hap failed, code signature verify failed.";
+        } else {
+            return "Verify Hap failed, parse app-identifier from profile failed, profile is invalid";
+        }
+    }
+
+
+    private int getErrorCode(Exception e) {
+        if (e instanceof IOException) {
+            return VerifyResult.RET_IO_ERROR;
+        } else if (e instanceof SignatureNotFoundException) {
+            return VerifyResult.RET_SIGNATURE_NOT_FOUND_ERROR;
+        } else if (e instanceof HapFormatException) {
+            return VerifyResult.RET_UNSUPPORTED_FORMAT_ERROR;
+        } else if (e instanceof FsVerityDigestException) {
+            return VerifyResult.RET_DIGEST_ERROR;
+        } else if (e instanceof VerifyCodeSignException) {
+            return VerifyResult.RET_CODE_SIGN_BLOCK_ERROR;
+        } else if (e instanceof CMSException) {
+            return VerifyResult.RET_SIGNATURE_ERROR;
+        } else {
+            return VerifyResult.RET_CODE_SIGN_BLOCK_ERROR;
+        }
+    }
+
     /**
      * Verify hap file.
      *
@@ -303,27 +340,10 @@ public class VerifyHap {
             result.setZipInfo(zipInfo);
             result.setHapSignBlockInfo(hapSigningBlockAndOffsetInFile);
             result.setSignBlockVersion(hapSigningBlockAndOffsetInFile.getVersion());
-        } catch (IOException e) {
-            LOGGER.error("Verify Hap has IO error!", e);
-            result = new VerifyResult(false, VerifyResult.RET_IO_ERROR, e.getMessage());
-        } catch (SignatureNotFoundException e) {
-            LOGGER.error("Verify Hap failed, signature not found.", e);
-            result = new VerifyResult(false, VerifyResult.RET_SIGNATURE_NOT_FOUND_ERROR, e.getMessage());
-        } catch (HapFormatException e) {
-            LOGGER.error("Verify Hap failed, unsupported format hap.", e);
-            result = new VerifyResult(false, VerifyResult.RET_UNSUPPORTED_FORMAT_ERROR, e.getMessage());
-        } catch (FsVerityDigestException e) {
-            LOGGER.error("Verify Hap failed, fs-verity digest generate failed.", e);
-            result = new VerifyResult(false, VerifyResult.RET_DIGEST_ERROR, e.getMessage());
-        } catch (VerifyCodeSignException e) {
-            LOGGER.error("Verify Hap failed, code sign block verify failed.", e);
-            result = new VerifyResult(false, VerifyResult.RET_CODE_SIGN_BLOCK_ERROR, e.getMessage());
-        } catch (CMSException e) {
-            LOGGER.error("Verify Hap failed, code signature verify failed.", e);
-            result = new VerifyResult(false, VerifyResult.RET_SIGNATURE_ERROR, e.getMessage());
-        } catch (ProfileException e) {
-            LOGGER.error("Verify Hap failed, parse app-identifier from profile failed, profile is invalid", e);
-            return new VerifyResult(false, VerifyResult.RET_CODE_SIGN_BLOCK_ERROR, e.getMessage());
+        } catch (IOException | SignatureNotFoundException | HapFormatException | FsVerityDigestException |
+                 VerifyCodeSignException | CMSException | ProfileException e) {
+            LOGGER.error(getErrorMessage(e), e);
+            result = new VerifyResult(false, getErrorCode(e), e.getMessage());
         }
         return result;
     }
