@@ -238,6 +238,7 @@ public class HapUtils {
      */
     public static String parsePluginId(String profileContent) throws ProfileException {
         String pluginID = null;
+        String distributionTypeKey = "app-distribution-type";
         String pluginIDKey = "pluginDistributionIDs";
         String capabilitiesKey = "app-services-capabilities";
         String permissionKey = "ohos.permission.kernel.SUPPORT_PLUGIN";
@@ -247,6 +248,15 @@ public class HapUtils {
                 throw new ProfileException(CodeSignErrMsg.PROFILE_JSON_PARSE_ERROR.toString());
             }
             JsonObject profileJson = parser.getAsJsonObject();
+            // check app-distribution-type
+            JsonElement distributionTypeElement = profileJson.get(distributionTypeKey);
+            if (distributionTypeElement != null && distributionTypeElement.getAsJsonPrimitive().isString()) {
+                String distributionType = distributionTypeElement.getAsString();
+                if ("developer_ID".equals(distributionType)) {
+                    return null;
+                }
+            }
+
             JsonObject capabilitiesObject = profileJson.getAsJsonObject(capabilitiesKey);
             if (capabilitiesObject == null || !capabilitiesObject.isJsonObject() || !capabilitiesObject.has(
                 permissionKey)) {
