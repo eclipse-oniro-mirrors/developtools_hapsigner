@@ -309,18 +309,8 @@ bool ZipSigner::GetZipEntries(std::ifstream& input)
     return true;
 }
 
-bool ZipSigner::ToFile(std::ifstream& input, std::ofstream& output)
+bool ZipSigner::WriteZipEntries(std::ifstream& input, std::ofstream& output)
 {
-    SIGNATURE_TOOLS_LOGI("Zip To File begin");
-    if (!input.good()) {
-        SIGNATURE_TOOLS_LOGE("read zip input file failed");
-        return false;
-    }
-    if (!output.good()) {
-        SIGNATURE_TOOLS_LOGE("read zip output file failed");
-        return false;
-    }
-
     for (const auto& entry : m_zipEntries) {
         ZipEntryData* zipEntryData = entry->GetZipEntryData();
         ZipEntryHeader* header = zipEntryData->GetZipEntryHeader();
@@ -344,7 +334,11 @@ bool ZipSigner::ToFile(std::ifstream& input, std::ofstream& output)
             }
         }
     }
+    return true;
+}
 
+bool ZipSigner::WriteTrailingSections(std::ofstream& output)
+{
     if (!m_signingBlock.empty()) {
         if (!FileUtils::WriteByteToOutFile(m_signingBlock, output)) {
             return false;
@@ -370,6 +364,27 @@ bool ZipSigner::ToFile(std::ifstream& input, std::ofstream& output)
     }
 
     if (!FileUtils::WriteByteToOutFile(m_endOfCentralDirectory->ToBytes(), output)) {
+        return false;
+    }
+    return true;
+}
+
+bool ZipSigner::ToFile(std::ifstream& input, std::ofstream& output)
+{
+    SIGNATURE_TOOLS_LOGI("Zip To File begin");
+    if (!input.good()) {
+        SIGNATURE_TOOLS_LOGE("read zip input file failed");
+        return false;
+    }
+    if (!output.good()) {
+        SIGNATURE_TOOLS_LOGE("read zip output file failed");
+        return false;
+    }
+
+    if (!WriteZipEntries(input, output)) {
+        return false;
+    }
+    if (!WriteTrailingSections(output)) {
         return false;
     }
 
@@ -511,7 +526,8 @@ void ZipSigner::FillEocdAndZip64(bool needZip64)
         m_endOfCentralDirectory->SetOffset(UINT32_MAX);
         if (!m_zip64Eocd) {
             m_zip64Eocd = new Zip64EndOfCentralDirectory();
-            m_zip64Eocd->SetSizeOfZip64Eocd(Zip64EndOfCentralDirectory::ZIP64_EOCD_LENGTH - 12);
+            m_zip64Eocd->SetSizeOfZip64Eocd(
+                Zip64EndOfCentralDirectory::ZIP64_EOCD_LENGTH - Zip64EndOfCentralDirectory::ZIP64_EOCD_FIXED_PART_SIZE);
         }
         m_zip64Eocd->SetThisDiskCDNum(m_zipEntries.size());
         m_zip64Eocd->SetCDTotal(m_zipEntries.size());
@@ -628,44 +644,9 @@ void ZipSigner::SetEndOfCentralDirectory(EndOfCentralDirectory* endOfCentralDire
     m_endOfCentralDirectory = endOfCentralDirectory;
 }
 
-bool ZipSigner::IsZip64()
-{
-    return m_isZip64;
-}
-
-void ZipSigner::SetIsZip64(bool isZip64)
-{
-    m_isZip64 = isZip64;
-}
-
-bool ZipSigner::IsForceZip64()
-{
-    return m_forceZip64;
-}
-
 void ZipSigner::SetForceZip64(bool forceZip64)
 {
     m_forceZip64 = forceZip64;
-}
-
-Zip64EndOfCentralDirectory* ZipSigner::GetZip64Eocd()
-{
-    return m_zip64Eocd;
-}
-
-void ZipSigner::SetZip64Eocd(Zip64EndOfCentralDirectory* zip64Eocd)
-{
-    m_zip64Eocd = zip64Eocd;
-}
-
-Zip64EndOfCentralDirectoryLocator* ZipSigner::GetZip64EocdLocator()
-{
-    return m_zip64EocdLocator;
-}
-
-void ZipSigner::SetZip64EocdLocator(Zip64EndOfCentralDirectoryLocator* zip64EocdLocator)
-{
-    m_zip64EocdLocator = zip64EocdLocator;
 }
 } // namespace SignatureTools
 } // namespace OHOS

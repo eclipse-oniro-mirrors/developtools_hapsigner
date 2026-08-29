@@ -101,19 +101,9 @@ void DataDescriptor::SetCrc32(int crc32)
     m_crc32 = crc32;
 }
 
-uint64_t DataDescriptor::GetCompressedSize()
-{
-    return m_compressedSize;
-}
-
 void DataDescriptor::SetCompressedSize(uint64_t compressedSize)
 {
     m_compressedSize = compressedSize;
-}
-
-uint64_t DataDescriptor::GetUnCompressedSize()
-{
-    return m_unCompressedSize;
 }
 
 void DataDescriptor::SetUnCompressedSize(uint64_t unCompressedSize)

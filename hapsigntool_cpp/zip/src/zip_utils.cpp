@@ -74,15 +74,5 @@ bool ZipUtils::SetUInt32ToBuffer(ByteBuffer& buffer, int offset, int64_t value)
     return true;
 }
 
-bool ZipUtils::SetUInt64ToBuffer(ByteBuffer& buffer, int offset, int64_t value)
-{
-    SIGNATURE_TOOLS_LOGI("offset: %d, value: %" PRId64, offset, value);
-    if (value < 0) {
-        SIGNATURE_TOOLS_LOGE("invalid_argument. negative value: %" PRId64, value);
-        return false;
-    }
-    buffer.PutUInt64(offset, static_cast<uint64_t>(value));
-    return true;
-}
 } // namespace SignatureTools
 } // namespace OHOS

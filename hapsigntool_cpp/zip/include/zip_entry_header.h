@@ -134,10 +134,6 @@ public:
 
     void SetIsZip64(bool isZip64);
 
-    std::optional<Zip64ExtendedInfo>& GetZip64ExtendedInfo();
-
-    void SetZip64ExtendedInfo(const std::optional<Zip64ExtendedInfo>& info);
-
 private:
     void RebuildExtraField(bool includeZip64);
 

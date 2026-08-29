@@ -17,7 +17,6 @@
 #define SIGNATRUETOOLS_ZIP_SIGNER_H
 
 #include <fstream>
-#include <optional>
 #include <string>
 #include <vector>
 
@@ -99,21 +98,7 @@ public:
 
     void SetEndOfCentralDirectory(EndOfCentralDirectory* endOfCentralDirectory);
 
-    bool IsZip64();
-
-    void SetIsZip64(bool isZip64);
-
-    bool IsForceZip64();
-
     void SetForceZip64(bool forceZip64);
-
-    Zip64EndOfCentralDirectory* GetZip64Eocd();
-
-    void SetZip64Eocd(Zip64EndOfCentralDirectory* zip64Eocd);
-
-    Zip64EndOfCentralDirectoryLocator* GetZip64EocdLocator();
-
-    void SetZip64EocdLocator(Zip64EndOfCentralDirectoryLocator* zip64EocdLocator);
 
 private:
     EndOfCentralDirectory* GetZipEndOfCentralDirectory(std::ifstream& input);
@@ -136,6 +121,8 @@ private:
     void UpdateEntriesForMode(bool zip64);
     uint64_t RecalcLengthsAndOffsets(bool useZip64Offset);
     void FillEocdAndZip64(bool needZip64);
+    bool WriteZipEntries(std::ifstream& input, std::ofstream& output);
+    bool WriteTrailingSections(std::ofstream& output);
 
     std::vector<ZipEntry*> m_zipEntries;
 

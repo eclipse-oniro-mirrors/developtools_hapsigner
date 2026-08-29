@@ -24,7 +24,7 @@ int32_t Zip64ExtendedInfo::FindZip64Header(const std::string& extraData)
     int32_t pos = 0;
     int32_t extraLen = static_cast<int32_t>(extraData.size());
 
-    while (pos + 4 <= extraLen) {
+    while (pos + EXTRA_SUBFIELD_HEADER_SIZE <= extraLen) {
         uint16_t headerId = static_cast<uint8_t>(extraData[pos]) |
                             (static_cast<uint16_t>(static_cast<uint8_t>(extraData[pos + 1])) << 8);
         uint16_t dataSize = static_cast<uint8_t>(extraData[pos + 2]) |
@@ -33,7 +33,7 @@ int32_t Zip64ExtendedInfo::FindZip64Header(const std::string& extraData)
         if (headerId == HEADER_ID) {
             return pos;
         }
-        pos += 4 + dataSize;
+        pos += EXTRA_SUBFIELD_HEADER_SIZE + dataSize;
     }
     return -1;
 }
@@ -79,10 +79,8 @@ bool Zip64ExtendedInfo::ReadFields(ByteBuffer& bf)
 }
 
 std::optional<Zip64ExtendedInfo> Zip64ExtendedInfo::Parse(const std::string& extraData,
-                                                           uint32_t compressedSize,
-                                                           uint32_t unCompressedSize,
-                                                           uint32_t localHeaderOffset,
-                                                           uint16_t diskNumStart)
+    uint32_t compressedSize, uint32_t unCompressedSize,
+    uint32_t localHeaderOffset, uint16_t diskNumStart)
 {
     Zip64ExtendedInfo info;
     info.m_hasCompressedSize = (compressedSize == UINT32_SENTINEL);
@@ -100,8 +98,8 @@ std::optional<Zip64ExtendedInfo> Zip64ExtendedInfo::Parse(const std::string& ext
         return std::nullopt;
     }
 
-    // Skip header ID and data size (4 bytes)
-    int32_t dataOffset = pos + 4;
+    // Skip header ID and data size (EXTRA_SUBFIELD_HEADER_SIZE bytes)
+    int32_t dataOffset = pos + EXTRA_SUBFIELD_HEADER_SIZE;
     int32_t extraLen = static_cast<int32_t>(extraData.size());
     ByteBuffer bf(extraData.c_str() + dataOffset, extraLen - dataOffset);
 
@@ -134,7 +132,7 @@ std::string Zip64ExtendedInfo::ToBytes() const
     }
 
     uint16_t dataSize = ComputeDataSize();
-    int32_t totalSize = 4 + dataSize; // header ID (2) + data size (2) + data
+    int32_t totalSize = EXTRA_SUBFIELD_HEADER_SIZE + dataSize;
     ByteBuffer bf(totalSize);
     bf.PutUInt16(HEADER_ID);
     bf.PutUInt16(dataSize);

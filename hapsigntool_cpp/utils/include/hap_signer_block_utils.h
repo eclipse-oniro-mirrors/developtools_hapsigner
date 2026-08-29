@@ -26,7 +26,6 @@
 #include "digest_parameter.h"
 #include "pkcs7_context.h"
 #include "signature_info.h"
-#include "zip64_end_of_central_directory.h"
 #include "zip64_end_of_central_directory_locator.h"
 
 namespace OHOS {
@@ -103,8 +102,6 @@ public:
                                                  Zip64EndOfCentralDirectoryLocator& locator);
     DLL_EXPORT static bool GetZip64CentralDirectoryOffset(RandomAccessFile& hapFile, int64_t eocdOffset,
                                                           int64_t& centralDirectoryOffset);
-    DLL_EXPORT static bool GetZip64CentralDirectorySize(RandomAccessFile& hapFile, int64_t eocdOffset,
-                                                        int64_t& centralDirectorySize);
     static std::optional<ByteBuffer> BuildZip64EocdBuffer(
         RandomAccessFile& hapFile, SignatureInfo& signInfo, int64_t centralDirSize);
     static std::unique_ptr<DataSource> CreateEocdDataSource(

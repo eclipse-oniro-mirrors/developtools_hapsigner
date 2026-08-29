@@ -311,8 +311,7 @@ bool SignProvider::Sign(Options* options)
     }
     // Since CheckParmaAndInitConfig has already validated all parameters, it is possible to directly use at
     std::string inputFilePath = signParams.at(ParamConstants::PARAM_BASIC_INPUT_FILE);
-    auto [inputStream, tmpOutput, tmpOutPath] = PrepareIOStreams(
-        inputFilePath,
+    auto [inputStream, tmpOutput, tmpOutPath] = PrepareIOStreams(inputFilePath,
         signParams.at(ParamConstants::PARAM_BASIC_OUTPUT_FILE), isPathOverlap);
     tmpOutputFilePath = tmpOutPath;
 
@@ -1148,12 +1147,6 @@ bool SignProvider::RedoSignWithZip64(SignerConfig& signerConfig, std::shared_ptr
 {
     std::string inputFilePath = signParams.at(ParamConstants::PARAM_BASIC_INPUT_FILE);
     std::string suffix = FileUtils::GetSuffix(inputFilePath);
-    if (!(inputFilePath.size() >= 4 && inputFilePath.compare(inputFilePath.size() - 4, 4, ".app") == 0)) {
-        SIGNATURE_TOOLS_LOGE("Only APP file supports ZIP64 format, input: %s", inputFilePath.c_str());
-        PrintErrorLog("[signHap] ZIP64 is only supported for .app files, CD offset exceeds 4GB",
-            ZIP_ERROR, tmpOutputFilePath);
-        return false;
-    }
     SIGNATURE_TOOLS_LOGI("EOCD fields overflow after signing block insertion, re-processing with ZIP64 mode");
     zip->SetForceZip64(true);
     auto inputStream = std::make_shared<std::ifstream>(inputFilePath, std::ios::binary);
@@ -1391,13 +1384,16 @@ bool SignProvider::CheckPermMode()
 
 bool SignProvider::ValidateSignConstraints(const std::string& inputFilePath, bool isZip64)
 {
+    constexpr const char* APP_SUFFIX = ".app";
+    constexpr size_t APP_SUFFIX_LEN = 4;
     auto fileSize = std::filesystem::file_size(inputFilePath);
     if (fileSize > static_cast<uint64_t>(MAX_INPUT_FILE_SIZE)) {
         SIGNATURE_TOOLS_LOGE("Input file size %llu exceeds 200GB limit", static_cast<unsigned long long>(fileSize));
         return PrintErrorLog("[signHap] Input file size exceeds 200GB limit", COMMAND_PARAM_ERROR);
     }
     if (isZip64 &&
-        !(inputFilePath.size() >= 4 && inputFilePath.compare(inputFilePath.size() - 4, 4, ".app") == 0)) {
+        !(inputFilePath.size() >= APP_SUFFIX_LEN &&
+          inputFilePath.compare(inputFilePath.size() - APP_SUFFIX_LEN, APP_SUFFIX_LEN, APP_SUFFIX) == 0)) {
         SIGNATURE_TOOLS_LOGE("Only APP file supports ZIP64 format, input: %s", inputFilePath.c_str());
         return PrintErrorLog("[signHap] ZIP64 format is only supported for .app files",
             ZIP_ERROR, tmpOutputFilePath);

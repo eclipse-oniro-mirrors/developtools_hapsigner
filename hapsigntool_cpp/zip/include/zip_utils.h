@@ -16,13 +16,9 @@
 #ifndef SIGNATRUETOOLS_ZIP_UTILS_H
 #define SIGNATRUETOOLS_ZIP_UTILS_H
 
-#include <limits>
-#include <memory>
-
 #include "signature_tools_log.h"
 #include "zip_data_input.h"
 #include "zip64_end_of_central_directory.h"
-#include "zip64_end_of_central_directory_locator.h"
 
 namespace OHOS {
 namespace SignatureTools {
@@ -54,7 +50,6 @@ private:
     static constexpr int64_t UINT32_MAX_VALUE = 0xffffffffLL;
 
     static bool SetUInt32ToBuffer(ByteBuffer& buffer, int offset, int64_t value);
-    static bool SetUInt64ToBuffer(ByteBuffer& buffer, int offset, int64_t value);
 };
 } // namespace SignatureTools
 } // namespace OHOS

@@ -82,7 +82,7 @@ bool HapSignerBlockUtils::FindHapSignature(RandomAccessFile& hapFile, SignatureI
     if (signInfo.hapCentralDirOffset == 0xFFFFFFFF) {
         signInfo.isZip64 = true;
         if (!GetZip64CentralDirectoryOffset(hapFile, signInfo.hapEocdOffset,
-                                           signInfo.hapCentralDirOffset)) {
+                                            signInfo.hapCentralDirOffset)) {
             SIGNATURE_TOOLS_LOGE("get Zip64 CD offset failed");
             return false;
         }
@@ -253,7 +253,7 @@ bool HapSignerBlockUtils::GetCentralDirectorySize(ByteBuffer& eocd, int64_t& cen
 }
 
 bool HapSignerBlockUtils::FindZip64EocdLocator(RandomAccessFile& hapFile, int64_t eocdOffset,
-                                                Zip64EndOfCentralDirectoryLocator& locator)
+                                               Zip64EndOfCentralDirectoryLocator& locator)
 {
     int64_t locatorOffset = eocdOffset - Zip64EndOfCentralDirectoryLocator::ZIP64_EOCD_LOCATOR_LENGTH;
     if (locatorOffset < 0) {
@@ -302,33 +302,6 @@ bool HapSignerBlockUtils::GetZip64CentralDirectoryOffset(RandomAccessFile& hapFi
     }
 
     centralDirectoryOffset = static_cast<int64_t>(zip64Eocd->GetOffset());
-    return true;
-}
-
-bool HapSignerBlockUtils::GetZip64CentralDirectorySize(RandomAccessFile& hapFile, int64_t eocdOffset,
-                                                       int64_t& centralDirectorySize)
-{
-    Zip64EndOfCentralDirectoryLocator locator;
-    if (!FindZip64EocdLocator(hapFile, eocdOffset, locator)) {
-        return false;
-    }
-
-    uint64_t zip64EocdOffset = locator.GetZip64EocdOffset();
-    ByteBuffer zip64EocdBuffer(Zip64EndOfCentralDirectory::ZIP64_EOCD_LENGTH);
-    int64_t ret = hapFile.ReadFileFullyFromOffset(zip64EocdBuffer, zip64EocdOffset);
-    if (ret < 0) {
-        SIGNATURE_TOOLS_LOGE("read Zip64 EOCD failed: %" PRId64, ret);
-        return false;
-    }
-
-    std::string zip64EocdStr(zip64EocdBuffer.GetBufferPtr(), zip64EocdBuffer.GetLimit());
-    auto zip64Eocd = Zip64EndOfCentralDirectory::GetByBytes(zip64EocdStr);
-    if (!zip64Eocd) {
-        SIGNATURE_TOOLS_LOGE("parse Zip64 EOCD failed");
-        return false;
-    }
-
-    centralDirectorySize = static_cast<int64_t>(zip64Eocd->GetCDSize());
     return true;
 }
 

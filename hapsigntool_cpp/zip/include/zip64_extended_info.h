@@ -41,6 +41,8 @@ public:
     static constexpr uint16_t HEADER_ID = 0x0001;
     static constexpr uint32_t UINT32_SENTINEL = 0xFFFFFFFF;
     static constexpr uint16_t UINT16_SENTINEL = 0xFFFF;
+    static constexpr int32_t EXTRA_SUBFIELD_HEADER_SIZE = 4; // header ID (2) + data size (2)
+    static constexpr uint16_t ZIP64_VERSION_NEEDED = 45;
 
     Zip64ExtendedInfo() = default;
     ~Zip64ExtendedInfo() = default;

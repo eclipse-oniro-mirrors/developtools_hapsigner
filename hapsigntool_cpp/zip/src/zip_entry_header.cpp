@@ -91,8 +91,7 @@ void ZipEntryHeader::ReadExtra(const std::string& bytes)
 
         // Parse ZIP64 Extended Information from extra field
         auto zip64Info = Zip64ExtendedInfo::Parse(extra, m_compressedSize,
-                                                   m_unCompressedSize,
-                                                   0, 0);
+            m_unCompressedSize, 0, 0);
         if (zip64Info.has_value()) {
             m_isZip64 = true;
             m_zip64ExtendedInfo = zip64Info;
@@ -150,9 +149,9 @@ void ZipEntryHeader::UpdateForZip64Mode(bool outputIsZip64)
             m_unCompressedSize = static_cast<uint32_t>(m_unCompressedSizeActual);
         }
 
-        // version needed must be >= 45 for ZIP64
-        if (m_version < 45) {
-            m_version = 45;
+        // version needed must be >= ZIP64_VERSION_NEEDED for ZIP64
+        if (m_version < Zip64ExtendedInfo::ZIP64_VERSION_NEEDED) {
+            m_version = Zip64ExtendedInfo::ZIP64_VERSION_NEEDED;
         }
 
         Zip64ExtendedInfo newInfo(m_compressedSizeActual, m_unCompressedSizeActual, 0, 0);
@@ -180,15 +179,16 @@ void ZipEntryHeader::RebuildExtraField(bool includeZip64)
     // Walk through original extra data, keep non-ZIP64 parts
     int32_t pos = 0;
     int32_t extraLen = static_cast<int32_t>(m_extraData.size());
-    while (pos + 4 <= extraLen) {
+    while (pos + Zip64ExtendedInfo::EXTRA_SUBFIELD_HEADER_SIZE <= extraLen) {
         uint16_t headerId = static_cast<uint8_t>(m_extraData[pos]) |
             (static_cast<uint16_t>(static_cast<uint8_t>(m_extraData[pos + 1])) << 8);
         uint16_t dataSize = static_cast<uint8_t>(m_extraData[pos + 2]) |
             (static_cast<uint16_t>(static_cast<uint8_t>(m_extraData[pos + 3])) << 8);
         if (headerId != Zip64ExtendedInfo::HEADER_ID) {
-            newExtra.append(m_extraData, pos, 4 + dataSize);
+            newExtra.append(m_extraData, pos,
+                Zip64ExtendedInfo::EXTRA_SUBFIELD_HEADER_SIZE + dataSize);
         }
-        pos += 4 + dataSize;
+        pos += Zip64ExtendedInfo::EXTRA_SUBFIELD_HEADER_SIZE + dataSize;
     }
     // Preserve trailing bytes that don't form a complete sub-field header (alignment padding)
     if (pos < extraLen) {
@@ -368,16 +368,6 @@ bool ZipEntryHeader::IsZip64()
 void ZipEntryHeader::SetIsZip64(bool isZip64)
 {
     m_isZip64 = isZip64;
-}
-
-std::optional<Zip64ExtendedInfo>& ZipEntryHeader::GetZip64ExtendedInfo()
-{
-    return m_zip64ExtendedInfo;
-}
-
-void ZipEntryHeader::SetZip64ExtendedInfo(const std::optional<Zip64ExtendedInfo>& info)
-{
-    m_zip64ExtendedInfo = info;
 }
 } // namespace SignatureTools
 } // namespace OHOS

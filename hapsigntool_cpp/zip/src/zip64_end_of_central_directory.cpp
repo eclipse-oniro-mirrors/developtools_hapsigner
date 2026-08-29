@@ -46,8 +46,8 @@ bool Zip64EndOfCentralDirectory::ReadField(ByteBuffer& bf, uint64_t& value, cons
     return true;
 }
 
-std::optional<Zip64EndOfCentralDirectory> Zip64EndOfCentralDirectory::GetByBytes(const std::string& bytes,
-                                                                                  int offset)
+std::optional<Zip64EndOfCentralDirectory> Zip64EndOfCentralDirectory::GetByBytes(
+    const std::string& bytes, int offset)
 {
     if (static_cast<int>(bytes.size()) < ZIP64_EOCD_LENGTH + offset) {
         SIGNATURE_TOOLS_LOGE("bytes size %zu is too small for zip64 eocd", bytes.size());
@@ -63,7 +63,9 @@ std::optional<Zip64EndOfCentralDirectory> Zip64EndOfCentralDirectory::GetByBytes
     }
 
     Zip64EndOfCentralDirectory zip64Eocd;
-    uint16_t u16; uint32_t u32; uint64_t u64;
+    uint16_t u16;
+    uint32_t u32;
+    uint64_t u64;
 
     if (!ReadField(bf, u64, "size of zip64 eocd")) return std::nullopt;
     zip64Eocd.SetSizeOfZip64Eocd(u64);

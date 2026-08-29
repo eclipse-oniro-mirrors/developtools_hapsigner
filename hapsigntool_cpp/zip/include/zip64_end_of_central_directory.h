@@ -45,6 +45,7 @@ namespace SignatureTools {
 class Zip64EndOfCentralDirectory {
 public:
     static constexpr int ZIP64_EOCD_LENGTH = 56;
+    static constexpr int ZIP64_EOCD_FIXED_PART_SIZE = 12; // signature (4) + size field (8)
     static constexpr int SIGNATURE = 0x06064b50;
 
     Zip64EndOfCentralDirectory() = default;
