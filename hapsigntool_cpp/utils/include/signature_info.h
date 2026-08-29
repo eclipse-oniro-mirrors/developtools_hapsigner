@@ -17,6 +17,8 @@
 
 #include <vector>
 #include "byte_buffer.h"
+#include "zip64_end_of_central_directory.h"
+#include "zip64_end_of_central_directory_locator.h"
 
 namespace OHOS {
 namespace SignatureTools {
@@ -32,6 +34,9 @@ struct SignatureInfo {
     ByteBuffer hapEocd;
     std::vector<OptionalBlock> optionBlocks;
     int32_t version = 0;
+    bool isZip64 = false;
+    std::optional<Zip64EndOfCentralDirectory> hapZip64Eocd;
+    std::optional<Zip64EndOfCentralDirectoryLocator> hapZip64EocdLocator;
 };
 } // namespace SignatureTools
 } // namespace OHOS

@@ -55,7 +55,7 @@ public:
      * @return zip entry
      * @throws IOException read zip exception
      */
-    static ZipEntryData* GetZipEntry(std::ifstream& input, uint32_t entryOffset, uint32_t fileSize);
+    static ZipEntryData* GetZipEntry(std::ifstream& input, uint64_t entryOffset, uint64_t fileSize);
 
     void SetZipEntryHeader(ZipEntryHeader* zipEntryHeader);
 
@@ -63,31 +63,31 @@ public:
 
     void SetDataDescriptor(DataDescriptor* dataDescriptor);
 
-    uint32_t GetFileOffset();
+    uint64_t GetFileOffset();
 
-    void SetFileOffset(uint32_t fileOffset);
+    void SetFileOffset(uint64_t fileOffset);
 
-    uint32_t GetFileSize();
+    uint64_t GetFileSize();
 
-    void SetFileSize(uint32_t fileSize);
+    void SetFileSize(uint64_t fileSize);
 
-    uint32_t GetLength();
+    uint64_t GetLength();
 
-    void SetLength(uint32_t length);
+    void SetLength(uint64_t length);
 
 private:
     static bool ReadEntryFileNameAndExtraByOffset(std::ifstream& input, ZipEntryHeader* entryHeader,
-        uint32_t& offset);
+        uint64_t& offset);
 
     ZipEntryHeader* m_zipEntryHeader;
 
-    uint32_t m_fileOffset = 0;
+    uint64_t m_fileOffset = 0;
 
-    uint32_t m_fileSize = 0;
+    uint64_t m_fileSize = 0;
 
     DataDescriptor* m_dataDescriptor;
 
-    uint32_t m_length = 0;
+    uint64_t m_length = 0;
 };
 } // namespace SignatureTools
 } // namespace OHOS

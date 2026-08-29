@@ -27,9 +27,9 @@ ZipEntryHeader* ZipEntryData::GetZipEntryHeader()
     return m_zipEntryHeader;
 }
 
-ZipEntryData* ZipEntryData::GetZipEntry(std::ifstream& input, uint32_t entryOffset, uint32_t fileSize)
+ZipEntryData* ZipEntryData::GetZipEntry(std::ifstream& input, uint64_t entryOffset, uint64_t fileSize)
 {
-    uint32_t offset = entryOffset;
+    uint64_t offset = entryOffset;
     /* read entry header by file and offset. */
     std::string headStr;
     if (FileUtils::ReadInputByOffsetAndLength(input, entryOffset, ZipEntryHeader::HEADER_LENGTH, headStr) != 0) {
@@ -56,8 +56,9 @@ ZipEntryData* ZipEntryData::GetZipEntry(std::ifstream& input, uint32_t entryOffs
     /* set desc null flag */
     if ((entryHeader->GetFlag() & HAS_DATA_DESCRIPTOR_MASK) != NOT_HAS_DATA_DESCRIPTOR_FLAG) {
         /* if entry has data descriptor, read entry data descriptor. */
+        int desLength = entryHeader->IsZip64() ? DataDescriptor::DES_LENGTH_ZIP64 : DataDescriptor::DES_LENGTH;
         std::string retStr;
-        if (FileUtils::ReadInputByLength(input, DataDescriptor::DES_LENGTH, retStr) != 0) {
+        if (FileUtils::ReadInputByLength(input, desLength, retStr) != 0) {
             SIGNATURE_TOOLS_LOGE("read entry data descriptor failed in file");
             return nullptr;
         }
@@ -65,7 +66,7 @@ ZipEntryData* ZipEntryData::GetZipEntry(std::ifstream& input, uint32_t entryOffs
         if (!dataDesc) {
             return nullptr;
         }
-        entryLength += DataDescriptor::DES_LENGTH;
+        entryLength += desLength;
         entry->SetDataDescriptor(dataDesc);
     }
     entry->SetZipEntryHeader(entryHeader);
@@ -74,7 +75,7 @@ ZipEntryData* ZipEntryData::GetZipEntry(std::ifstream& input, uint32_t entryOffs
 }
 
 bool ZipEntryData::ReadEntryFileNameAndExtraByOffset(std::ifstream& input, ZipEntryHeader* entryHeader,
-    uint32_t& offset)
+    uint64_t& offset)
 {
     if (entryHeader->GetFileNameLength() > 0) {
         std::string fileNameStr;
@@ -112,32 +113,32 @@ void ZipEntryData::SetDataDescriptor(DataDescriptor* dataDescriptor)
     m_dataDescriptor = dataDescriptor;
 }
 
-uint32_t ZipEntryData::GetFileOffset()
+uint64_t ZipEntryData::GetFileOffset()
 {
     return m_fileOffset;
 }
 
-void ZipEntryData::SetFileOffset(uint32_t fileOffset)
+void ZipEntryData::SetFileOffset(uint64_t fileOffset)
 {
     m_fileOffset = fileOffset;
 }
 
-uint32_t ZipEntryData::GetFileSize()
+uint64_t ZipEntryData::GetFileSize()
 {
     return m_fileSize;
 }
 
-void ZipEntryData::SetFileSize(uint32_t fileSize)
+void ZipEntryData::SetFileSize(uint64_t fileSize)
 {
     m_fileSize = fileSize;
 }
 
-uint32_t ZipEntryData::GetLength()
+uint64_t ZipEntryData::GetLength()
 {
     return m_length;
 }
 
-void ZipEntryData::SetLength(uint32_t length)
+void ZipEntryData::SetLength(uint64_t length)
 {
     m_length = length;
 }

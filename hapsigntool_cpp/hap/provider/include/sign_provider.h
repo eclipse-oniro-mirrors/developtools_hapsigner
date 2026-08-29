@@ -44,6 +44,7 @@
 #include "random_access_file.h"
 #include "zip_entry_header.h"
 #include "zip_signer.h"
+#include "zip64_end_of_central_directory.h"
 #include "zip_data_input.h"
 #include "zip_utils.h"
 #include "code_signing.h"
@@ -83,7 +84,11 @@ protected:
         ByteBufferDataSource* endOfCentralDir = nullptr;
         ByteBuffer cDByteBuffer;
         std::pair<ByteBuffer, int64_t> eocdPair;
+        ByteBuffer eocdFullBuffer;
         int64_t cDOffset = 0LL;
+        int64_t cDSize = 0LL;
+        bool isZip64 = false;
+        Zip64EndOfCentralDirectory zip64Eocd;
         ~DataSourceContents()
         {
             delete beforeCentralDir;
@@ -104,6 +109,7 @@ protected:
     bool CheckCompatibleVersion();
     std::vector<OptionalBlock> optionalBlocks;
     std::map<std::string, std::string> signParams = std::map<std::string, std::string>();
+    std::string tmpOutputFilePath;
 
 private:
     struct SignContext {
@@ -132,9 +138,15 @@ private:
     bool CopyFileAndAlignment(std::ifstream& input, std::ofstream& tmpOutput, int alignment, ZipSigner& zip);
 
     bool CheckSignatureAlg();
+    bool ValidateSignConstraints(const std::string& inputFilePath, bool isZip64);
 
     int LoadOptionalBlock(const std::string& file, int type);
     bool CheckFile(const std::string& filePath);
+    bool RedoSignWithZip64(SignerConfig& signerConfig, std::shared_ptr<ZipSigner>& zip,
+                           std::shared_ptr<RandomAccessFile>& outputHap,
+                           DataSourceContents& dataSrcContents, ByteBuffer& signingBlock);
+    bool DoSignBlock(SignerConfig& signerConfig, DataSourceContents& dataSrcContents,
+                     const std::string& suffix, ZipSigner& zip, ByteBuffer& signingBlock);
 
     int GetX509Certificates(Options* options, STACK_OF(X509)** ret);
     int GetPublicCerts(Options* options, STACK_OF(X509)** ret);
@@ -177,13 +189,17 @@ private:
     bool AppendReCodeSignBlock(SignerConfig* signerConfig, std::string outputFilePath,
                              const std::string& suffix, int64_t centralDirectoryOffset, ZipSigner& zip);
     int64_t ComputeCodeSignOffset(int64_t centralDirectoryOffset);
-    bool OutputSignedFile(RandomAccessFile* outputHap, long centralDirectoryOffset,
-                          ByteBuffer& signingBlock, ByteBufferDataSource* centralDirectory, ByteBuffer& eocdBuffer);
+    bool OutputSignedFile(RandomAccessFile* outputHap, DataSourceContents& dataSrcContents,
+                          ByteBuffer& signingBlock);
 
     bool InitDataSourceContents(RandomAccessFile& outputHap, DataSourceContents& dataSrcContents);
+    bool ParseZip64IfPresent(RandomAccessFile& outputHap, DataSourceContents& dataSrcContents);
+    bool ComputeCentralDirectorySize(DataSourceContents& dataSrcContents, int64_t& cDSize);
+    bool BuildZip64EocdSegment(DataSourceContents& dataSrcContents, int64_t cDSize);
 
     static std::vector<std::string> VALID_SIGN_ALG_NAME;
     static constexpr int FOUR_BYTE = 4;
+    static constexpr int64_t MAX_INPUT_FILE_SIZE = 200LL * 1024 * 1024 * 1024; // 200GB
     static const std::string PROFILE_PREFIX;
     static constexpr int PROPERTY_BLOCK_HEADER_SIZE = 12;
     static constexpr int PROPERTY_BLOCK_COUNT = 2; // The sum of property block and hap sign block

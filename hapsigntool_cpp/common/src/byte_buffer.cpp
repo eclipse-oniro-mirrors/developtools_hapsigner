@@ -208,6 +208,29 @@ bool ByteBuffer::GetUInt32(uint32_t& value)
     return true;
 }
 
+bool ByteBuffer::GetUInt64(uint64_t& value)
+{
+    if (!GetUInt64(0, value)) {
+        SIGNATURE_TOOLS_LOGE("GetUInt64 failed");
+        return false;
+    }
+    position += sizeof(uint64_t);
+    return true;
+}
+
+bool ByteBuffer::GetUInt64(int32_t index, uint64_t& value)
+{
+    if (!CheckInputForGettingData(index, sizeof(uint64_t))) {
+        SIGNATURE_TOOLS_LOGE("Failed to get UInt64");
+        return false;
+    }
+    if (memcpy_s(&value, sizeof(value), (buffer.get() + position + index), sizeof(uint64_t)) != EOK) {
+        SIGNATURE_TOOLS_LOGE("memcpy_s failed");
+        return false;
+    }
+    return true;
+}
+
 bool ByteBuffer::GetUInt16(uint16_t& value)
 {
     if (!GetUInt16(0, value)) {
@@ -418,6 +441,26 @@ void ByteBuffer::PutUInt32(uint32_t value)
             SIGNATURE_TOOLS_LOGE("memcpy_s failed");
         } else {
             position += sizeof(value);
+        }
+    }
+}
+
+void ByteBuffer::PutUInt64(uint64_t value)
+{
+    if (limit - position >= static_cast<int64_t>(sizeof(value))) {
+        if (memcpy_s(buffer.get() + position, limit - position, &value, sizeof(value)) != EOK) {
+            SIGNATURE_TOOLS_LOGE("memcpy_s failed");
+        } else {
+            position += sizeof(value);
+        }
+    }
+}
+
+void ByteBuffer::PutUInt64(int32_t offset, uint64_t value)
+{
+    if (buffer != nullptr && offset >= 0 && limit - offset >= static_cast<int32_t>(sizeof(value))) {
+        if (memcpy_s((buffer.get() + offset), (limit - offset), &value, sizeof(value)) != EOK) {
+            SIGNATURE_TOOLS_LOGE("memcpy_s failed");
         }
     }
 }

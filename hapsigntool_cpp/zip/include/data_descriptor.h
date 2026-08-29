@@ -32,6 +32,9 @@ public:
     /* DataDescriptor invariable bytes length */
     static constexpr int DES_LENGTH = 16;
 
+    /* DataDescriptor ZIP64 bytes length */
+    static constexpr int DES_LENGTH_ZIP64 = 24;
+
     /* 4 bytes , DataDescriptor signature */
     static constexpr int SIGNATURE = 0x08074b50;
 
@@ -54,23 +57,30 @@ public:
 
     void SetCrc32(int crc32);
 
-    uint32_t GetCompressedSize();
+    uint64_t GetCompressedSize();
 
-    void SetCompressedSize(uint32_t compressedSize);
+    void SetCompressedSize(uint64_t compressedSize);
 
-    uint32_t GetUnCompressedSize();
+    uint64_t GetUnCompressedSize();
 
-    void SetUnCompressedSize(uint32_t unCompressedSize);
+    void SetUnCompressedSize(uint64_t unCompressedSize);
+
+    bool IsZip64();
+
+    void SetIsZip64(bool isZip64);
 
 private:
     /* 4 bytes */
     int m_crc32 = 0;
 
-    /* 4 bytes */
-    uint32_t m_compressedSize = 0;
+    /* compressed size: 4 bytes (ZIP32) or 8 bytes (ZIP64) */
+    uint64_t m_compressedSize = 0;
 
-    /* 4 bytes */
-    uint32_t m_unCompressedSize = 0;
+    /* uncompressed size: 4 bytes (ZIP32) or 8 bytes (ZIP64) */
+    uint64_t m_unCompressedSize = 0;
+
+    /* ZIP64 flag */
+    bool m_isZip64 = false;
 };
 } // namespace SignatureTools
 } // namespace OHOS

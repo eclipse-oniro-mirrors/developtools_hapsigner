@@ -21,6 +21,8 @@
 
 #include "signature_tools_log.h"
 #include "zip_data_input.h"
+#include "zip64_end_of_central_directory.h"
+#include "zip64_end_of_central_directory_locator.h"
 
 namespace OHOS {
 namespace SignatureTools {
@@ -35,12 +37,24 @@ public:
      */
     static bool SetCentralDirectoryOffset(ByteBuffer& eocd, int64_t offset);
 
+    /**
+     * set offset value of Central Directory with ZIP64 support.
+     *
+     * @param eocd buffer of End of Central Directory Record.
+     * @param offset offset value of Central Directory.
+     * @param zip64Eocd Zip64EndOfCentralDirectory pointer (may be nullptr).
+     */
+    static bool SetCentralDirectoryOffset(ByteBuffer& eocd, int64_t offset,
+        Zip64EndOfCentralDirectory* zip64Eocd);
+
 private:
     static constexpr int ZIP_CENTRAL_DIR_OFFSET_IN_EOCD = 16;
+    static constexpr int ZIP_CENTRAL_DIR_SIZE_IN_EOCD = 12;
 
     static constexpr int64_t UINT32_MAX_VALUE = 0xffffffffLL;
 
     static bool SetUInt32ToBuffer(ByteBuffer& buffer, int offset, int64_t value);
+    static bool SetUInt64ToBuffer(ByteBuffer& buffer, int offset, int64_t value);
 };
 } // namespace SignatureTools
 } // namespace OHOS

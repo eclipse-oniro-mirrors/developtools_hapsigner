@@ -23,6 +23,8 @@
 
 #include "endof_central_directory.h"
 #include "signature_tools_log.h"
+#include "zip64_end_of_central_directory.h"
+#include "zip64_end_of_central_directory_locator.h"
 #include "zip_entry.h"
 
 namespace OHOS {
@@ -41,11 +43,15 @@ public:
     ZipSigner()
     {
         m_endOfCentralDirectory = nullptr;
+        m_zip64Eocd = nullptr;
+        m_zip64EocdLocator = nullptr;
     }
 
     ~ZipSigner()
     {
         delete m_endOfCentralDirectory;
+        delete m_zip64Eocd;
+        delete m_zip64EocdLocator;
         for (auto& zipEntry : m_zipEntries) {
             delete zipEntry;
         }
@@ -73,25 +79,41 @@ public:
 
     void SetZipEntries(const std::vector<ZipEntry*>& zipEntries);
 
-    uint32_t GetSigningOffset();
+    uint64_t GetSigningOffset();
 
-    void SetSigningOffset(uint32_t signingOffset);
+    void SetSigningOffset(uint64_t signingOffset);
 
     std::string GetSigningBlock();
 
     void SetSigningBlock(const std::string& signingBlock);
 
-    uint32_t GetCDOffset();
+    uint64_t GetCDOffset();
 
-    void SetCDOffset(uint32_t cDOffset);
+    void SetCDOffset(uint64_t cDOffset);
 
-    uint32_t GetEOCDOffset();
+    uint64_t GetEOCDOffset();
 
-    void SetEOCDOffset(uint32_t eOCDOffset);
+    void SetEOCDOffset(uint64_t eOCDOffset);
 
     EndOfCentralDirectory* GetEndOfCentralDirectory();
 
     void SetEndOfCentralDirectory(EndOfCentralDirectory* endOfCentralDirectory);
+
+    bool IsZip64();
+
+    void SetIsZip64(bool isZip64);
+
+    bool IsForceZip64();
+
+    void SetForceZip64(bool forceZip64);
+
+    Zip64EndOfCentralDirectory* GetZip64Eocd();
+
+    void SetZip64Eocd(Zip64EndOfCentralDirectory* zip64Eocd);
+
+    Zip64EndOfCentralDirectoryLocator* GetZip64EocdLocator();
+
+    void SetZip64EocdLocator(Zip64EndOfCentralDirectoryLocator* zip64EocdLocator);
 
 private:
     EndOfCentralDirectory* GetZipEndOfCentralDirectory(std::ifstream& input);
@@ -107,17 +129,33 @@ private:
 
     void ResetOffset();
 
+    EndOfCentralDirectory* ParseZip64IfPresent(std::ifstream& input,
+        EndOfCentralDirectory* eocd, uint64_t fileSize);
+    bool ReadZip64EocdLocator(std::ifstream& input);
+    bool ReadZip64Eocd(std::ifstream& input);
+    void UpdateEntriesForMode(bool zip64);
+    uint64_t RecalcLengthsAndOffsets(bool useZip64Offset);
+    void FillEocdAndZip64(bool needZip64);
+
     std::vector<ZipEntry*> m_zipEntries;
 
-    uint32_t m_signingOffset = 0;
+    uint64_t m_signingOffset = 0;
 
     std::string m_signingBlock;
 
-    uint32_t m_cDOffset = 0;
+    uint64_t m_cDOffset = 0;
 
-    uint32_t m_eOCDOffset = 0;
+    uint64_t m_eOCDOffset = 0;
 
     EndOfCentralDirectory* m_endOfCentralDirectory;
+
+    bool m_isZip64 = false;
+
+    bool m_forceZip64 = false;
+
+    Zip64EndOfCentralDirectory* m_zip64Eocd;
+
+    Zip64EndOfCentralDirectoryLocator* m_zip64EocdLocator;
 };
 } // namespace SignatureTools
 } // namespace OHOS

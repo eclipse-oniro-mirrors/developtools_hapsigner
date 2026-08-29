@@ -16,9 +16,11 @@
 #ifndef SIGNATRUETOOLS_CENTRAL_DIRECTORY_H
 #define SIGNATRUETOOLS_CENTRAL_DIRECTORY_H
 
+#include <optional>
 #include <string>
 
 #include "byte_buffer.h"
+#include "zip64_extended_info.h"
 
 namespace OHOS {
 namespace SignatureTools {
@@ -58,6 +60,10 @@ public:
 
     std::string ToBytes();
 
+    void UpdateForZip64Mode(bool outputIsZip64);
+
+    void UpdateZip64OffsetAndRebuild(uint64_t newOffset);
+
     static int GetCdLength();
 
     static int GetSIGNATURE();
@@ -94,9 +100,17 @@ public:
 
     void SetCompressedSize(uint32_t compressedSize);
 
+    uint64_t GetCompressedSizeActual();
+
+    void SetCompressedSizeActual(uint64_t compressedSize);
+
     uint32_t GetUnCompressedSize();
 
     void SetUnCompressedSize(uint32_t unCompressedSize);
+
+    uint64_t GetUnCompressedSizeActual();
+
+    void SetUnCompressedSizeActual(uint64_t unCompressedSize);
 
     uint16_t GetExtraLength();
 
@@ -109,6 +123,10 @@ public:
     uint16_t GetDiskNumStart();
 
     void SetDiskNumStart(uint16_t diskNumStart);
+
+    uint32_t GetDiskNumStartActual();
+
+    void SetDiskNumStartActual(uint32_t diskNumStart);
 
     uint16_t GetCommentLength();
 
@@ -125,6 +143,18 @@ public:
     uint32_t GetOffset();
 
     void SetOffset(uint32_t offset);
+
+    uint64_t GetOffsetActual();
+
+    void SetOffsetActual(uint64_t offset);
+
+    bool IsZip64();
+
+    void SetIsZip64(bool isZip64);
+
+    std::optional<Zip64ExtendedInfo>& GetZip64ExtendedInfo();
+
+    void SetZip64ExtendedInfo(const std::optional<Zip64ExtendedInfo>& info);
 
     std::string GetFileName();
 
@@ -144,6 +174,8 @@ public:
 
 private:
     static void SetCentralDirectoryValues(ByteBuffer& bf, CentralDirectory* cd);
+
+    void RebuildExtraField(bool includeZip64);
 
     /* 2 bytes */
     short m_version = 0;
@@ -169,8 +201,14 @@ private:
     /* 4 bytes */
     uint32_t m_compressedSize = 0;
 
+    /* actual 64-bit value (for ZIP64) */
+    uint64_t m_compressedSizeActual = 0;
+
     /* 4 bytes */
     uint32_t m_unCompressedSize = 0;
+
+    /* actual 64-bit value (for ZIP64) */
+    uint64_t m_unCompressedSizeActual = 0;
 
     /* 2 bytes */
     uint16_t m_fileNameLength = 0;
@@ -184,6 +222,9 @@ private:
     /* 2 bytes */
     uint16_t m_diskNumStart = 0;
 
+    /* actual 32-bit value (for ZIP64) */
+    uint32_t m_diskNumStartActual = 0;
+
     /* 2 bytes */
     short m_internalFile = 0;
 
@@ -192,6 +233,15 @@ private:
 
     /* 4 bytes */
     uint32_t m_offset = 0;
+
+    /* actual 64-bit value (for ZIP64) */
+    uint64_t m_offsetActual = 0;
+
+    /* ZIP64 flag */
+    bool m_isZip64 = false;
+
+    /* ZIP64 Extended Information */
+    std::optional<Zip64ExtendedInfo> m_zip64ExtendedInfo;
 
     /* n bytes */
     std::string m_fileName;
