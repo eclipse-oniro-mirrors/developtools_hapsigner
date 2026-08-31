@@ -71,6 +71,7 @@ bool HapSignerBlockUtils::FindHapSignature(RandomAccessFile& hapFile, SignatureI
 
     signInfo.hapEocd = eocdAndOffsetInFile.first;
     signInfo.hapEocdOffset = eocdAndOffsetInFile.second;
+
     if (!GetCentralDirectoryOffset(signInfo.hapEocd, signInfo.hapEocdOffset,
                                    signInfo.hapCentralDirOffset)) {
         SIGNATURE_TOOLS_LOGE("get CD offset failed");
@@ -287,6 +288,7 @@ bool HapSignerBlockUtils::GetZip64CentralDirectoryOffset(RandomAccessFile& hapFi
     }
 
     uint64_t zip64EocdOffset = locator.GetZip64EocdOffset();
+
     ByteBuffer zip64EocdBuffer(Zip64EndOfCentralDirectory::ZIP64_EOCD_LENGTH);
     int64_t ret = hapFile.ReadFileFullyFromOffset(zip64EocdBuffer, zip64EocdOffset);
     if (ret < 0) {
@@ -329,13 +331,15 @@ bool HapSignerBlockUtils::FindHapSigningBlock(RandomAccessFile& hapFile, int64_t
      * 16 bytes: magic
      * int32: version
      */
+    int64_t readOffset = centralDirOffset - ZIP_HEAD_OF_SIGNING_BLOCK_LENGTH;
+
     ByteBuffer hapBlockHead(ZIP_HEAD_OF_SIGNING_BLOCK_LENGTH);
-    int64_t ret = hapFile.ReadFileFullyFromOffset(hapBlockHead,
-                                                  centralDirOffset - hapBlockHead.GetCapacity());
+    int64_t ret = hapFile.ReadFileFullyFromOffset(hapBlockHead, readOffset);
     if (ret < 0) {
         SIGNATURE_TOOLS_LOGE("read hapBlockHead error: %" PRId64, ret);
         return false;
     }
+
     HapSignBlockHead hapSignBlockHead;
     if (!ParseSignBlockHead(hapSignBlockHead, hapBlockHead)) {
         SIGNATURE_TOOLS_LOGE("ParseSignBlockHead failed");

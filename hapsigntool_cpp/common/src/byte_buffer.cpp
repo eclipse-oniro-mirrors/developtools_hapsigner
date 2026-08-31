@@ -96,8 +96,11 @@ ByteBuffer& ByteBuffer::operator=(const ByteBuffer& other)
     if (&other == this) {
         return *this;
     }
-    // std::unique_ptr reset()，will first release the original object and then point to the new object
+    // std::unique_ptr reset()��will first release the original object and then point to the new object
     buffer = nullptr;
+    position = 0;
+    limit = 0;
+    capacity = 0;
     Init(other.GetCapacity());
     if (buffer != nullptr && other.GetBufferPtr() != nullptr && capacity > 0) {
         if (memcpy_s(buffer.get(), capacity, other.GetBufferPtr(), other.GetCapacity()) != EOK) {
@@ -667,12 +670,10 @@ bool ByteBuffer::IsEqual(const std::string& other)
 
 void ByteBuffer::SetCapacity(int32_t cap)
 {
-    if (buffer != nullptr) {
-        buffer = nullptr;
-        position = 0;
-        limit = 0;
-        capacity = 0;
-    }
+    buffer = nullptr;
+    position = 0;
+    limit = 0;
+    capacity = 0;
     Init(cap);
 }
 

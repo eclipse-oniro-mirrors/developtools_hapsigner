@@ -57,7 +57,11 @@ public:
 
     void SetCrc32(int crc32);
 
+    uint64_t GetCompressedSize();
+
     void SetCompressedSize(uint64_t compressedSize);
+
+    uint64_t GetUnCompressedSize();
 
     void SetUnCompressedSize(uint64_t unCompressedSize);
 
