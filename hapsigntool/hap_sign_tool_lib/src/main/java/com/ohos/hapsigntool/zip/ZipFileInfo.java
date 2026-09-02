@@ -15,7 +15,10 @@
 
 package com.ohos.hapsigntool.zip;
 
+import com.ohos.hapsigntool.error.ZipException;
+
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 
 /**
  * Information of ZIP file
@@ -23,19 +26,97 @@ import java.nio.ByteBuffer;
  * @since 2021/12/20
  */
 public class ZipFileInfo {
-    private final long centralDirectoryOffset;
     private final int centralDirectorySize;
     private final int centralDirectoryEntryCount;
-    private final long eocdOffset;
-    private final ByteBuffer eocd;
+    private long eocdOffset;
+    private final EndOfCentralDirectory endOfCentralDirectory;
+    private long centralDirectoryOffset;
+    private Zip64Eocd zip64Eocd;
+    private Zip64EocdLocator zip64EocdLocator;
+    private boolean isZip64;
 
     public ZipFileInfo(long centralDirectoryOffset, int centralDirectorySize, int centralDirectoryEntryCount,
-        long eocdOffset, ByteBuffer eocd) {
+        long eocdOffset, EndOfCentralDirectory endOfCentralDirectory) {
         this.centralDirectoryOffset = centralDirectoryOffset;
         this.centralDirectorySize = centralDirectorySize;
         this.centralDirectoryEntryCount = centralDirectoryEntryCount;
         this.eocdOffset = eocdOffset;
-        this.eocd = eocd;
+        this.endOfCentralDirectory = endOfCentralDirectory;
+    }
+
+    /**
+     * Return content buffer after zip central directory, include eocd/zip64 eocd/zip64 eocd locator.
+     *
+     * @return content buffer after zip central directory
+     * @throws ZipException if transfer to buffer error
+     */
+    public ByteBuffer generateEocdBuffer() throws ZipException {
+        if (!isZip64) {
+            return getEocd();
+        }
+        byte[] zip64EocdBytes = zip64Eocd.toBytes();
+        byte[] zip64EocdLocatorBytes = zip64EocdLocator.toBytes();
+        byte[] eocdBytes = endOfCentralDirectory.toBytes();
+        int capacity = zip64EocdBytes.length + zip64EocdLocatorBytes.length + eocdBytes.length;
+        ByteBuffer byteBuffer = ByteBuffer.allocate(capacity).order(ByteOrder.LITTLE_ENDIAN);
+        byteBuffer.put(zip64EocdBytes);
+        byteBuffer.put(zip64EocdLocatorBytes);
+        byteBuffer.put(eocdBytes);
+        byteBuffer.flip();
+        return byteBuffer;
+    }
+
+    /**
+     * Transfer to zip64 format
+     */
+    public void toZip64() {
+        if (isZip64) {
+            return;
+        }
+        zip64Eocd = createZip64EocdByEocd();
+        zip64EocdLocator = createZip64EocdLocatorByEocd();
+        isZip64 = true;
+        endOfCentralDirectory.toZip64Format();
+    }
+
+    private Zip64Eocd createZip64EocdByEocd() {
+        Zip64Eocd newZip64Eocd = new Zip64Eocd();
+        newZip64Eocd.setRecordSize(Zip64Eocd.MIN_RECORD_SIZE);
+        newZip64Eocd.setVersionNeeded((short) 45);
+        newZip64Eocd.setVersionMadeBy((short) 45);
+        newZip64Eocd.setDiskNumber(endOfCentralDirectory.getDiskNum());
+        newZip64Eocd.setDiskNumberOfCdStart(endOfCentralDirectory.getcDStartDiskNum());
+        newZip64Eocd.setEntriesOnDisk(endOfCentralDirectory.getThisDiskCDNum());
+        newZip64Eocd.setTotalEntries(endOfCentralDirectory.getCDTotal());
+        newZip64Eocd.setCentralDirectorySize(centralDirectorySize);
+        newZip64Eocd.setCentralDirectoryOffset(centralDirectoryOffset);
+        return newZip64Eocd;
+    }
+
+    private Zip64EocdLocator createZip64EocdLocatorByEocd() {
+        Zip64EocdLocator newZip64EocdLocator = new Zip64EocdLocator();
+        newZip64EocdLocator.setDiskNumberOfZip64Eocd(endOfCentralDirectory.getcDStartDiskNum());
+        newZip64EocdLocator.setZip64EocdOffset(centralDirectoryOffset + centralDirectorySize);
+        newZip64EocdLocator.setTotalNumberOfDisk(endOfCentralDirectory.getDiskNum());
+        return newZip64EocdLocator;
+    }
+
+    /**
+     * Update central directory offset.
+     *
+     * @param newOffset new central directory offset
+     */
+    public void updateCentralDirectoryOffset(long newOffset) {
+        this.centralDirectoryOffset = newOffset;
+        this.eocdOffset = newOffset + centralDirectorySize;
+        if (isZip64) {
+            zip64Eocd.setCentralDirectoryOffset(newOffset);
+            zip64EocdLocator.setZip64EocdOffset(newOffset + centralDirectorySize);
+            this.eocdOffset += zip64Eocd.getSize();
+            this.eocdOffset += Zip64EocdLocator.SIZE;
+            return;
+        }
+        endOfCentralDirectory.setOffset(newOffset);
     }
 
     public long getCentralDirectoryOffset() {
@@ -54,7 +135,37 @@ public class ZipFileInfo {
         return eocdOffset;
     }
 
+    /**
+     * Return end of central directory buffer.
+     *
+     * @return end of central directory buffer
+     */
     public ByteBuffer getEocd() {
-        return eocd;
+        byte[] bytes = endOfCentralDirectory.toBytes();
+        return ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN);
+    }
+
+    public void setZip64EocdLocator(Zip64EocdLocator zip64EocdLocator) {
+        this.zip64EocdLocator = zip64EocdLocator;
+    }
+
+    public Zip64EocdLocator getZip64EocdLocator() {
+        return zip64EocdLocator;
+    }
+
+    public void setZip64Eocd(Zip64Eocd zip64Eocd) {
+        this.zip64Eocd = zip64Eocd;
+    }
+
+    public Zip64Eocd getZip64Eocd() {
+        return zip64Eocd;
+    }
+
+    public void setZip64(boolean zip64) {
+        isZip64 = zip64;
+    }
+
+    public boolean isZip64() {
+        return isZip64;
     }
 }
