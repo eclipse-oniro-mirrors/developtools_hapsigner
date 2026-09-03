@@ -95,6 +95,25 @@ protected:
             delete centralDir;
             delete endOfCentralDir;
         }
+        DataSourceContents() = default;
+        DataSourceContents(const DataSourceContents&) = delete;
+        DataSourceContents& operator=(const DataSourceContents&) = delete;
+        void Reset()
+        {
+            delete beforeCentralDir;
+            beforeCentralDir = nullptr;
+            delete centralDir;
+            centralDir = nullptr;
+            delete endOfCentralDir;
+            endOfCentralDir = nullptr;
+            cDByteBuffer = ByteBuffer();
+            eocdPair = {};
+            eocdFullBuffer = ByteBuffer();
+            cDOffset = 0LL;
+            cDSize = 0LL;
+            isZip64 = false;
+            zip64Eocd = Zip64EndOfCentralDirectory();
+        }
     };
 
     void CheckSignAlignment();

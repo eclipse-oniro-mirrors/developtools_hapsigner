@@ -30,6 +30,10 @@ bool ZipUtils::SetCentralDirectoryOffset(ByteBuffer& eocd, int64_t offset)
 bool ZipUtils::SetCentralDirectoryOffset(ByteBuffer& eocd, int64_t offset,
     Zip64EndOfCentralDirectory* zip64Eocd)
 {
+    if (offset < 0) {
+        SIGNATURE_TOOLS_LOGE("Set Central Directory Offset failed: offset %" PRId64 " is negative", offset);
+        return false;
+    }
     if (offset > UINT32_MAX_VALUE) {
         // Offset overflows 32 bits: Zip64 EOCD is required to store the actual value
         if (zip64Eocd == nullptr) {

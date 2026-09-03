@@ -465,7 +465,7 @@ bool SignProvider::ReSignHap(Options* options)
 
     dataSrcContents.eocdPair.first.SetPosition(0);
     if (!ZipUtils::SetCentralDirectoryOffset(dataSrcContents.eocdPair.first, newCentralDirectoryOffset,
-        nullptr)) {
+        dataSrcContents.isZip64 ? &dataSrcContents.zip64Eocd : nullptr)) {
         return PrintErrorLog("[ReSignHap] Set Central Directory Offset.", ZIP_ERROR, tmpOutputFilePath);
     }
 
@@ -1156,12 +1156,12 @@ bool SignProvider::RedoSignWithZip64(SignerConfig& signerConfig, std::shared_ptr
     SIGNATURE_TOOLS_LOGI("EOCD fields overflow after signing block insertion, re-processing with ZIP64 mode");
     zip->SetForceZip64(true);
     auto inputStream = std::make_shared<std::ifstream>(inputFilePath, std::ios::binary);
-    if (!inputStream || !inputStream->good()) {
+    if (!inputStream->good()) {
         PrintErrorLog("[signHap] Re-open input file failed", IO_ERROR, tmpOutputFilePath);
         return false;
     }
     auto tmpOutput = std::make_shared<std::ofstream>(tmpOutputFilePath, std::ios::binary | std::ios::trunc);
-    if (!tmpOutput || !tmpOutput->good()) {
+    if (!tmpOutput->good()) {
         PrintErrorLog("[signHap] Re-open temp output failed", IO_ERROR, tmpOutputFilePath);
         return false;
     }
@@ -1169,7 +1169,7 @@ bool SignProvider::RedoSignWithZip64(SignerConfig& signerConfig, std::shared_ptr
         PrintErrorLog("[signHap] Init Zip Output (ZIP64 retry) failed", IO_ERROR);
         return false;
     }
-    dataSrcContents = DataSourceContents();
+    dataSrcContents.Reset();
     if (!InitDataSourceContents(*outputHap, dataSrcContents)) {
         PrintErrorLog("[signHap] Init Data Source Contents (ZIP64 retry) failed",
             ZIP_ERROR, tmpOutputFilePath);

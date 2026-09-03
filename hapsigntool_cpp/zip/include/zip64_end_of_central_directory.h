@@ -46,12 +46,12 @@ class Zip64EndOfCentralDirectory {
 public:
     static constexpr int ZIP64_EOCD_LENGTH = 56;
     static constexpr int ZIP64_EOCD_FIXED_PART_SIZE = 12; // signature (4) + size field (8)
-    static constexpr int SIGNATURE = 0x06064b50;
+    static constexpr uint32_t SIGNATURE = 0x06064b50;
 
     Zip64EndOfCentralDirectory() = default;
     ~Zip64EndOfCentralDirectory() = default;
 
-    static std::optional<Zip64EndOfCentralDirectory> GetByBytes(const std::string& bytes, int offset = 0);
+    static std::optional<Zip64EndOfCentralDirectory> GetByBytes(const std::string& bytes, int32_t offset = 0);
     std::string ToBytes();
 
     uint64_t GetSizeOfZip64Eocd() const;

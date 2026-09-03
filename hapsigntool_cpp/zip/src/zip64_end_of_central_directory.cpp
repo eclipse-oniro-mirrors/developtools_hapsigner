@@ -47,18 +47,18 @@ bool Zip64EndOfCentralDirectory::ReadField(ByteBuffer& bf, uint64_t& value, cons
 }
 
 std::optional<Zip64EndOfCentralDirectory> Zip64EndOfCentralDirectory::GetByBytes(
-    const std::string& bytes, int offset)
+    const std::string& bytes, int32_t offset)
 {
-    if (static_cast<int>(bytes.size()) < ZIP64_EOCD_LENGTH + offset) {
-        SIGNATURE_TOOLS_LOGE("bytes size %zu is too small for zip64 eocd", bytes.size());
+    if (offset < 0 || static_cast<size_t>(offset) + ZIP64_EOCD_LENGTH > bytes.size()) {
+        SIGNATURE_TOOLS_LOGE("bytes size %zu is too small for zip64 eocd (offset=%d)", bytes.size(), offset);
         return std::nullopt;
     }
 
     ByteBuffer bf(bytes.c_str() + offset, bytes.size() - offset);
 
-    int32_t signatureValue;
-    if (!bf.GetInt32(signatureValue) || signatureValue != SIGNATURE) {
-        SIGNATURE_TOOLS_LOGE("zip64 eocd signature mismatch: %d", signatureValue);
+    uint32_t signatureValue;
+    if (!bf.GetUInt32(signatureValue) || signatureValue != SIGNATURE) {
+        SIGNATURE_TOOLS_LOGE("zip64 eocd signature mismatch: 0x%08x", signatureValue);
         return std::nullopt;
     }
 
@@ -92,7 +92,7 @@ std::optional<Zip64EndOfCentralDirectory> Zip64EndOfCentralDirectory::GetByBytes
 std::string Zip64EndOfCentralDirectory::ToBytes()
 {
     ByteBuffer bf(ZIP64_EOCD_LENGTH);
-    bf.PutInt32(SIGNATURE);
+    bf.PutUInt32(SIGNATURE);
     bf.PutUInt64(m_sizeOfZip64Eocd);
     bf.PutUInt16(m_versionMadeBy);
     bf.PutUInt16(m_versionNeeded);

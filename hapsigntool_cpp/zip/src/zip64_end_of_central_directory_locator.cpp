@@ -20,18 +20,18 @@ namespace OHOS {
 namespace SignatureTools {
 
 std::optional<Zip64EndOfCentralDirectoryLocator> Zip64EndOfCentralDirectoryLocator::GetByBytes(
-    const std::string& bytes, int offset)
+    const std::string& bytes, int32_t offset)
 {
-    if (static_cast<int>(bytes.size()) < ZIP64_EOCD_LOCATOR_LENGTH + offset) {
-        SIGNATURE_TOOLS_LOGE("bytes size %zu is too small for zip64 eocd locator", bytes.size());
+    if (offset < 0 || static_cast<size_t>(offset) + ZIP64_EOCD_LOCATOR_LENGTH > bytes.size()) {
+        SIGNATURE_TOOLS_LOGE("bytes size %zu is too small for zip64 eocd locator (offset=%d)", bytes.size(), offset);
         return std::nullopt;
     }
 
     ByteBuffer bf(bytes.c_str() + offset, bytes.size() - offset);
 
-    int32_t signatureValue;
-    if (!bf.GetInt32(signatureValue) || signatureValue != SIGNATURE) {
-        SIGNATURE_TOOLS_LOGE("zip64 eocd locator signature mismatch: %d", signatureValue);
+    uint32_t signatureValue;
+    if (!bf.GetUInt32(signatureValue) || signatureValue != SIGNATURE) {
+        SIGNATURE_TOOLS_LOGE("zip64 eocd locator signature mismatch: 0x%08x", signatureValue);
         return std::nullopt;
     }
 
@@ -64,7 +64,7 @@ std::optional<Zip64EndOfCentralDirectoryLocator> Zip64EndOfCentralDirectoryLocat
 std::string Zip64EndOfCentralDirectoryLocator::ToBytes()
 {
     ByteBuffer bf(ZIP64_EOCD_LOCATOR_LENGTH);
-    bf.PutInt32(SIGNATURE);
+    bf.PutUInt32(SIGNATURE);
     bf.PutUInt32(m_diskNumberWithZip64EocdStart);
     bf.PutUInt64(m_zip64EocdOffset);
     bf.PutUInt32(m_totalDiskCount);

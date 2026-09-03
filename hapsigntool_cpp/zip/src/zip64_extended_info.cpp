@@ -29,11 +29,14 @@ int32_t Zip64ExtendedInfo::FindZip64Header(const std::string& extraData)
                             (static_cast<uint16_t>(static_cast<uint8_t>(extraData[pos + 1])) << 8);
         uint16_t dataSize = static_cast<uint8_t>(extraData[pos + 2]) |
                             (static_cast<uint16_t>(static_cast<uint8_t>(extraData[pos + 3])) << 8);
-
+        int32_t subFieldLen = EXTRA_SUBFIELD_HEADER_SIZE + dataSize;
+        if (pos + subFieldLen > extraLen) {
+            break;
+        }
         if (headerId == HEADER_ID) {
             return pos;
         }
-        pos += EXTRA_SUBFIELD_HEADER_SIZE + dataSize;
+        pos += subFieldLen;
     }
     return -1;
 }

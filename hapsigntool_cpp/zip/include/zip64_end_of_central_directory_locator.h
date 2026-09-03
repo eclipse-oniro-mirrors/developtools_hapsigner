@@ -36,12 +36,12 @@ namespace SignatureTools {
 class Zip64EndOfCentralDirectoryLocator {
 public:
     static constexpr int ZIP64_EOCD_LOCATOR_LENGTH = 20;
-    static constexpr int SIGNATURE = 0x07064b50;
+    static constexpr uint32_t SIGNATURE = 0x07064b50;
 
     Zip64EndOfCentralDirectoryLocator() = default;
     ~Zip64EndOfCentralDirectoryLocator() = default;
 
-    static std::optional<Zip64EndOfCentralDirectoryLocator> GetByBytes(const std::string& bytes, int offset = 0);
+    static std::optional<Zip64EndOfCentralDirectoryLocator> GetByBytes(const std::string& bytes, int32_t offset = 0);
     std::string ToBytes();
 
     uint32_t GetDiskNumberWithZip64EocdStart() const;

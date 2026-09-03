@@ -96,7 +96,7 @@ ByteBuffer& ByteBuffer::operator=(const ByteBuffer& other)
     if (&other == this) {
         return *this;
     }
-    // std::unique_ptr reset()��will first release the original object and then point to the new object
+    // std::unique_ptr reset()，will first release the original object and then point to the new object
     buffer = nullptr;
     position = 0;
     limit = 0;
