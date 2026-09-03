@@ -159,6 +159,11 @@ public class Options extends HashMap<String, Object> {
     public static final String MODE = "mode";
 
     /**
+     * Quiet mode parameter name.
+     */
+    public static final String QUIET = "quiet";
+
+    /**
      * Self sign parameter name.
      */
     public static final String SELF_SIGN = "selfSign";

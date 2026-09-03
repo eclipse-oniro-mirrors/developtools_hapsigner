@@ -83,10 +83,12 @@ public final class BinarySignTool {
                 System.exit(1);
             }
         } catch (CustomException | InvalidParamsException e) {
-            LOGGER.error(e.getMessage());
+            LOGGER.error(e.getMessage().trim());
+            LOGGER.result(args[0] + " failed");
             System.exit(1);
         } catch (Exception e) {
-            LOGGER.error(SignToolErrMsg.UNKNOWN_ERROR.toString(e.getMessage()));
+            LOGGER.error(SignToolErrMsg.UNKNOWN_ERROR.toString(e.getMessage()).trim());
+            LOGGER.result(args[0] + " failed");
             System.exit(1);
         }
     }
@@ -111,11 +113,7 @@ public final class BinarySignTool {
             LOGGER.debug(params.toString());
             LOGGER.info("Start {}", params.getMethod());
             boolean isSuccess = dispatchParams(params, api);
-            if (isSuccess) {
-                LOGGER.info(String.format("%s %s", params.getMethod(), "success"));
-            } else {
-                LOGGER.info(String.format("%s %s", params.getMethod(), "failed"));
-            }
+            LOGGER.result(String.format("%s %s", params.getMethod(), isSuccess ? "success" : "failed"));
             return isSuccess;
         }
         return true;

@@ -58,6 +58,7 @@ const std::string Options::PROFILE_FILE = "profileFile";
 const std::string Options::PROFILE_SIGNED = "profileSigned";
 const std::string Options::MODULE_FILE = "moduleFile";
 const std::string Options::SELF_SIGN = "selfSign";
+const std::string Options::QUIET = "quiet";
 
 char* Options::GetChars(const std::string& key)
 {

@@ -29,18 +29,20 @@ USAGE:  <sign|display-sign> [options]
         -outFile : output the signed Provision Profile file, required fields;
         -moduleFile : module.json file.
         -selfSign : Whether to elf file is self sign. The value 1 means enable self sign, and value 0 means disable. The default value is 0. It is optional.
-        -signServer : remote signer plugin, required fields on remoteSign mode;
-        -signerPlugin : remote sign service url, required fields on remoteSign mode;
+        -signServer : remote sign service url, required fields on remoteSign mode;
+        -signerPlugin : remote signer plugin, required fields on remoteSign mode;
         -onlineAuthMode : remote sign auth mode, required fields on remoteSign mode, including account;
         -username : user account for online auth, required fields on remoteSign mode with account auth mode;
         -userPwd : user password for online auth, required fields on remoteSign mode with account auth mode;
         -ext : extend parameters for remote signer plugin, optional fields;
+        -quiet : quiet mode, suppress non-result output and only output the final result. value: true/false. optional;
 
     EXAMPLE:
         sign -mode localSign -keyAlias "oh-app1-key-v1" -appCertFile "app-release-cert.cer" -profileFile "signed-profile.p7b" -inFile "unsigned.elf" -signAlg SHA256withECDSA  -keystoreFile  "app-keypair.jks" -keystorePwd ****** -outFile "signed.elf"
 
     display-sign [options]:
         -inFile : signed elf file, required fields;
+        -quiet : unused;
 
     EXAMPLE:
         display-sign -inFile "signed.elf"
