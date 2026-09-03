@@ -158,6 +158,7 @@ private:
 
     bool CheckSignatureAlg();
     bool ValidateSignConstraints(const std::string& inputFilePath, bool isZip64);
+    bool ValidateOutputFileSize(DataSourceContents& dataSrcContents, ByteBuffer& signingBlock);
 
     int LoadOptionalBlock(const std::string& file, int type);
     bool CheckFile(const std::string& filePath);
@@ -218,7 +219,6 @@ private:
 
     static std::vector<std::string> VALID_SIGN_ALG_NAME;
     static constexpr int FOUR_BYTE = 4;
-    static constexpr int64_t MAX_INPUT_FILE_SIZE = 200LL * 1024 * 1024 * 1024; // 200GB
     static const std::string PROFILE_PREFIX;
     static constexpr int PROPERTY_BLOCK_HEADER_SIZE = 12;
     static constexpr int PROPERTY_BLOCK_COUNT = 2; // The sum of property block and hap sign block

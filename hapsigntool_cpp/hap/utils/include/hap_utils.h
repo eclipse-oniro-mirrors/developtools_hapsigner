@@ -82,6 +82,7 @@ public:
     static constexpr int PERMISSION_SIGN_DIGEST_TYPE_SIZE = 4;
     static constexpr int PERMISSION_SIGN_MAGIC_LENGTH = 8;
     static constexpr int MAX_PERMISSION_SIGN_DIGEST_COUNT = 4;
+    static constexpr int64_t MAX_INPUT_FILE_SIZE = 200LL * 1024 * 1024 * 1024; // 200GB
 
 public:
     static std::string GetAppIdentifier(const std::string& profileContent);

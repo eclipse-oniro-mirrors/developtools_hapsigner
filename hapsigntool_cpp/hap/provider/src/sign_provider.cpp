@@ -1392,12 +1392,28 @@ bool SignProvider::CheckPermMode()
     return true;
 }
 
+bool SignProvider::ValidateOutputFileSize(DataSourceContents& dataSrcContents, ByteBuffer& signingBlock)
+{
+    int64_t outputFileSize = dataSrcContents.cDOffset + signingBlock.GetCapacity() +
+        dataSrcContents.centralDir->GetByteBuffer().GetCapacity() +
+        dataSrcContents.eocdPair.first.GetCapacity();
+    if (dataSrcContents.isZip64) {
+        outputFileSize += Zip64EndOfCentralDirectory::ZIP64_EOCD_LENGTH +
+            Zip64EndOfCentralDirectoryLocator::ZIP64_EOCD_LOCATOR_LENGTH;
+    }
+    if (outputFileSize > HapUtils::MAX_INPUT_FILE_SIZE) {
+        SIGNATURE_TOOLS_LOGE("Output file size %" PRId64 " exceeds 200GB limit", outputFileSize);
+        return PrintErrorLog("[SignHap] Output file size exceeds 200GB limit", COMMAND_PARAM_ERROR);
+    }
+    return true;
+}
+
 bool SignProvider::ValidateSignConstraints(const std::string& inputFilePath, bool isZip64)
 {
     constexpr const char* APP_SUFFIX = ".app";
     constexpr size_t APP_SUFFIX_LEN = 4;
     auto fileSize = std::filesystem::file_size(inputFilePath);
-    if (fileSize > static_cast<uint64_t>(MAX_INPUT_FILE_SIZE)) {
+    if (fileSize > static_cast<uint64_t>(HapUtils::MAX_INPUT_FILE_SIZE)) {
         SIGNATURE_TOOLS_LOGE("Input file size %llu exceeds 200GB limit", static_cast<unsigned long long>(fileSize));
         return PrintErrorLog("[signHap] Input file size exceeds 200GB limit", COMMAND_PARAM_ERROR);
     }
@@ -1462,6 +1478,10 @@ bool SignProvider::OutputSignedFile(RandomAccessFile* outputHap,
                                     DataSourceContents& dataSrcContents,
                                     ByteBuffer& signingBlock)
 {
+    if (!ValidateOutputFileSize(dataSrcContents, signingBlock)) {
+        return false;
+    }
+
     std::shared_ptr<RandomAccessFileOutput> outputHapOut =
         std::make_shared<RandomAccessFileOutput>(outputHap, dataSrcContents.cDOffset);
     if (!outputHapOut->Write(signingBlock)) {
