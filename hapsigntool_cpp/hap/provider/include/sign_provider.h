@@ -128,7 +128,6 @@ protected:
     bool CheckCompatibleVersion();
     std::vector<OptionalBlock> optionalBlocks;
     std::map<std::string, std::string> signParams = std::map<std::string, std::string>();
-    std::string tmpOutputFilePath;
 
 private:
     struct SignContext {
@@ -219,11 +218,14 @@ private:
 
     static std::vector<std::string> VALID_SIGN_ALG_NAME;
     static constexpr int FOUR_BYTE = 4;
+    static constexpr const char* APP_SUFFIX = ".app";
+    static constexpr size_t APP_SUFFIX_LEN = 4;
     static const std::string PROFILE_PREFIX;
     static constexpr int PROPERTY_BLOCK_HEADER_SIZE = 12;
     static constexpr int PROPERTY_BLOCK_COUNT = 2; // The sum of property block and hap sign block
     static constexpr int ADDITIONAL_BLOCK_COUNT = 1; // The num of subblock head before codesign block in property block
     std::string profileContent;
+    std::string tmpOutputFilePath;
 };
 } // namespace SignatureTools
 } // namespace OHOS

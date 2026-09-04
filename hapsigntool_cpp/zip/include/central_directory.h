@@ -60,9 +60,9 @@ public:
 
     std::string ToBytes();
 
-    void UpdateForZip64Mode(bool outputIsZip64);
+    bool UpdateForZip64Mode(bool outputIsZip64);
 
-    void UpdateZip64OffsetAndRebuild(uint64_t newOffset);
+    bool UpdateZip64OffsetAndRebuild(uint64_t newOffset);
 
     static int GetCdLength();
 
@@ -173,7 +173,7 @@ public:
 private:
     static void SetCentralDirectoryValues(ByteBuffer& bf, CentralDirectory* cd);
 
-    void RebuildExtraField(bool includeZip64);
+    bool RebuildExtraField(bool includeZip64);
 
     /* 2 bytes */
     short m_version = 0;

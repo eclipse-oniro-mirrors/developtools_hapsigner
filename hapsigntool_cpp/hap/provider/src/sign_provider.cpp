@@ -91,6 +91,11 @@ int SignProvider::CheckParmaAndInitConfig(SignerConfig& signerConfig, Options* o
         return COMMAND_PARAM_ERROR;
     }
     std::string inputFilePath = signParams.at(ParamConstants::PARAM_BASIC_INPUT_FILE);
+    auto fileSize = std::filesystem::file_size(inputFilePath);
+    if (fileSize > static_cast<uint64_t>(HapUtils::MAX_INPUT_FILE_SIZE)) {
+        SIGNATURE_TOOLS_LOGE("Input file size %llu exceeds 200GB limit", static_cast<unsigned long long>(fileSize));
+        return COMMAND_PARAM_ERROR;
+    }
     suffix = FileUtils::GetSuffix(inputFilePath);
     if (suffix == "") {
         SIGNATURE_TOOLS_LOGE("hap format error pleass check!!");
@@ -189,6 +194,12 @@ bool SignProvider::ParseZip64IfPresent(RandomAccessFile& outputHap, DataSourceCo
         return false;
     }
     uint64_t zip64EocdOffset = locator.GetZip64EocdOffset();
+    uint64_t eocdEndOffset = static_cast<uint64_t>(dataSrcContents.eocdPair.second);
+    if (zip64EocdOffset >= eocdEndOffset ||
+        Zip64EndOfCentralDirectory::ZIP64_EOCD_LENGTH > eocdEndOffset - zip64EocdOffset) {
+        PrintErrorNumberMsg("ZIP_ERROR", ZIP_ERROR, "zip64 eocd offset out of bounds");
+        return false;
+    }
     ByteBuffer zip64EocdBuffer(Zip64EndOfCentralDirectory::ZIP64_EOCD_LENGTH);
     int64_t ret = outputHap.ReadFileFullyFromOffset(zip64EocdBuffer, zip64EocdOffset);
     if (ret <= 0) {
@@ -1154,6 +1165,9 @@ bool SignProvider::RedoSignWithZip64(SignerConfig& signerConfig, std::shared_ptr
     std::string inputFilePath = signParams.at(ParamConstants::PARAM_BASIC_INPUT_FILE);
     std::string suffix = FileUtils::GetSuffix(inputFilePath);
     SIGNATURE_TOOLS_LOGI("EOCD fields overflow after signing block insertion, re-processing with ZIP64 mode");
+    if (!ValidateSignConstraints(inputFilePath, true)) {
+        return false;
+    }
     zip->SetForceZip64(true);
     auto inputStream = std::make_shared<std::ifstream>(inputFilePath, std::ios::binary);
     if (!inputStream->good()) {
@@ -1410,13 +1424,6 @@ bool SignProvider::ValidateOutputFileSize(DataSourceContents& dataSrcContents, B
 
 bool SignProvider::ValidateSignConstraints(const std::string& inputFilePath, bool isZip64)
 {
-    constexpr const char* APP_SUFFIX = ".app";
-    constexpr size_t APP_SUFFIX_LEN = 4;
-    auto fileSize = std::filesystem::file_size(inputFilePath);
-    if (fileSize > static_cast<uint64_t>(HapUtils::MAX_INPUT_FILE_SIZE)) {
-        SIGNATURE_TOOLS_LOGE("Input file size %llu exceeds 200GB limit", static_cast<unsigned long long>(fileSize));
-        return PrintErrorLog("[signHap] Input file size exceeds 200GB limit", COMMAND_PARAM_ERROR);
-    }
     if (isZip64 &&
         !(inputFilePath.size() >= APP_SUFFIX_LEN &&
           inputFilePath.compare(inputFilePath.size() - APP_SUFFIX_LEN, APP_SUFFIX_LEN, APP_SUFFIX) == 0)) {

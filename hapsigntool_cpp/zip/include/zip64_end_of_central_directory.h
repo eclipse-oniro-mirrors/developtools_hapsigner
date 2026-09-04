@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024-2024 Huawei Device Co., Ltd.
+ * Copyright (c) 2026-2026 Huawei Device Co., Ltd.
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -52,7 +52,7 @@ public:
     ~Zip64EndOfCentralDirectory() = default;
 
     static std::optional<Zip64EndOfCentralDirectory> GetByBytes(const std::string& bytes, int32_t offset = 0);
-    std::string ToBytes();
+    std::string ToBytes() const;
 
     uint64_t GetSizeOfZip64Eocd() const;
     void SetSizeOfZip64Eocd(uint64_t size);

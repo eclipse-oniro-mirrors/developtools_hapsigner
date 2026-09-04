@@ -165,7 +165,7 @@ std::string CentralDirectory::ToBytes()
     return bf.ToString();
 }
 
-void CentralDirectory::UpdateForZip64Mode(bool outputIsZip64)
+bool CentralDirectory::UpdateForZip64Mode(bool outputIsZip64)
 {
     m_isZip64 = outputIsZip64;
 
@@ -203,7 +203,9 @@ void CentralDirectory::UpdateForZip64Mode(bool outputIsZip64)
         m_zip64ExtendedInfo = newInfo;
 
         // Rebuild extra field: keep non-ZIP64 parts + new Zip64 Extended Info
-        RebuildExtraField(true);
+        if (!RebuildExtraField(true)) {
+            return false;
+        }
     } else {
         // ZIP32 output: use actual values, remove Zip64 Extended Info from extra field
         m_compressedSize = static_cast<uint32_t>(m_compressedSizeActual);
@@ -213,11 +215,14 @@ void CentralDirectory::UpdateForZip64Mode(bool outputIsZip64)
         m_zip64ExtendedInfo = std::nullopt;
 
         // Rebuild extra field: strip Zip64 Extended Info
-        RebuildExtraField(false);
+        if (!RebuildExtraField(false)) {
+            return false;
+        }
     }
+    return true;
 }
 
-void CentralDirectory::UpdateZip64OffsetAndRebuild(uint64_t newOffset)
+bool CentralDirectory::UpdateZip64OffsetAndRebuild(uint64_t newOffset)
 {
     m_offsetActual = newOffset;
     if (newOffset > UINT32_MAX) {
@@ -240,11 +245,14 @@ void CentralDirectory::UpdateZip64OffsetAndRebuild(uint64_t newOffset)
 
     if (m_zip64ExtendedInfo.has_value()) {
         m_zip64ExtendedInfo->SetLocalHeaderOffset(newOffset);
-        RebuildExtraField(true);
+        if (!RebuildExtraField(true)) {
+            return false;
+        }
     }
+    return true;
 }
 
-void CentralDirectory::RebuildExtraField(bool includeZip64)
+bool CentralDirectory::RebuildExtraField(bool includeZip64)
 {
     std::string newExtra;
     if (includeZip64 && m_zip64ExtendedInfo.has_value()) {
@@ -273,13 +281,14 @@ void CentralDirectory::RebuildExtraField(bool includeZip64)
         newExtra.append(m_extraData, pos, extraLen - pos);
     }
 
-    m_extraData = newExtra;
     if (newExtra.size() > UINT16_MAX) {
         SIGNATURE_TOOLS_LOGE("Extra field length %zu exceeds UINT16_MAX", newExtra.size());
-        return;
+        return false;
     }
+    m_extraData = newExtra;
     m_extraLength = static_cast<uint16_t>(newExtra.size());
     m_length = CD_LENGTH + m_fileNameLength + m_extraLength + m_commentLength;
+    return true;
 }
 
 int CentralDirectory::GetCdLength()

@@ -133,7 +133,7 @@ std::string ZipEntryHeader::ToBytes()
     return bf.ToString();
 }
 
-void ZipEntryHeader::UpdateForZip64Mode(bool outputIsZip64)
+bool ZipEntryHeader::UpdateForZip64Mode(bool outputIsZip64)
 {
     m_isZip64 = outputIsZip64;
 
@@ -158,18 +158,23 @@ void ZipEntryHeader::UpdateForZip64Mode(bool outputIsZip64)
         m_zip64ExtendedInfo = newInfo;
 
         // Rebuild extra field
-        RebuildExtraField(true);
+        if (!RebuildExtraField(true)) {
+            return false;
+        }
     } else {
         m_compressedSize = static_cast<uint32_t>(m_compressedSizeActual);
         m_unCompressedSize = static_cast<uint32_t>(m_unCompressedSizeActual);
         m_zip64ExtendedInfo = std::nullopt;
 
         // Rebuild extra field: strip Zip64 Extended Info
-        RebuildExtraField(false);
+        if (!RebuildExtraField(false)) {
+            return false;
+        }
     }
+    return true;
 }
 
-void ZipEntryHeader::RebuildExtraField(bool includeZip64)
+bool ZipEntryHeader::RebuildExtraField(bool includeZip64)
 {
     std::string newExtra;
     if (includeZip64 && m_zip64ExtendedInfo.has_value()) {
@@ -195,9 +200,14 @@ void ZipEntryHeader::RebuildExtraField(bool includeZip64)
         newExtra.append(m_extraData, pos, extraLen - pos);
     }
 
+    if (newExtra.size() > UINT16_MAX) {
+        SIGNATURE_TOOLS_LOGE("Extra field length %zu exceeds UINT16_MAX", newExtra.size());
+        return false;
+    }
     m_extraData = newExtra;
     m_extraLength = static_cast<uint16_t>(newExtra.size());
     m_length = HEADER_LENGTH + m_fileNameLength + m_extraLength;
+    return true;
 }
 
 int ZipEntryHeader::GetHeaderLength()

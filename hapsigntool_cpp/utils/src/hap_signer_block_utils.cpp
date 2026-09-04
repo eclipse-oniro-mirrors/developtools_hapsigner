@@ -288,6 +288,12 @@ bool HapSignerBlockUtils::GetZip64CentralDirectoryOffset(RandomAccessFile& hapFi
     }
 
     uint64_t zip64EocdOffset = locator.GetZip64EocdOffset();
+    uint64_t eocdEndOffset = static_cast<uint64_t>(eocdOffset);
+    if (zip64EocdOffset >= eocdEndOffset ||
+        Zip64EndOfCentralDirectory::ZIP64_EOCD_LENGTH > eocdEndOffset - zip64EocdOffset) {
+        SIGNATURE_TOOLS_LOGE("zip64 eocd offset out of bounds: %" PRIu64, zip64EocdOffset);
+        return false;
+    }
 
     ByteBuffer zip64EocdBuffer(Zip64EndOfCentralDirectory::ZIP64_EOCD_LENGTH);
     int64_t ret = hapFile.ReadFileFullyFromOffset(zip64EocdBuffer, zip64EocdOffset);
@@ -303,7 +309,13 @@ bool HapSignerBlockUtils::GetZip64CentralDirectoryOffset(RandomAccessFile& hapFi
         return false;
     }
 
-    centralDirectoryOffset = static_cast<int64_t>(zip64Eocd->GetOffset());
+    int64_t cdOffset = static_cast<int64_t>(zip64Eocd->GetOffset());
+    if (cdOffset < 0 || cdOffset >= eocdOffset) {
+        SIGNATURE_TOOLS_LOGE("zip64 central directory offset %" PRId64
+                             " is invalid (eocdOffset=%" PRId64 ")", cdOffset, eocdOffset);
+        return false;
+    }
+    centralDirectoryOffset = cdOffset;
     return true;
 }
 

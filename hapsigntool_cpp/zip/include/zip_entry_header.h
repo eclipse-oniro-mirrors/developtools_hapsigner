@@ -64,7 +64,7 @@ public:
 
     std::string ToBytes();
 
-    void UpdateForZip64Mode(bool outputIsZip64);
+    bool UpdateForZip64Mode(bool outputIsZip64);
 
     static int GetHeaderLength();
 
@@ -135,7 +135,7 @@ public:
     void SetIsZip64(bool isZip64);
 
 private:
-    void RebuildExtraField(bool includeZip64);
+    bool RebuildExtraField(bool includeZip64);
 
     /* 2 bytes */
     short m_version = 0;
