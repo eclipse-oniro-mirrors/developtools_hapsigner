@@ -31,7 +31,7 @@ int ZipEntry::Alignment(int alignNum)
         return -1;
     }
     uint32_t remainder = (m_zipEntryData->GetZipEntryHeader()->GetLength() +
-        m_fileEntryInCentralDirectory->GetOffset()) % alignNum;
+        static_cast<uint32_t>(m_fileEntryInCentralDirectory->GetEffectiveOffset())) % alignNum;
     if (remainder == 0) {
         return padding;
     }
@@ -95,9 +95,10 @@ bool ZipEntry::SetEntryHeaderNewExtraLength(uint16_t newLength)
     zipEntryHeader->SetExtraLength(newLength);
     zipEntryHeader->SetLength(ZipEntryHeader::HEADER_LENGTH +
         zipEntryHeader->GetExtraLength() + zipEntryHeader->GetFileNameLength());
+    int desLen = (m_zipEntryData->GetDataDescriptor() == nullptr) ? 0 :
+        m_zipEntryData->GetDataDescriptor()->GetDesLength();
     m_zipEntryData->SetLength(zipEntryHeader->GetLength() +
-        m_zipEntryData->GetFileSize() +
-        (m_zipEntryData->GetDataDescriptor() == nullptr ? 0 : DataDescriptor::DES_LENGTH));
+        m_zipEntryData->GetFileSize() + desLen);
     return true;
 }
 

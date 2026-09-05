@@ -79,16 +79,28 @@ void EndOfCentralDirectory::SetEndOfCentralDirectoryValues(ByteBuffer& bf, EndOf
 
     bf.GetUInt16(eocdUInt16Value);
     eocd->SetThisDiskCDNum(eocdUInt16Value);
+    eocd->SetThisDiskCDNumActual(eocdUInt16Value == 0xFFFF ? 0 : eocdUInt16Value);
 
     bf.GetUInt16(eocdUInt16Value);
     eocd->SetcDTotal(eocdUInt16Value);
+    eocd->SetcDTotalActual(eocdUInt16Value == 0xFFFF ? 0 : eocdUInt16Value);
 
     uint32_t eocdUInt32Value;
     bf.GetUInt32(eocdUInt32Value);
     eocd->SetcDSize(eocdUInt32Value);
+    eocd->SetcDSizeActual(eocdUInt32Value == 0xFFFFFFFF ? 0 : eocdUInt32Value);
 
     bf.GetUInt32(eocdUInt32Value);
     eocd->SetOffset(eocdUInt32Value);
+    eocd->SetOffsetActual(eocdUInt32Value == 0xFFFFFFFF ? 0 : eocdUInt32Value);
+
+    // Detect ZIP64 sentinel values
+    if (eocd->GetThisDiskCDNum() == 0xFFFF ||
+        eocd->GetcDTotal() == 0xFFFF ||
+        eocd->GetcDSize() == 0xFFFFFFFF ||
+        eocd->GetOffset() == 0xFFFFFFFF) {
+        eocd->SetIsZip64(true);
+    }
 
     bf.GetUInt16(eocdUInt16Value);
     eocd->SetCommentLength(eocdUInt16Value);
@@ -212,6 +224,71 @@ int EndOfCentralDirectory::GetLength()
 void EndOfCentralDirectory::SetLength(uint32_t length)
 {
     m_length = length;
+}
+
+uint64_t EndOfCentralDirectory::GetThisDiskCDNumActual()
+{
+    return m_thisDiskCDNumActual;
+}
+
+void EndOfCentralDirectory::SetThisDiskCDNumActual(uint64_t thisDiskCDNum)
+{
+    m_thisDiskCDNumActual = thisDiskCDNum;
+}
+
+uint64_t EndOfCentralDirectory::GetcDTotalActual()
+{
+    return m_cDTotalActual;
+}
+
+void EndOfCentralDirectory::SetcDTotalActual(uint64_t cDTotal)
+{
+    m_cDTotalActual = cDTotal;
+}
+
+uint64_t EndOfCentralDirectory::GetcDSizeActual()
+{
+    return m_cDSizeActual;
+}
+
+void EndOfCentralDirectory::SetcDSizeActual(uint64_t cDSize)
+{
+    m_cDSizeActual = cDSize;
+}
+
+uint64_t EndOfCentralDirectory::GetOffsetActual()
+{
+    return m_offsetActual;
+}
+
+void EndOfCentralDirectory::SetOffsetActual(uint64_t offset)
+{
+    m_offsetActual = offset;
+}
+
+bool EndOfCentralDirectory::IsZip64()
+{
+    return m_isZip64;
+}
+
+void EndOfCentralDirectory::SetIsZip64(bool isZip64)
+{
+    m_isZip64 = isZip64;
+}
+
+uint64_t EndOfCentralDirectory::GetEffectiveOffset()
+{
+    return m_isZip64 ? m_offsetActual : m_offset;
+}
+
+uint64_t EndOfCentralDirectory::GetEffectiveCDSize()
+{
+    return m_isZip64 ? m_cDSizeActual : m_cDSize;
+}
+
+uint64_t EndOfCentralDirectory::GetEffectiveCDTotal()
+{
+    return m_isZip64 ? m_cDTotalActual : m_cDTotal;
 }
 } // namespace SignatureTools
 } // namespace OHOS

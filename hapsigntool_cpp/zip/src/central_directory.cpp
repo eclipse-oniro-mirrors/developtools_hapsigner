@@ -40,6 +40,10 @@ bool CentralDirectory::GetCentralDirectory(ByteBuffer& bf, CentralDirectory* cd)
         std::string extra(extraLength, 0);
         bf.GetData(&extra[0], extraLength);
         cd->SetExtraData(extra);
+
+        if (!ParseZip64ExtendedInfo(extra, cd)) {
+            return false;
+        }
     }
     uint16_t commentLength = cd->GetCommentLength();
     if (commentLength > 0) {
@@ -49,6 +53,36 @@ bool CentralDirectory::GetCentralDirectory(ByteBuffer& bf, CentralDirectory* cd)
     }
     cd->SetLength(CD_LENGTH + fileNameLength + extraLength + commentLength);
 
+    return true;
+}
+
+bool CentralDirectory::ParseZip64ExtendedInfo(const std::string& extra, CentralDirectory* cd)
+{
+    auto zip64Info = Zip64ExtendedInfo::Parse(extra, cd->GetCompressedSize(),
+        cd->GetUnCompressedSize(), cd->GetOffset(), cd->GetDiskNumStart());
+    if (zip64Info.has_value()) {
+        cd->SetIsZip64(true);
+        cd->SetZip64ExtendedInfo(zip64Info);
+        if (zip64Info->HasCompressedSize()) {
+            cd->SetCompressedSizeActual(zip64Info->GetCompressedSize());
+        }
+        if (zip64Info->HasUnCompressedSize()) {
+            cd->SetUnCompressedSizeActual(zip64Info->GetUnCompressedSize());
+        }
+        if (zip64Info->HasLocalHeaderOffset()) {
+            cd->SetOffsetActual(zip64Info->GetLocalHeaderOffset());
+        }
+        if (zip64Info->HasDiskNumStart()) {
+            cd->SetDiskNumStartActual(zip64Info->GetDiskNumStart());
+        }
+    } else if (cd->GetCompressedSize() == UINT32_MAX ||
+               cd->GetUnCompressedSize() == UINT32_MAX ||
+               cd->GetOffset() == UINT32_MAX ||
+               cd->GetDiskNumStart() == UINT16_MAX) {
+        SIGNATURE_TOOLS_LOGE("Central Directory has sentinel values but "
+                             "Zip64 Extended Info is missing in extra field");
+        return false;
+    }
     return true;
 }
 
@@ -80,9 +114,11 @@ void CentralDirectory::SetCentralDirectoryValues(ByteBuffer& bf, CentralDirector
     uint32_t centralDirectoryUInt32Value;
     bf.GetUInt32(centralDirectoryUInt32Value);
     cd->SetCompressedSize(centralDirectoryUInt32Value);
+    cd->SetCompressedSizeActual(centralDirectoryUInt32Value);
 
     bf.GetUInt32(centralDirectoryUInt32Value);
     cd->SetUnCompressedSize(centralDirectoryUInt32Value);
+    cd->SetUnCompressedSizeActual(centralDirectoryUInt32Value);
 
     uint16_t centralDirectoryUInt16Value;
     bf.GetUInt16(centralDirectoryUInt16Value);
@@ -96,6 +132,7 @@ void CentralDirectory::SetCentralDirectoryValues(ByteBuffer& bf, CentralDirector
 
     bf.GetUInt16(centralDirectoryUInt16Value);
     cd->SetDiskNumStart(centralDirectoryUInt16Value);
+    cd->SetDiskNumStartActual(centralDirectoryUInt16Value);
 
     bf.GetInt16(centralDirectoryInt16Value);
     cd->SetInternalFile(centralDirectoryInt16Value);
@@ -105,6 +142,7 @@ void CentralDirectory::SetCentralDirectoryValues(ByteBuffer& bf, CentralDirector
 
     bf.GetUInt32(centralDirectoryUInt32Value);
     cd->SetOffset(centralDirectoryUInt32Value);
+    cd->SetOffsetActual(centralDirectoryUInt32Value);
 }
 
 std::string CentralDirectory::ToBytes()
@@ -135,10 +173,136 @@ std::string CentralDirectory::ToBytes()
         bf.PutData(m_extraData.c_str(), m_extraData.size());
     }
     if (m_commentLength > 0) {
-        bf.PutData(m_extraData.c_str(), m_extraData.size());
+        bf.PutData(m_comment.c_str(), m_comment.size());
     }
 
     return bf.ToString();
+}
+
+bool CentralDirectory::UpdateForZip64Mode(bool outputIsZip64)
+{
+    m_isZip64 = outputIsZip64;
+
+    if (outputIsZip64) {
+        // ZIP64 output: set sentinel values for overflow fields, update Zip64 Extended Info
+        if (m_compressedSizeActual > UINT32_MAX) {
+            m_compressedSize = UINT32_MAX;
+        } else {
+            m_compressedSize = static_cast<uint32_t>(m_compressedSizeActual);
+        }
+        if (m_unCompressedSizeActual > UINT32_MAX) {
+            m_unCompressedSize = UINT32_MAX;
+        } else {
+            m_unCompressedSize = static_cast<uint32_t>(m_unCompressedSizeActual);
+        }
+        if (m_offsetActual > UINT32_MAX) {
+            m_offset = UINT32_MAX;
+        } else {
+            m_offset = static_cast<uint32_t>(m_offsetActual);
+        }
+        if (m_diskNumStartActual > UINT16_MAX) {
+            m_diskNumStart = UINT16_MAX;
+        } else {
+            m_diskNumStart = static_cast<uint16_t>(m_diskNumStartActual);
+        }
+
+        // version needed must be >= ZIP64_VERSION_NEEDED for ZIP64
+        if (m_versionExtra < Zip64ExtendedInfo::ZIP64_VERSION_NEEDED) {
+            m_versionExtra = Zip64ExtendedInfo::ZIP64_VERSION_NEEDED;
+        }
+
+        // Rebuild or create Zip64 Extended Info with actual values
+        Zip64ExtendedInfo newInfo(m_compressedSizeActual, m_unCompressedSizeActual,
+                                   m_offsetActual, m_diskNumStartActual);
+        m_zip64ExtendedInfo = newInfo;
+
+        // Rebuild extra field: keep non-ZIP64 parts + new Zip64 Extended Info
+        if (!RebuildExtraField(true)) {
+            return false;
+        }
+    } else {
+        // ZIP32 output: use actual values, remove Zip64 Extended Info from extra field
+        m_compressedSize = static_cast<uint32_t>(m_compressedSizeActual);
+        m_unCompressedSize = static_cast<uint32_t>(m_unCompressedSizeActual);
+        m_offset = static_cast<uint32_t>(m_offsetActual);
+        m_diskNumStart = static_cast<uint16_t>(m_diskNumStartActual);
+        m_zip64ExtendedInfo = std::nullopt;
+
+        // Rebuild extra field: strip Zip64 Extended Info
+        if (!RebuildExtraField(false)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool CentralDirectory::UpdateZip64OffsetAndRebuild(uint64_t newOffset)
+{
+    m_offsetActual = newOffset;
+    if (newOffset > UINT32_MAX) {
+        m_offset = UINT32_MAX;
+    } else {
+        m_offset = static_cast<uint32_t>(newOffset);
+    }
+
+    if (!m_zip64ExtendedInfo.has_value()) {
+        bool needsZip64 = (m_compressedSizeActual > UINT32_MAX) ||
+                          (m_unCompressedSizeActual > UINT32_MAX) ||
+                          (newOffset > UINT32_MAX) ||
+                          (m_diskNumStartActual > UINT16_MAX);
+        if (needsZip64) {
+            m_zip64ExtendedInfo.emplace(m_compressedSizeActual, m_unCompressedSizeActual,
+                                        newOffset, m_diskNumStartActual);
+            m_isZip64 = true;
+        }
+    }
+
+    if (m_zip64ExtendedInfo.has_value()) {
+        m_zip64ExtendedInfo->SetLocalHeaderOffset(newOffset);
+        if (!RebuildExtraField(true)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool CentralDirectory::RebuildExtraField(bool includeZip64)
+{
+    std::string newExtra;
+    if (includeZip64 && m_zip64ExtendedInfo.has_value()) {
+        newExtra = m_zip64ExtendedInfo->ToBytes();
+    }
+
+    // Walk through original extra data, keep non-ZIP64 parts
+    int32_t pos = 0;
+    int32_t extraLen = static_cast<int32_t>(m_extraData.size());
+    while (pos + Zip64ExtendedInfo::EXTRA_SUBFIELD_HEADER_SIZE <= extraLen) {
+        uint16_t headerId = static_cast<uint8_t>(m_extraData[pos]) |
+            (static_cast<uint16_t>(static_cast<uint8_t>(m_extraData[pos + 1])) << 8);
+        uint16_t dataSize = static_cast<uint8_t>(m_extraData[pos + 2]) |
+            (static_cast<uint16_t>(static_cast<uint8_t>(m_extraData[pos + 3])) << 8);
+        int32_t subFieldLen = Zip64ExtendedInfo::EXTRA_SUBFIELD_HEADER_SIZE + dataSize;
+        if (pos + subFieldLen > extraLen) {
+            break;
+        }
+        if (headerId != Zip64ExtendedInfo::HEADER_ID) {
+            newExtra.append(m_extraData, pos, subFieldLen);
+        }
+        pos += subFieldLen;
+    }
+    // Preserve trailing bytes that don't form a complete sub-field header (alignment padding)
+    if (pos < extraLen) {
+        newExtra.append(m_extraData, pos, extraLen - pos);
+    }
+
+    if (newExtra.size() > UINT16_MAX) {
+        SIGNATURE_TOOLS_LOGE("Extra field length %zu exceeds UINT16_MAX", newExtra.size());
+        return false;
+    }
+    m_extraData = newExtra;
+    m_extraLength = static_cast<uint16_t>(newExtra.size());
+    m_length = CD_LENGTH + m_fileNameLength + m_extraLength + m_commentLength;
+    return true;
 }
 
 int CentralDirectory::GetCdLength()
@@ -349,6 +513,76 @@ uint32_t CentralDirectory::GetLength()
 void CentralDirectory::SetLength(uint32_t length)
 {
     m_length = length;
+}
+
+uint64_t CentralDirectory::GetCompressedSizeActual()
+{
+    return m_compressedSizeActual;
+}
+
+void CentralDirectory::SetCompressedSizeActual(uint64_t compressedSize)
+{
+    m_compressedSizeActual = compressedSize;
+}
+
+uint64_t CentralDirectory::GetUnCompressedSizeActual()
+{
+    return m_unCompressedSizeActual;
+}
+
+void CentralDirectory::SetUnCompressedSizeActual(uint64_t unCompressedSize)
+{
+    m_unCompressedSizeActual = unCompressedSize;
+}
+
+uint64_t CentralDirectory::GetOffsetActual()
+{
+    return m_offsetActual;
+}
+
+void CentralDirectory::SetOffsetActual(uint64_t offset)
+{
+    m_offsetActual = offset;
+}
+
+uint32_t CentralDirectory::GetDiskNumStartActual()
+{
+    return m_diskNumStartActual;
+}
+
+void CentralDirectory::SetDiskNumStartActual(uint32_t diskNumStart)
+{
+    m_diskNumStartActual = diskNumStart;
+}
+
+bool CentralDirectory::IsZip64()
+{
+    return m_isZip64;
+}
+
+void CentralDirectory::SetIsZip64(bool isZip64)
+{
+    m_isZip64 = isZip64;
+}
+
+uint64_t CentralDirectory::GetEffectiveOffset()
+{
+    return m_isZip64 ? m_offsetActual : m_offset;
+}
+
+uint64_t CentralDirectory::GetEffectiveCompressedSize()
+{
+    return m_isZip64 ? m_compressedSizeActual : m_compressedSize;
+}
+
+uint64_t CentralDirectory::GetEffectiveUnCompressedSize()
+{
+    return m_isZip64 ? m_unCompressedSizeActual : m_unCompressedSize;
+}
+
+void CentralDirectory::SetZip64ExtendedInfo(const std::optional<Zip64ExtendedInfo>& info)
+{
+    m_zip64ExtendedInfo = info;
 }
 } // namespace SignatureTools
 } // namespace OHOS

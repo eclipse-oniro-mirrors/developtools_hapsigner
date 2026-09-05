@@ -16,6 +16,7 @@
 #include "hap_signer_block_utils.h"
 #include <cinttypes>
 #include <climits>
+#include <memory>
 #include <vector>
 
 #include "signature_info.h"
@@ -28,6 +29,8 @@
 #include "signature_tools_log.h"
 #include "signature_tools_errno.h"
 #include "hap_utils.h"
+#include "zip64_end_of_central_directory.h"
+#include "zip64_end_of_central_directory_locator.h"
 
 namespace OHOS {
 namespace SignatureTools {
@@ -68,10 +71,22 @@ bool HapSignerBlockUtils::FindHapSignature(RandomAccessFile& hapFile, SignatureI
 
     signInfo.hapEocd = eocdAndOffsetInFile.first;
     signInfo.hapEocdOffset = eocdAndOffsetInFile.second;
-    if (!GetCentralDirectoryOffset(signInfo.hapEocd, signInfo.hapEocdOffset, signInfo.hapCentralDirOffset)) {
+
+    if (!GetCentralDirectoryOffset(signInfo.hapEocd, signInfo.hapEocdOffset,
+                                   signInfo.hapCentralDirOffset)) {
         SIGNATURE_TOOLS_LOGE("get CD offset failed");
         PrintErrorNumberMsg("verify", VERIFY_ERROR, "ZIP End of Central Directory not found");
         return false;
+    }
+
+    // Check for ZIP64 sentinel and read actual offset from Zip64 EOCD
+    if (signInfo.hapCentralDirOffset == -1) {
+        signInfo.isZip64 = true;
+        if (!GetZip64CentralDirectoryOffset(hapFile, signInfo.hapEocdOffset,
+                                            signInfo.hapCentralDirOffset)) {
+            SIGNATURE_TOOLS_LOGE("get Zip64 CD offset failed");
+            return false;
+        }
     }
 
     if (!FindHapSigningBlock(hapFile, signInfo.hapCentralDirOffset, signInfo)) {
@@ -188,6 +203,12 @@ bool HapSignerBlockUtils::GetCentralDirectoryOffset(ByteBuffer& eocd, int64_t eo
         return false;
     }
 
+    // Check for ZIP64 sentinel in CD offset or CD size — actual values must be read from Zip64 EOCD
+    if (offsetValue == 0xFFFFFFFF || sizeValue == 0xFFFFFFFF) {
+        centralDirectoryOffset = -1;
+        return true;
+    }
+
     centralDirectoryOffset = static_cast<int64_t>(offsetValue);
     if (centralDirectoryOffset > eocdOffset) {
         SIGNATURE_TOOLS_LOGE("centralDirOffset %" PRId64 " is larger than eocdOffset %" PRId64,
@@ -196,23 +217,103 @@ bool HapSignerBlockUtils::GetCentralDirectoryOffset(ByteBuffer& eocd, int64_t eo
     }
 
     int64_t centralDirectorySize = static_cast<int64_t>(sizeValue);
-    if (centralDirectoryOffset + centralDirectorySize != eocdOffset) {
-        SIGNATURE_TOOLS_LOGE("centralDirOffset %" PRId64 " add centralDirSize %" PRId64 " is"
-                             " not equal to eocdOffset %" PRId64, centralDirectoryOffset,
-                             centralDirectorySize, eocdOffset);
-        return false;
+    int64_t cdEndOffset = centralDirectoryOffset + centralDirectorySize;
+    if (cdEndOffset != eocdOffset) {
+        int64_t expectedWithZip64 = cdEndOffset +
+            Zip64EndOfCentralDirectory::ZIP64_EOCD_LENGTH +
+            Zip64EndOfCentralDirectoryLocator::ZIP64_EOCD_LOCATOR_LENGTH;
+        if (expectedWithZip64 != eocdOffset) {
+            SIGNATURE_TOOLS_LOGE("centralDirOffset %" PRId64 " add centralDirSize %" PRId64 " is"
+                                 " not equal to eocdOffset %" PRId64, centralDirectoryOffset,
+                                 centralDirectorySize, eocdOffset);
+            return false;
+        }
     }
     return true;
 }
 
-bool HapSignerBlockUtils::GetCentralDirectorySize(ByteBuffer& eocd, long& centralDirectorySize)
+bool HapSignerBlockUtils::GetCentralDirectorySize(ByteBuffer& eocd, int64_t& centralDirectorySize)
 {
     uint32_t cdSize;
     if (!eocd.GetUInt32(ZIP_CD_SIZE_OFFSET_IN_EOCD, cdSize)) {
         SIGNATURE_TOOLS_LOGE("GetUInt32 failed");
         return false;
     }
-    centralDirectorySize = (long)cdSize;
+    // Sentinel value indicates Zip64 but caller is using non-Zip64 path
+    if (cdSize == 0xFFFFFFFF) {
+        SIGNATURE_TOOLS_LOGE("CD size sentinel value found but not in Zip64 mode");
+        return false;
+    }
+    centralDirectorySize = static_cast<int64_t>(cdSize);
+    return true;
+}
+
+bool HapSignerBlockUtils::FindZip64EocdLocator(RandomAccessFile& hapFile, int64_t eocdOffset,
+                                               Zip64EndOfCentralDirectoryLocator& locator)
+{
+    int64_t locatorOffset = eocdOffset - Zip64EndOfCentralDirectoryLocator::ZIP64_EOCD_LOCATOR_LENGTH;
+    if (locatorOffset < 0) {
+        SIGNATURE_TOOLS_LOGE("no room for Zip64 EOCD Locator before EOCD");
+        return false;
+    }
+
+    ByteBuffer locatorBuffer(Zip64EndOfCentralDirectoryLocator::ZIP64_EOCD_LOCATOR_LENGTH);
+    int64_t ret = hapFile.ReadFileFullyFromOffset(locatorBuffer, locatorOffset);
+    if (ret < 0) {
+        SIGNATURE_TOOLS_LOGE("read Zip64 EOCD Locator failed: %" PRId64, ret);
+        return false;
+    }
+
+    std::string locatorStr(locatorBuffer.GetBufferPtr(), locatorBuffer.GetLimit());
+    auto parsedLocator = Zip64EndOfCentralDirectoryLocator::GetByBytes(locatorStr);
+    if (!parsedLocator) {
+        SIGNATURE_TOOLS_LOGE("parse Zip64 EOCD Locator failed");
+        return false;
+    }
+    locator = parsedLocator.value();
+    return true;
+}
+
+bool HapSignerBlockUtils::GetZip64CentralDirectoryOffset(RandomAccessFile& hapFile, int64_t eocdOffset,
+                                                         int64_t& centralDirectoryOffset)
+{
+    Zip64EndOfCentralDirectoryLocator locator;
+    if (!FindZip64EocdLocator(hapFile, eocdOffset, locator)) {
+        return false;
+    }
+
+    uint64_t zip64EocdOffset = locator.GetZip64EocdOffset();
+    uint64_t eocdEndOffset = static_cast<uint64_t>(eocdOffset);
+    // Zip64 EOCD must end before the Locator (locatorOffset < eocdEndOffset, so this subsumes the EOCD32 upper bound)
+    uint64_t locatorOffset = eocdEndOffset -
+        Zip64EndOfCentralDirectoryLocator::ZIP64_EOCD_LOCATOR_LENGTH;
+    if (zip64EocdOffset >= locatorOffset ||
+        Zip64EndOfCentralDirectory::ZIP64_EOCD_LENGTH > locatorOffset - zip64EocdOffset) {
+        SIGNATURE_TOOLS_LOGE("zip64 eocd offset out of bounds: %" PRIu64, zip64EocdOffset);
+        return false;
+    }
+
+    ByteBuffer zip64EocdBuffer(Zip64EndOfCentralDirectory::ZIP64_EOCD_LENGTH);
+    int64_t ret = hapFile.ReadFileFullyFromOffset(zip64EocdBuffer, zip64EocdOffset);
+    if (ret < 0) {
+        SIGNATURE_TOOLS_LOGE("read Zip64 EOCD failed: %" PRId64, ret);
+        return false;
+    }
+
+    std::string zip64EocdStr(zip64EocdBuffer.GetBufferPtr(), zip64EocdBuffer.GetLimit());
+    auto zip64Eocd = Zip64EndOfCentralDirectory::GetByBytes(zip64EocdStr);
+    if (!zip64Eocd) {
+        SIGNATURE_TOOLS_LOGE("parse Zip64 EOCD failed");
+        return false;
+    }
+
+    int64_t cdOffset = static_cast<int64_t>(zip64Eocd->GetOffset());
+    if (cdOffset < 0 || cdOffset >= static_cast<int64_t>(zip64EocdOffset) || cdOffset >= eocdOffset) {
+        SIGNATURE_TOOLS_LOGE("zip64 central directory offset %" PRId64
+                             " is invalid (eocdOffset=%" PRId64 ")", cdOffset, eocdOffset);
+        return false;
+    }
+    centralDirectoryOffset = cdOffset;
     return true;
 }
 
@@ -240,13 +341,15 @@ bool HapSignerBlockUtils::FindHapSigningBlock(RandomAccessFile& hapFile, int64_t
      * 16 bytes: magic
      * int32: version
      */
+    int64_t readOffset = centralDirOffset - ZIP_HEAD_OF_SIGNING_BLOCK_LENGTH;
+
     ByteBuffer hapBlockHead(ZIP_HEAD_OF_SIGNING_BLOCK_LENGTH);
-    int64_t ret = hapFile.ReadFileFullyFromOffset(hapBlockHead,
-                                                  centralDirOffset - hapBlockHead.GetCapacity());
+    int64_t ret = hapFile.ReadFileFullyFromOffset(hapBlockHead, readOffset);
     if (ret < 0) {
         SIGNATURE_TOOLS_LOGE("read hapBlockHead error: %" PRId64, ret);
         return false;
     }
+
     HapSignBlockHead hapSignBlockHead;
     if (!ParseSignBlockHead(hapSignBlockHead, hapBlockHead)) {
         SIGNATURE_TOOLS_LOGE("ParseSignBlockHead failed");
@@ -370,6 +473,8 @@ bool HapSignerBlockUtils::FindHapSubSigningBlock(RandomAccessFile& hapFile, int3
             return false;
         }
         readLen += headLength;
+        SIGNATURE_TOOLS_LOGI("subSigningBlock[%d]: type=%u, offset=%u, length=%u, blockCount=%d",
+            i, subSignBlockHead.type, subSignBlockHead.offset, subSignBlockHead.length, blockCount);
         if (!ClassifyBothHapSubSigningBlock(signInfo, blockCount, signBuffer, subSignBlockHead.type)) {
             SIGNATURE_TOOLS_LOGE("subSigningBlock error, type is %d", subSignBlockHead.type);
             return false;
@@ -481,19 +586,92 @@ bool HapSignerBlockUtils::GetOptionalBlockIndex(std::vector<OptionalBlock>& opti
     return false;
 }
 
+std::optional<ByteBuffer> HapSignerBlockUtils::BuildZip64EocdBuffer(
+    RandomAccessFile& hapFile, SignatureInfo& signInfo, int64_t centralDirSize)
+{
+    ByteBuffer zip64Buf(Zip64EndOfCentralDirectory::ZIP64_EOCD_LENGTH +
+        Zip64EndOfCentralDirectoryLocator::ZIP64_EOCD_LOCATOR_LENGTH);
+    if (hapFile.ReadFileFullyFromOffset(zip64Buf,
+        signInfo.hapCentralDirOffset + centralDirSize) < 0) {
+        return std::nullopt;
+    }
+    int64_t signingBlockSize = signInfo.hapCentralDirOffset - signInfo.hapSigningBlockOffset;
+
+    // Normalize Zip64EOCD CD offset to signing path's original value
+    auto zip64Eocd = Zip64EndOfCentralDirectory::GetByBytes(
+        std::string(zip64Buf.GetBufferPtr(), Zip64EndOfCentralDirectory::ZIP64_EOCD_LENGTH));
+    if (zip64Eocd) {
+        zip64Eocd->SetOffset(static_cast<uint64_t>(signInfo.hapSigningBlockOffset));
+        zip64Buf.SetPosition(0);
+        zip64Buf.PutData(zip64Eocd->ToBytes().c_str(), Zip64EndOfCentralDirectory::ZIP64_EOCD_LENGTH);
+    }
+
+    // Normalize Locator Zip64EocdOffset by subtracting signingBlockSize
+    auto locator = Zip64EndOfCentralDirectoryLocator::GetByBytes(
+        std::string(zip64Buf.GetBufferPtr() + Zip64EndOfCentralDirectory::ZIP64_EOCD_LENGTH,
+                    Zip64EndOfCentralDirectoryLocator::ZIP64_EOCD_LOCATOR_LENGTH));
+    if (locator) {
+        uint64_t origOffset = locator->GetZip64EocdOffset();
+        if (origOffset >= static_cast<uint64_t>(signingBlockSize)) {
+            locator->SetZip64EocdOffset(origOffset - static_cast<uint64_t>(signingBlockSize));
+        }
+        zip64Buf.SetPosition(Zip64EndOfCentralDirectory::ZIP64_EOCD_LENGTH);
+        zip64Buf.PutData(locator->ToBytes().c_str(),
+            Zip64EndOfCentralDirectoryLocator::ZIP64_EOCD_LOCATOR_LENGTH);
+    }
+
+    // Concatenate [Zip64EOCD][Locator][EOCD32]
+    int32_t eocd32Len = signInfo.hapEocd.GetCapacity();
+    ByteBuffer result(zip64Buf.GetCapacity() + eocd32Len);
+    zip64Buf.SetPosition(0);
+    result.PutData(zip64Buf.GetBufferPtr(), zip64Buf.GetCapacity());
+    signInfo.hapEocd.SetPosition(0);
+    result.PutData(signInfo.hapEocd.GetBufferPtr(), eocd32Len);
+    result.Flip();
+    return result;
+}
+
+std::unique_ptr<DataSource> HapSignerBlockUtils::CreateEocdDataSource(
+    RandomAccessFile& hapFile, SignatureInfo& signInfo, int64_t centralDirSize,
+    ByteBuffer& eocdFullBuffer)
+{
+    if (signInfo.isZip64) {
+        auto eocdBuf = BuildZip64EocdBuffer(hapFile, signInfo, centralDirSize);
+        if (!eocdBuf) {
+            return nullptr;
+        }
+        eocdFullBuffer = std::move(*eocdBuf);
+        return std::make_unique<ByteBufferDataSource>(eocdFullBuffer);
+    }
+    return std::make_unique<ByteBufferDataSource>(signInfo.hapEocd);
+}
+
 bool HapSignerBlockUtils::VerifyHapIntegrity(
     Pkcs7Context& digestInfo, RandomAccessFile& hapFile, SignatureInfo& signInfo)
 {
-    if (!SetUnsignedInt32(signInfo.hapEocd, ZIP_CD_OFFSET_IN_EOCD, signInfo.hapSigningBlockOffset)) {
+    int64_t eocdCdOffset = signInfo.isZip64 ? static_cast<int64_t>(0xFFFFFFFF)
+                                            : signInfo.hapSigningBlockOffset;
+    if (!SetUnsignedInt32(signInfo.hapEocd, ZIP_CD_OFFSET_IN_EOCD, eocdCdOffset)) {
         SIGNATURE_TOOLS_LOGE("Set central dir offset failed");
         return false;
     }
 
     int64_t centralDirSize = signInfo.hapEocdOffset - signInfo.hapCentralDirOffset;
+    if (signInfo.isZip64) {
+        centralDirSize -= Zip64EndOfCentralDirectory::ZIP64_EOCD_LENGTH +
+            Zip64EndOfCentralDirectoryLocator::ZIP64_EOCD_LOCATOR_LENGTH;
+    }
+
     FileDataSource contentsZip(hapFile, 0, signInfo.hapSigningBlockOffset, 0);
     FileDataSource centralDir(hapFile, signInfo.hapCentralDirOffset, centralDirSize, 0);
-    ByteBufferDataSource eocd(signInfo.hapEocd);
-    DataSource* content[ZIP_BLOCKS_NUM_NEED_DIGEST] = {&contentsZip, &centralDir, &eocd};
+
+    ByteBuffer eocdFullBuffer;
+    auto eocdHolder = CreateEocdDataSource(hapFile, signInfo, centralDirSize, eocdFullBuffer);
+    if (!eocdHolder) {
+        return false;
+    }
+
+    DataSource* content[ZIP_BLOCKS_NUM_NEED_DIGEST] = {&contentsZip, &centralDir, eocdHolder.get()};
     int32_t nId = DigestCommon::GetDigestAlgorithmId(digestInfo.digestAlgorithm);
     DigestParameter digestParam = GetDigestParameter(nId);
     ByteBuffer chunkDigest;

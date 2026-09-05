@@ -17,12 +17,13 @@
 #define SIGNATRUETOOLS_ZIP_SIGNER_H
 
 #include <fstream>
-#include <optional>
 #include <string>
 #include <vector>
 
 #include "endof_central_directory.h"
 #include "signature_tools_log.h"
+#include "zip64_end_of_central_directory.h"
+#include "zip64_end_of_central_directory_locator.h"
 #include "zip_entry.h"
 
 namespace OHOS {
@@ -41,11 +42,15 @@ public:
     ZipSigner()
     {
         m_endOfCentralDirectory = nullptr;
+        m_zip64Eocd = nullptr;
+        m_zip64EocdLocator = nullptr;
     }
 
     ~ZipSigner()
     {
         delete m_endOfCentralDirectory;
+        delete m_zip64Eocd;
+        delete m_zip64EocdLocator;
         for (auto& zipEntry : m_zipEntries) {
             delete zipEntry;
         }
@@ -65,33 +70,35 @@ public:
      *
      * @param alignment int alignment
      */
-    void Alignment(int alignment);
+    bool Alignment(int alignment);
 
-    void RemoveSignBlock();
+    bool RemoveSignBlock();
 
     std::vector<ZipEntry*>& GetZipEntries();
 
     void SetZipEntries(const std::vector<ZipEntry*>& zipEntries);
 
-    uint32_t GetSigningOffset();
+    uint64_t GetSigningOffset();
 
-    void SetSigningOffset(uint32_t signingOffset);
+    void SetSigningOffset(uint64_t signingOffset);
 
     std::string GetSigningBlock();
 
     void SetSigningBlock(const std::string& signingBlock);
 
-    uint32_t GetCDOffset();
+    uint64_t GetCDOffset();
 
-    void SetCDOffset(uint32_t cDOffset);
+    void SetCDOffset(uint64_t cDOffset);
 
-    uint32_t GetEOCDOffset();
+    uint64_t GetEOCDOffset();
 
-    void SetEOCDOffset(uint32_t eOCDOffset);
+    void SetEOCDOffset(uint64_t eOCDOffset);
 
     EndOfCentralDirectory* GetEndOfCentralDirectory();
 
     void SetEndOfCentralDirectory(EndOfCentralDirectory* endOfCentralDirectory);
+
+    void SetForceZip64(bool forceZip64);
 
 private:
     EndOfCentralDirectory* GetZipEndOfCentralDirectory(std::ifstream& input);
@@ -103,21 +110,41 @@ private:
     bool GetZipEntries(std::ifstream& input);
 
     /* sort uncompress entry in the front. */
-    void Sort();
+    bool Sort();
 
-    void ResetOffset();
+    bool ResetOffset();
+    bool DetermineZip64Needed();
+    bool UpdateZip64OffsetsInCD();
+
+    EndOfCentralDirectory* ParseZip64IfPresent(std::ifstream& input,
+        EndOfCentralDirectory* eocd, uint64_t fileSize);
+    bool ReadZip64EocdLocator(std::ifstream& input);
+    bool ReadZip64Eocd(std::ifstream& input);
+    bool UpdateEntriesForMode(bool zip64);
+    uint64_t RecalcLengthsAndOffsets(bool useZip64Offset);
+    void FillEocdAndZip64(bool needZip64);
+    bool WriteZipEntries(std::ifstream& input, std::ofstream& output);
+    bool WriteTrailingSections(std::ofstream& output);
 
     std::vector<ZipEntry*> m_zipEntries;
 
-    uint32_t m_signingOffset = 0;
+    uint64_t m_signingOffset = 0;
 
     std::string m_signingBlock;
 
-    uint32_t m_cDOffset = 0;
+    uint64_t m_cDOffset = 0;
 
-    uint32_t m_eOCDOffset = 0;
+    uint64_t m_eOCDOffset = 0;
 
     EndOfCentralDirectory* m_endOfCentralDirectory;
+
+    bool m_isZip64 = false;
+
+    bool m_forceZip64 = false;
+
+    Zip64EndOfCentralDirectory* m_zip64Eocd;
+
+    Zip64EndOfCentralDirectoryLocator* m_zip64EocdLocator;
 };
 } // namespace SignatureTools
 } // namespace OHOS

@@ -15,6 +15,8 @@
 #ifndef SIGNATRUETOOLS_SIGNING_BLOCK_UTILS_H
 #define SIGNATRUETOOLS_SIGNING_BLOCK_UTILS_H
 
+#include <memory>
+#include <optional>
 #include <vector>
 
 #include "data_source.h"
@@ -24,6 +26,7 @@
 #include "digest_parameter.h"
 #include "pkcs7_context.h"
 #include "signature_info.h"
+#include "zip64_end_of_central_directory_locator.h"
 
 namespace OHOS {
 namespace SignatureTools {
@@ -94,7 +97,16 @@ public:
     DLL_EXPORT static bool FindEocdInSearchBuffer(ByteBuffer& zipContents, int& offset);
     DLL_EXPORT static bool GetCentralDirectoryOffset(ByteBuffer& eocd, int64_t eocdOffset,
                                                      int64_t& centralDirectoryOffset);
-    DLL_EXPORT static bool GetCentralDirectorySize(ByteBuffer& eocd, long& centralDirectorySize);
+    DLL_EXPORT static bool GetCentralDirectorySize(ByteBuffer& eocd, int64_t& centralDirectorySize);
+    DLL_EXPORT static bool FindZip64EocdLocator(RandomAccessFile& hapFile, int64_t eocdOffset,
+                                                 Zip64EndOfCentralDirectoryLocator& locator);
+    DLL_EXPORT static bool GetZip64CentralDirectoryOffset(RandomAccessFile& hapFile, int64_t eocdOffset,
+                                                          int64_t& centralDirectoryOffset);
+    static std::optional<ByteBuffer> BuildZip64EocdBuffer(
+        RandomAccessFile& hapFile, SignatureInfo& signInfo, int64_t centralDirSize);
+    static std::unique_ptr<DataSource> CreateEocdDataSource(
+        RandomAccessFile& hapFile, SignatureInfo& signInfo, int64_t centralDirSize,
+        ByteBuffer& eocdFullBuffer);
     static bool FindHapSigningBlock(RandomAccessFile& hapFile, int64_t centralDirOffset,
                                     SignatureInfo& signInfo);
     static bool FindHapSubSigningBlock(RandomAccessFile& hapFile,

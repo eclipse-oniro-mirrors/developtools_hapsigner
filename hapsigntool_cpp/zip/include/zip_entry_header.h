@@ -16,9 +16,11 @@
 #ifndef SIGNATRUETOOLS_ZIP_ENTRY_HEADER_H
 #define SIGNATRUETOOLS_ZIP_ENTRY_HEADER_H
 
+#include <optional>
 #include <string>
 
 #include "byte_buffer.h"
+#include "zip64_extended_info.h"
 
 namespace OHOS {
 namespace SignatureTools {
@@ -58,9 +60,11 @@ public:
 
     void ReadFileName(const std::string& bytes);
 
-    void ReadExtra(const std::string& bytes);
+    bool ReadExtra(const std::string& bytes);
 
     std::string ToBytes();
+
+    bool UpdateForZip64Mode(bool outputIsZip64);
 
     static int GetHeaderLength();
 
@@ -94,9 +98,17 @@ public:
 
     void SetCompressedSize(uint32_t compressedSize);
 
+    uint64_t GetCompressedSizeActual();
+
+    void SetCompressedSizeActual(uint64_t compressedSize);
+
     uint32_t GetUnCompressedSize();
 
     void SetUnCompressedSize(uint32_t unCompressedSize);
+
+    uint64_t GetUnCompressedSizeActual();
+
+    void SetUnCompressedSizeActual(uint64_t unCompressedSize);
 
     uint16_t GetFileNameLength();
 
@@ -118,7 +130,13 @@ public:
 
     void SetLength(uint32_t length);
 
+    bool IsZip64();
+
+    void SetIsZip64(bool isZip64);
+
 private:
+    bool RebuildExtraField(bool includeZip64);
+
     /* 2 bytes */
     short m_version = 0;
 
@@ -140,8 +158,14 @@ private:
     /* 4 bytes */
     uint32_t m_compressedSize = 0;
 
+    /* actual 64-bit value (for ZIP64) */
+    uint64_t m_compressedSizeActual = 0;
+
     /* 4 bytes */
     uint32_t m_unCompressedSize = 0;
+
+    /* actual 64-bit value (for ZIP64) */
+    uint64_t m_unCompressedSizeActual = 0;
 
     /* 2 bytes */
     uint16_t m_fileNameLength = 0;
@@ -156,6 +180,12 @@ private:
     std::string m_extraData;
 
     uint32_t m_length = 0;
+
+    /* ZIP64 flag */
+    bool m_isZip64 = false;
+
+    /* ZIP64 Extended Information */
+    std::optional<Zip64ExtendedInfo> m_zip64ExtendedInfo;
 };
 } // namespace SignatureTools
 } // namespace OHOS

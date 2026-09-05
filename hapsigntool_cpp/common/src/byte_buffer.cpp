@@ -98,6 +98,9 @@ ByteBuffer& ByteBuffer::operator=(const ByteBuffer& other)
     }
     // std::unique_ptr reset()，will first release the original object and then point to the new object
     buffer = nullptr;
+    position = 0;
+    limit = 0;
+    capacity = 0;
     Init(other.GetCapacity());
     if (buffer != nullptr && other.GetBufferPtr() != nullptr && capacity > 0) {
         if (memcpy_s(buffer.get(), capacity, other.GetBufferPtr(), other.GetCapacity()) != EOK) {
@@ -205,6 +208,29 @@ bool ByteBuffer::GetUInt32(uint32_t& value)
         return false;
     }
     position += sizeof(uint32_t);
+    return true;
+}
+
+bool ByteBuffer::GetUInt64(uint64_t& value)
+{
+    if (!GetUInt64(0, value)) {
+        SIGNATURE_TOOLS_LOGE("GetUInt64 failed");
+        return false;
+    }
+    position += sizeof(uint64_t);
+    return true;
+}
+
+bool ByteBuffer::GetUInt64(int32_t index, uint64_t& value)
+{
+    if (!CheckInputForGettingData(index, sizeof(uint64_t))) {
+        SIGNATURE_TOOLS_LOGE("Failed to get UInt64");
+        return false;
+    }
+    if (memcpy_s(&value, sizeof(value), (buffer.get() + position + index), sizeof(uint64_t)) != EOK) {
+        SIGNATURE_TOOLS_LOGE("memcpy_s failed");
+        return false;
+    }
     return true;
 }
 
@@ -422,6 +448,26 @@ void ByteBuffer::PutUInt32(uint32_t value)
     }
 }
 
+void ByteBuffer::PutUInt64(uint64_t value)
+{
+    if (limit - position >= static_cast<int64_t>(sizeof(value))) {
+        if (memcpy_s(buffer.get() + position, limit - position, &value, sizeof(value)) != EOK) {
+            SIGNATURE_TOOLS_LOGE("memcpy_s failed");
+        } else {
+            position += sizeof(value);
+        }
+    }
+}
+
+void ByteBuffer::PutUInt64(int32_t offset, uint64_t value)
+{
+    if (buffer != nullptr && offset >= 0 && limit - offset >= static_cast<int32_t>(sizeof(value))) {
+        if (memcpy_s((buffer.get() + offset), (limit - offset), &value, sizeof(value)) != EOK) {
+            SIGNATURE_TOOLS_LOGE("memcpy_s failed");
+        }
+    }
+}
+
 void ByteBuffer::ClearData()
 {
     if (buffer != nullptr && position < capacity) {
@@ -624,12 +670,10 @@ bool ByteBuffer::IsEqual(const std::string& other)
 
 void ByteBuffer::SetCapacity(int32_t cap)
 {
-    if (buffer != nullptr) {
-        buffer = nullptr;
-        position = 0;
-        limit = 0;
-        capacity = 0;
-    }
+    buffer = nullptr;
+    position = 0;
+    limit = 0;
+    capacity = 0;
     Init(cap);
 }
 

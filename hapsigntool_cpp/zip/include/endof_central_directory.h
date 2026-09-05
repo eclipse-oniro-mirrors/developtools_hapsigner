@@ -89,17 +89,43 @@ public:
 
     void SetThisDiskCDNum(uint16_t thisDiskCDNum);
 
+    uint64_t GetThisDiskCDNumActual();
+
+    void SetThisDiskCDNumActual(uint64_t thisDiskCDNum);
+
     uint16_t GetcDTotal();
 
     void SetcDTotal(uint16_t cDTotal);
+
+    uint64_t GetcDTotalActual();
+
+    void SetcDTotalActual(uint64_t cDTotal);
 
     uint32_t GetcDSize();
 
     void SetcDSize(uint32_t cDSize);
 
+    uint64_t GetcDSizeActual();
+
+    void SetcDSizeActual(uint64_t cDSize);
+
     uint32_t GetOffset();
 
     void SetOffset(uint32_t offset);
+
+    uint64_t GetOffsetActual();
+
+    void SetOffsetActual(uint64_t offset);
+
+    uint64_t GetEffectiveOffset();
+
+    uint64_t GetEffectiveCDSize();
+
+    uint64_t GetEffectiveCDTotal();
+
+    bool IsZip64();
+
+    void SetIsZip64(bool isZip64);
 
     uint16_t GetCommentLength();
 
@@ -125,14 +151,29 @@ private:
     /* 2 bytes */
     uint16_t m_thisDiskCDNum = 0;
 
+    /* actual 64-bit value (for ZIP64) */
+    uint64_t m_thisDiskCDNumActual = 0;
+
     /* 2 bytes */
     uint16_t m_cDTotal = 0;
+
+    /* actual 64-bit value (for ZIP64) */
+    uint64_t m_cDTotalActual = 0;
 
     /* 4 bytes */
     uint32_t m_cDSize = 0;
 
+    /* actual 64-bit value (for ZIP64) */
+    uint64_t m_cDSizeActual = 0;
+
     /* 4bytes */
     uint32_t m_offset = 0;
+
+    /* actual 64-bit value (for ZIP64) */
+    uint64_t m_offsetActual = 0;
+
+    /* ZIP64 flag */
+    bool m_isZip64 = false;
 
     /* 2 bytes */
     uint16_t m_commentLength = 0;

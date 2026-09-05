@@ -44,6 +44,7 @@
 #include "random_access_file.h"
 #include "zip_entry_header.h"
 #include "zip_signer.h"
+#include "zip64_end_of_central_directory.h"
 #include "zip_data_input.h"
 #include "zip_utils.h"
 #include "code_signing.h"
@@ -78,17 +79,31 @@ public:
 
 protected:
     struct DataSourceContents {
-        DataSource* beforeCentralDir = nullptr;
-        ByteBufferDataSource* centralDir = nullptr;
-        ByteBufferDataSource* endOfCentralDir = nullptr;
+        std::unique_ptr<DataSource> beforeCentralDir;
+        std::unique_ptr<ByteBufferDataSource> centralDir;
+        std::unique_ptr<ByteBufferDataSource> endOfCentralDir;
         ByteBuffer cDByteBuffer;
         std::pair<ByteBuffer, int64_t> eocdPair;
+        ByteBuffer eocdFullBuffer;
         int64_t cDOffset = 0LL;
-        ~DataSourceContents()
+        int64_t cDSize = 0LL;
+        bool isZip64 = false;
+        Zip64EndOfCentralDirectory zip64Eocd;
+        DataSourceContents() = default;
+        DataSourceContents(const DataSourceContents&) = delete;
+        DataSourceContents& operator=(const DataSourceContents&) = delete;
+        void Reset()
         {
-            delete beforeCentralDir;
-            delete centralDir;
-            delete endOfCentralDir;
+            beforeCentralDir.reset();
+            centralDir.reset();
+            endOfCentralDir.reset();
+            cDByteBuffer = ByteBuffer();
+            eocdPair = {};
+            eocdFullBuffer = ByteBuffer();
+            cDOffset = 0LL;
+            cDSize = 0LL;
+            isZip64 = false;
+            zip64Eocd = Zip64EndOfCentralDirectory();
         }
     };
 
@@ -132,9 +147,16 @@ private:
     bool CopyFileAndAlignment(std::ifstream& input, std::ofstream& tmpOutput, int alignment, ZipSigner& zip);
 
     bool CheckSignatureAlg();
+    bool ValidateSignConstraints(const std::string& inputFilePath, bool isZip64);
+    bool ValidateOutputFileSize(DataSourceContents& dataSrcContents, ByteBuffer& signingBlock);
 
     int LoadOptionalBlock(const std::string& file, int type);
     bool CheckFile(const std::string& filePath);
+    bool RedoSignWithZip64(SignerConfig& signerConfig, std::shared_ptr<ZipSigner>& zip,
+                           std::shared_ptr<RandomAccessFile>& outputHap,
+                           DataSourceContents& dataSrcContents, ByteBuffer& signingBlock);
+    bool DoSignBlock(SignerConfig& signerConfig, DataSourceContents& dataSrcContents,
+                     const std::string& suffix, ZipSigner& zip, ByteBuffer& signingBlock);
 
     int GetX509Certificates(Options* options, STACK_OF(X509)** ret);
     int GetPublicCerts(Options* options, STACK_OF(X509)** ret);
@@ -177,18 +199,24 @@ private:
     bool AppendReCodeSignBlock(SignerConfig* signerConfig, std::string outputFilePath,
                              const std::string& suffix, int64_t centralDirectoryOffset, ZipSigner& zip);
     int64_t ComputeCodeSignOffset(int64_t centralDirectoryOffset);
-    bool OutputSignedFile(RandomAccessFile* outputHap, long centralDirectoryOffset,
-                          ByteBuffer& signingBlock, ByteBufferDataSource* centralDirectory, ByteBuffer& eocdBuffer);
+    bool OutputSignedFile(RandomAccessFile* outputHap, DataSourceContents& dataSrcContents,
+                          ByteBuffer& signingBlock);
 
     bool InitDataSourceContents(RandomAccessFile& outputHap, DataSourceContents& dataSrcContents);
+    bool ParseZip64IfPresent(RandomAccessFile& outputHap, DataSourceContents& dataSrcContents);
+    bool ComputeCentralDirectorySize(DataSourceContents& dataSrcContents, int64_t& cDSize);
+    bool BuildZip64EocdSegment(DataSourceContents& dataSrcContents, int64_t cDSize);
 
     static std::vector<std::string> VALID_SIGN_ALG_NAME;
     static constexpr int FOUR_BYTE = 4;
+    static constexpr const char* APP_SUFFIX = ".app";
+    static constexpr size_t APP_SUFFIX_LEN = 4;
     static const std::string PROFILE_PREFIX;
     static constexpr int PROPERTY_BLOCK_HEADER_SIZE = 12;
     static constexpr int PROPERTY_BLOCK_COUNT = 2; // The sum of property block and hap sign block
     static constexpr int ADDITIONAL_BLOCK_COUNT = 1; // The num of subblock head before codesign block in property block
     std::string profileContent;
+    std::string tmpOutputFilePath;
 };
 } // namespace SignatureTools
 } // namespace OHOS

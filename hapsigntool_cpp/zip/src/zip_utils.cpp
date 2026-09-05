@@ -24,6 +24,41 @@ namespace OHOS {
 namespace SignatureTools {
 bool ZipUtils::SetCentralDirectoryOffset(ByteBuffer& eocd, int64_t offset)
 {
+    return SetCentralDirectoryOffset(eocd, offset, nullptr);
+}
+
+bool ZipUtils::SetCentralDirectoryOffset(ByteBuffer& eocd, int64_t offset,
+    Zip64EndOfCentralDirectory* zip64Eocd)
+{
+    if (offset < 0) {
+        SIGNATURE_TOOLS_LOGE("Set Central Directory Offset failed: offset %" PRId64 " is negative", offset);
+        return false;
+    }
+    if (offset > UINT32_MAX_VALUE) {
+        // Offset overflows 32 bits: Zip64 EOCD is required to store the actual value
+        if (zip64Eocd == nullptr) {
+            SIGNATURE_TOOLS_LOGE("Set Central Directory Offset failed: offset %" PRId64
+                " overflows UINT32_MAX but no Zip64 EOCD provided", offset);
+            return false;
+        }
+        // ZIP64: write sentinel value in EOCD32 and actual value in Zip64 EOCD
+        if (!SetUInt32ToBuffer(eocd, eocd.GetPosition() + ZIP_CENTRAL_DIR_OFFSET_IN_EOCD,
+            static_cast<int64_t>(0xFFFFFFFF))) {
+            return false;
+        }
+        zip64Eocd->SetOffset(static_cast<uint64_t>(offset));
+        return true;
+    }
+    if (zip64Eocd != nullptr) {
+        // ZIP64 mode: write sentinel value in EOCD32 and actual value in Zip64 EOCD
+        if (!SetUInt32ToBuffer(eocd, eocd.GetPosition() + ZIP_CENTRAL_DIR_OFFSET_IN_EOCD,
+            static_cast<int64_t>(0xFFFFFFFF))) {
+            return false;
+        }
+        zip64Eocd->SetOffset(static_cast<uint64_t>(offset));
+        return true;
+    }
+    // ZIP32 mode: write actual value directly in EOCD32
     if (!SetUInt32ToBuffer(eocd, eocd.GetPosition() + ZIP_CENTRAL_DIR_OFFSET_IN_EOCD, offset)) {
         SIGNATURE_TOOLS_LOGE("Set Central Directory Offset failed.");
         return false;
@@ -42,5 +77,6 @@ bool ZipUtils::SetUInt32ToBuffer(ByteBuffer& buffer, int offset, int64_t value)
     buffer.PutInt32(offset, static_cast<int>(value));
     return true;
 }
+
 } // namespace SignatureTools
 } // namespace OHOS

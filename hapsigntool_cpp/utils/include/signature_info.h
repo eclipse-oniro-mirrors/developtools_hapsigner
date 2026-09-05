@@ -32,6 +32,7 @@ struct SignatureInfo {
     ByteBuffer hapEocd;
     std::vector<OptionalBlock> optionBlocks;
     int32_t version = 0;
+    bool isZip64 = false;
 };
 } // namespace SignatureTools
 } // namespace OHOS

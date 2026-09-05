@@ -53,9 +53,11 @@ ZipEntryHeader* ZipEntryHeader::GetZipEntryHeader(const std::string& bytes)
     uint32_t entryHeaderUInt32Value;
     bf.GetUInt32(entryHeaderUInt32Value);
     entryHeader->SetCompressedSize(entryHeaderUInt32Value);
+    entryHeader->SetCompressedSizeActual(entryHeaderUInt32Value);
 
     bf.GetUInt32(entryHeaderUInt32Value);
     entryHeader->SetUnCompressedSize(entryHeaderUInt32Value);
+    entryHeader->SetUnCompressedSizeActual(entryHeaderUInt32Value);
 
     uint16_t entryHeaderUInt16Value;
     bf.GetUInt16(entryHeaderUInt16Value);
@@ -79,14 +81,33 @@ void ZipEntryHeader::ReadFileName(const std::string& bytes)
     }
 }
 
-void ZipEntryHeader::ReadExtra(const std::string& bytes)
+bool ZipEntryHeader::ReadExtra(const std::string& bytes)
 {
     ByteBuffer bf(bytes.c_str(), bytes.size());
     if (m_extraLength > 0) {
         std::string extra(m_extraLength, 0);
         bf.GetData(&extra[0], m_extraLength);
         m_extraData = extra;
+
+        // Parse ZIP64 Extended Information from extra field
+        auto zip64Info = Zip64ExtendedInfo::Parse(extra, m_compressedSize,
+            m_unCompressedSize, 0, 0);
+        if (zip64Info.has_value()) {
+            m_isZip64 = true;
+            m_zip64ExtendedInfo = zip64Info;
+            if (zip64Info->HasCompressedSize()) {
+                m_compressedSizeActual = zip64Info->GetCompressedSize();
+            }
+            if (zip64Info->HasUnCompressedSize()) {
+                m_unCompressedSizeActual = zip64Info->GetUnCompressedSize();
+            }
+        } else if (m_compressedSize == UINT32_MAX || m_unCompressedSize == UINT32_MAX) {
+            SIGNATURE_TOOLS_LOGE("Local File Header has sentinel values but "
+                                 "Zip64 Extended Info is missing in extra field");
+            return false;
+        }
     }
+    return true;
 }
 
 std::string ZipEntryHeader::ToBytes()
@@ -113,6 +134,86 @@ std::string ZipEntryHeader::ToBytes()
     }
 
     return bf.ToString();
+}
+
+bool ZipEntryHeader::UpdateForZip64Mode(bool outputIsZip64)
+{
+    m_isZip64 = outputIsZip64;
+
+    if (outputIsZip64) {
+        if (m_compressedSizeActual > UINT32_MAX) {
+            m_compressedSize = UINT32_MAX;
+        } else {
+            m_compressedSize = static_cast<uint32_t>(m_compressedSizeActual);
+        }
+        if (m_unCompressedSizeActual > UINT32_MAX) {
+            m_unCompressedSize = UINT32_MAX;
+        } else {
+            m_unCompressedSize = static_cast<uint32_t>(m_unCompressedSizeActual);
+        }
+
+        // version needed must be >= ZIP64_VERSION_NEEDED for ZIP64
+        if (m_version < Zip64ExtendedInfo::ZIP64_VERSION_NEEDED) {
+            m_version = Zip64ExtendedInfo::ZIP64_VERSION_NEEDED;
+        }
+
+        Zip64ExtendedInfo newInfo(m_compressedSizeActual, m_unCompressedSizeActual, 0, 0);
+        m_zip64ExtendedInfo = newInfo;
+
+        // Rebuild extra field
+        if (!RebuildExtraField(true)) {
+            return false;
+        }
+    } else {
+        m_compressedSize = static_cast<uint32_t>(m_compressedSizeActual);
+        m_unCompressedSize = static_cast<uint32_t>(m_unCompressedSizeActual);
+        m_zip64ExtendedInfo = std::nullopt;
+
+        // Rebuild extra field: strip Zip64 Extended Info
+        if (!RebuildExtraField(false)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool ZipEntryHeader::RebuildExtraField(bool includeZip64)
+{
+    std::string newExtra;
+    if (includeZip64 && m_zip64ExtendedInfo.has_value()) {
+        newExtra = m_zip64ExtendedInfo->ToBytes();
+    }
+
+    // Walk through original extra data, keep non-ZIP64 parts
+    int32_t pos = 0;
+    int32_t extraLen = static_cast<int32_t>(m_extraData.size());
+    while (pos + Zip64ExtendedInfo::EXTRA_SUBFIELD_HEADER_SIZE <= extraLen) {
+        uint16_t headerId = static_cast<uint8_t>(m_extraData[pos]) |
+            (static_cast<uint16_t>(static_cast<uint8_t>(m_extraData[pos + 1])) << 8);
+        uint16_t dataSize = static_cast<uint8_t>(m_extraData[pos + 2]) |
+            (static_cast<uint16_t>(static_cast<uint8_t>(m_extraData[pos + 3])) << 8);
+        int32_t subFieldLen = Zip64ExtendedInfo::EXTRA_SUBFIELD_HEADER_SIZE + dataSize;
+        if (pos + subFieldLen > extraLen) {
+            break;
+        }
+        if (headerId != Zip64ExtendedInfo::HEADER_ID) {
+            newExtra.append(m_extraData, pos, subFieldLen);
+        }
+        pos += subFieldLen;
+    }
+    // Preserve trailing bytes that don't form a complete sub-field header (alignment padding)
+    if (pos < extraLen) {
+        newExtra.append(m_extraData, pos, extraLen - pos);
+    }
+
+    if (newExtra.size() > UINT16_MAX) {
+        SIGNATURE_TOOLS_LOGE("Extra field length %zu exceeds UINT16_MAX", newExtra.size());
+        return false;
+    }
+    m_extraData = newExtra;
+    m_extraLength = static_cast<uint16_t>(newExtra.size());
+    m_length = HEADER_LENGTH + m_fileNameLength + m_extraLength;
+    return true;
 }
 
 int ZipEntryHeader::GetHeaderLength()
@@ -253,6 +354,36 @@ uint32_t ZipEntryHeader::GetLength()
 void ZipEntryHeader::SetLength(uint32_t length)
 {
     m_length = length;
+}
+
+uint64_t ZipEntryHeader::GetCompressedSizeActual()
+{
+    return m_compressedSizeActual;
+}
+
+void ZipEntryHeader::SetCompressedSizeActual(uint64_t compressedSize)
+{
+    m_compressedSizeActual = compressedSize;
+}
+
+uint64_t ZipEntryHeader::GetUnCompressedSizeActual()
+{
+    return m_unCompressedSizeActual;
+}
+
+void ZipEntryHeader::SetUnCompressedSizeActual(uint64_t unCompressedSize)
+{
+    m_unCompressedSizeActual = unCompressedSize;
+}
+
+bool ZipEntryHeader::IsZip64()
+{
+    return m_isZip64;
+}
+
+void ZipEntryHeader::SetIsZip64(bool isZip64)
+{
+    m_isZip64 = isZip64;
 }
 } // namespace SignatureTools
 } // namespace OHOS

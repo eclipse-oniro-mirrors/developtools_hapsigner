@@ -213,6 +213,11 @@ int32_t VerifyHap::Verify(const std::string& filePath, Options* options)
         SIGNATURE_TOOLS_LOGE("Check file path%s failed", filePath.c_str());
         return IO_ERROR;
     }
+    auto fileSize = std::filesystem::file_size(standardFilePath);
+    if (fileSize > static_cast<uint64_t>(HapUtils::MAX_INPUT_FILE_SIZE)) {
+        SIGNATURE_TOOLS_LOGE("Input file size %llu exceeds 200GB limit", static_cast<unsigned long long>(fileSize));
+        return COMMAND_PARAM_ERROR;
+    }
     RandomAccessFile hapFile;
     if (!hapFile.Init(standardFilePath)) {
         SIGNATURE_TOOLS_LOGE("%s init failed", standardFilePath.c_str());
