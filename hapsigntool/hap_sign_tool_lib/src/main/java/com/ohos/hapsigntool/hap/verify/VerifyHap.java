@@ -23,6 +23,7 @@ import com.ohos.hapsigntool.codesigning.sign.VerifyCodeSignature;
 import com.ohos.hapsigntool.entity.Pair;
 import com.ohos.hapsigntool.entity.SignatureAlgorithm;
 import com.ohos.hapsigntool.error.SignToolErrMsg;
+import com.ohos.hapsigntool.error.ZipException;
 import com.ohos.hapsigntool.hap.entity.PermissionDigestItem;
 import com.ohos.hapsigntool.hap.entity.SigningBlock;
 import com.ohos.hapsigntool.error.HapFormatException;
@@ -311,14 +312,11 @@ public class VerifyHap {
     public VerifyResult verifyHap(String hapFilePath) {
         VerifyResult result;
         try (RandomAccessFile fle = new RandomAccessFile(hapFilePath, "r")) {
+            if (fle.length() > Zip.MAX_APP_FILE_LENGTH) {
+                throw new IOException("file size out of range: " + fle.length());
+            }
             ZipDataInput hapFile = new RandomAccessFileZipDataInput(fle);
             ZipFileInfo zipInfo = ZipUtils.findZipInfo(hapFile);
-            long eocdOffset = zipInfo.getEocdOffset();
-            if (ZipUtils.checkZip64EoCDLocatorIsPresent(hapFile, eocdOffset)) {
-                String errorMsg = "ZIP64 format not supported!";
-                LOGGER.error(errorMsg);
-                return new VerifyResult(false, VerifyResult.RET_UNSUPPORTED_FORMAT_ERROR, errorMsg);
-            }
             HapUtils.HapSignBlockInfo hapSigningBlockAndOffsetInFile = HapUtils.findHapSigningBlock(hapFile, zipInfo);
             ByteBuffer signingBlock = hapSigningBlockAndOffsetInFile.getContent();
             signingBlock.order(ByteOrder.LITTLE_ENDIAN);
@@ -350,13 +348,14 @@ public class VerifyHap {
 
     private HapVerify getHapVerify(ZipDataInput hapFile, ZipFileInfo zipInfo,
                                    HapUtils.HapSignBlockInfo hapSigningBlockAndOffsetInFile,
-                                   ByteBuffer signatureSchemeBlock, List<SigningBlock> optionalBlocks) {
+                                   ByteBuffer signatureSchemeBlock, List<SigningBlock> optionalBlocks)
+            throws ZipException {
         long signingBlockOffset = hapSigningBlockAndOffsetInFile.getOffset();
         ZipDataInput beforeHapSigningBlock = hapFile.slice(0, signingBlockOffset);
         ZipDataInput centralDirectoryBlock = hapFile.slice(zipInfo.getCentralDirectoryOffset(),
                 zipInfo.getCentralDirectorySize());
-        ByteBuffer eocdBbyteBuffer = zipInfo.getEocd();
-        ZipUtils.setCentralDirectoryOffset(eocdBbyteBuffer, signingBlockOffset);
+        zipInfo.updateCentralDirectoryOffset(signingBlockOffset);
+        ByteBuffer eocdBbyteBuffer = zipInfo.generateEocdBuffer();
         ZipDataInput eocdBlock = new ByteBufferZipDataInput(eocdBbyteBuffer);
         HapVerify verifyEngine = new HapVerify(beforeHapSigningBlock, signatureSchemeBlock,
                 centralDirectoryBlock, eocdBlock, optionalBlocks);

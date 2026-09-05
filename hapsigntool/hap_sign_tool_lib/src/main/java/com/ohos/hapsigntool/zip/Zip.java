@@ -26,6 +26,7 @@ import com.ohos.hapsigntool.utils.LogUtils;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.RandomAccessFile;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.ArrayList;
@@ -50,11 +51,18 @@ public class Zip {
      */
     public static final int MAX_COMMENT_LENGTH = 65535;
 
+    /**
+     * max app file length: 200G
+     */
+    public static final long MAX_APP_FILE_LENGTH = 200 * 1024 * 1024 * 1024L;
+
     private static final int FILE_ALIGNMENT_BYTES_4K = 4096;
 
     private static final int RES_FILE_ALIGNMENT_THRESHOLD_BYTES = 1024 * 1024;
 
     private static final String RES_FILE_PRE_FIX = "resources/resfile/";
+
+    private static final int MAX_CENTRAL_DIRECTORY_NUMBER = 0xFFFF;
 
     private List<ZipEntry> zipEntries;
 
@@ -70,6 +78,12 @@ public class Zip {
 
     private String file;
 
+    private boolean isZip64;
+
+    private Zip64Eocd zip64Eocd;
+
+    private Zip64EocdLocator zip64EocdLocator;
+
     /**
      * create Zip by file
      *
@@ -81,12 +95,23 @@ public class Zip {
             if (!inputFile.exists()) {
                 throw new ZipException("read zip file failed");
             }
+            if (inputFile.length() > MAX_APP_FILE_LENGTH) {
+                throw new ZipException("read zip file failed, file length exceed 200GB.");
+            }
             long start = System.currentTimeMillis();
             // 1. get eocd data
             endOfCentralDirectory = getZipEndOfCentralDirectory(inputFile);
             cDOffset = endOfCentralDirectory.getOffset();
             long eocdEnd = System.currentTimeMillis();
             LOGGER.debug("getZipEndOfCentralDirectory use {} ms", eocdEnd - start);
+
+            // 1.1 check zip64 eocd locator
+            // if zip64 eocd locator required
+            parseZip64EocdLocator(inputFile);
+            if (this.isZip64) {
+                parseZip64Eocd(inputFile);
+                cDOffset = this.zip64Eocd.getCentralDirectoryOffset();
+            }
             // 2. use eocd's cd offset, get cd data
             getZipCentralDirectory(inputFile);
             long cdEnd = System.currentTimeMillis();
@@ -104,6 +129,54 @@ public class Zip {
         } catch (IOException e) {
             CustomException.throwException(ERROR.ZIP_ERROR, SignToolErrMsg.READ_ZIP_FAILED.toString(e.getMessage()));
         }
+    }
+
+    private void parseZip64EocdLocator(File inputFile) throws IOException {
+        boolean isZip64EocdLocatorRequired = isZip64EocdLocatorRequired();
+        try (RandomAccessFile zipFile = new RandomAccessFile(inputFile, "r")) {
+            Optional<Zip64EocdLocator> zip64EocdLocatorOptional = ZipUtils.findZip64EocdLocator(
+                    new RandomAccessFileZipDataInput(zipFile), eOCDOffset);
+            if (isZip64EocdLocatorRequired) {
+                if (!zip64EocdLocatorOptional.isPresent()) {
+                    throw new ZipException("parse zip file error, "
+                            + "zip64 end of central directory locator is required, but not found.");
+                }
+                this.isZip64 = true;
+                this.zip64EocdLocator = zip64EocdLocatorOptional.get();
+            } else {
+                if (zip64EocdLocatorOptional.isPresent()) {
+                    throw new ZipException("parse zip file error, "
+                            + "zip64 end of central directory locator is not required, but found.");
+                }
+            }
+        }
+    }
+
+    private void parseZip64Eocd(File inputFile) throws IOException {
+        if (!this.isZip64 || this.zip64EocdLocator == null) {
+            return;
+        }
+        long zip64EocdOffset = this.zip64EocdLocator.getZip64EocdOffset();
+        if (zip64EocdOffset < 0 || zip64EocdOffset < cDOffset
+                || (zip64EocdOffset + Zip64Eocd.MIN_SIZE + Zip64EocdLocator.SIZE) > eOCDOffset) {
+            throw new ZipException("parse zip file error, "
+                    + "invalid zip64 end of central directory offset: " + zip64EocdOffset);
+        }
+        try (RandomAccessFile zipFile = new RandomAccessFile(inputFile, "r")) {
+            Optional<Zip64Eocd> zip64EocdOptional = ZipUtils.findZip64Eocd(
+                    new RandomAccessFileZipDataInput(zipFile), zip64EocdOffset, eOCDOffset);
+            if (!zip64EocdOptional.isPresent()) {
+                throw new ZipException("parse zip file error, "
+                        + "zip64 end of central directory is required, but not found.");
+            }
+            this.zip64Eocd = zip64EocdOptional.get();
+        }
+    }
+
+    private boolean isZip64EocdLocatorRequired() {
+        return endOfCentralDirectory.getCDTotal() == UnsignedDecimalUtil.MAX_UNSIGNED_SHORT_VALUE
+                || endOfCentralDirectory.getOffset() == UnsignedDecimalUtil.MAX_UNSIGNED_INT_VALUE
+                || endOfCentralDirectory.getCDSize() == UnsignedDecimalUtil.MAX_UNSIGNED_INT_VALUE;
     }
 
     private EndOfCentralDirectory getZipEndOfCentralDirectory(File file) throws IOException {
@@ -135,14 +208,15 @@ public class Zip {
     }
 
     private void getZipCentralDirectory(File file) throws IOException {
-        zipEntries = new ArrayList<>(endOfCentralDirectory.getCDTotal());
+        int centralDirectoryCount = getCentralDirectoryCount();
+        int centralDirectorySize = getCentralDirectorySize();
+        zipEntries = new ArrayList<>(centralDirectoryCount);
         // read full central directory bytes
-        byte[] cdBytes = FileUtils.readFileByOffsetAndLength(file, cDOffset, endOfCentralDirectory.getCDSize());
-        if (cdBytes.length < CentralDirectory.CD_LENGTH) {
+        byte[] cdBytes = FileUtils.readFileByOffsetAndLength(file, cDOffset, centralDirectorySize);
+        if (cdBytes.length != centralDirectorySize) {
             throw new ZipException("find zip cd failed");
         }
-        ByteBuffer bf = ByteBuffer.wrap(cdBytes);
-        bf.order(ByteOrder.LITTLE_ENDIAN);
+        ByteBuffer bf = ByteBuffer.wrap(cdBytes).order(ByteOrder.LITTLE_ENDIAN);
         int offset = 0;
         // one by one format central directory
         while (offset < cdBytes.length) {
@@ -152,9 +226,48 @@ public class Zip {
             zipEntries.add(entry);
             offset += cd.getLength();
         }
-        if (offset + cDOffset != eOCDOffset) {
-            throw new ZipException("cd end offset not equals to eocd offset, maybe this is a zip64 file");
+        long exceptEocdOffset = offset + cDOffset;
+        if (isZip64) {
+            exceptEocdOffset += zip64Eocd.getSize();
+            exceptEocdOffset += Zip64EocdLocator.SIZE;
         }
+        if (exceptEocdOffset != eOCDOffset) {
+            throw new ZipException("excepted eocd offset not equals to actual eocd offset");
+        }
+    }
+
+    private int getCentralDirectoryCount() throws ZipException {
+        if (isZip64) {
+            long totalEntries = this.zip64Eocd.getTotalEntries();
+            if (totalEntries > Integer.MAX_VALUE) {
+                throw new ZipException("parse zip central directory failed, " +
+                        "total number of central directory records " + totalEntries + " out of range.");
+            }
+            return (int) totalEntries;
+        }
+        int cdTotal = endOfCentralDirectory.getCDTotal();
+        if (cdTotal < 0) {
+            throw new ZipException("invalid CD total count: " + cdTotal);
+        }
+        if (cdTotal >= UnsignedDecimalUtil.MAX_UNSIGNED_SHORT_VALUE) {
+            throw new ZipException("CD total count indicates zip64 but file is not zip64 format");
+        }
+        return cdTotal;
+    }
+
+    private int getCentralDirectorySize() throws ZipException {
+        long centralDirectorySize = endOfCentralDirectory.getCDSize();
+        if (!isZip64 && centralDirectorySize >= UnsignedDecimalUtil.MAX_UNSIGNED_INT_VALUE) {
+            throw new ZipException("CD size indicates zip64 but file is not zip64 format");
+        }
+        if (isZip64) {
+            centralDirectorySize = this.zip64Eocd.getCentralDirectorySize();
+        }
+        if (centralDirectorySize > Integer.MAX_VALUE) {
+            throw new ZipException("parse zip central directory failed, " +
+                    "central directory size " + centralDirectorySize + " out of range.");
+        }
+        return (int) centralDirectorySize;
     }
 
     private byte[] getSigningBlock(File file) throws IOException {
@@ -217,6 +330,10 @@ public class Zip {
             for (ZipEntry entry : zipEntries) {
                 CentralDirectory cd = entry.getCentralDirectory();
                 FileUtils.writeByteToOutFile(cd.toBytes(), fos);
+            }
+            if (isZip64) {
+                FileUtils.writeByteToOutFile(zip64Eocd.toBytes(), fos);
+                FileUtils.writeByteToOutFile(zip64EocdLocator.toBytes(), fos);
             }
             FileUtils.writeByteToOutFile(endOfCentralDirectory.toBytes(), fos);
         } catch (IOException e) {
@@ -290,16 +407,20 @@ public class Zip {
 
     /**
      * remove sign block
+     *
+     * @throws ZipException if remove sign block failed
      */
-    public void removeSignBlock() {
+    public void removeSignBlock() throws ZipException {
         signingBlock = null;
         resetOffset();
     }
 
     /**
-     * sort uncompress entry in the front.
+     * Sort uncompress entry in the front.
+     *
+     * @throws ZipException sort entry failed
      */
-    private void sort() {
+    private void sort() throws ZipException {
         // sort uncompress file (so, abc, an) - bitmap - other uncompress file - compress file
         zipEntries.sort((entry1, entry2) -> {
             short entry1Method = entry1.getZipEntryData().getZipEntryHeader().getMethod();
@@ -323,73 +444,77 @@ public class Zip {
         resetOffset();
     }
 
-    private void resetOffset() {
+    private void resetOffset() throws ZipException {
         long offset = 0L;
         long cdLength = 0L;
         for (ZipEntry entry : zipEntries) {
             entry.updateLength();
-            entry.getCentralDirectory().setOffset(offset);
+            entry.getCentralDirectory().updateOffset(offset);
             offset += entry.getZipEntryData().getLength();
             cdLength += entry.getCentralDirectory().getLength();
         }
         if (signingBlock != null) {
             offset += signingBlock.length;
         }
-        cDOffset = offset;
-        endOfCentralDirectory.setOffset(offset);
-        endOfCentralDirectory.setCDSize(cdLength);
-        offset += cdLength;
-        eOCDOffset = offset;
+        updateEocd(offset, cdLength);
+    }
+
+    private void updateEocd(long newCdOffset, long newCdSize) {
+        cDOffset = newCdOffset;
+        eOCDOffset = newCdOffset + newCdSize;
+        if (isZip64) {
+            zip64Eocd.setCentralDirectoryOffset(newCdOffset);
+            zip64Eocd.setCentralDirectorySize(newCdSize);
+            zip64Eocd.setTotalEntries(zipEntries.size());
+            zip64Eocd.setEntriesOnDisk(zipEntries.size());
+            zip64EocdLocator.setZip64EocdOffset(newCdOffset + newCdSize);
+            eOCDOffset += zip64Eocd.getSize();
+            eOCDOffset += Zip64EocdLocator.SIZE;
+            endOfCentralDirectory.toZip64Format();
+            return;
+        }
+        if (newCdOffset >= UnsignedDecimalUtil.MAX_UNSIGNED_INT_VALUE
+                || newCdSize >= UnsignedDecimalUtil.MAX_UNSIGNED_INT_VALUE
+                || zipEntries.size() >= UnsignedDecimalUtil.MAX_UNSIGNED_SHORT_VALUE) {
+            // need zip64 format
+            zip64Eocd = createZip64Eocd();
+            zip64Eocd.setCentralDirectoryOffset(newCdOffset);
+            zip64Eocd.setCentralDirectorySize(newCdSize);
+            zip64Eocd.setTotalEntries(zipEntries.size());
+            zip64Eocd.setEntriesOnDisk(zipEntries.size());
+            zip64EocdLocator = createZip64EocdLocator();
+            zip64EocdLocator.setZip64EocdOffset(newCdOffset + newCdSize);
+            isZip64 = true;
+            eOCDOffset += zip64Eocd.getSize();
+            eOCDOffset += Zip64EocdLocator.SIZE;
+            endOfCentralDirectory.toZip64Format();
+            return;
+        }
+        endOfCentralDirectory.setOffset(newCdOffset);
+        endOfCentralDirectory.setCDSize(newCdSize);
         endOfCentralDirectory.setCDTotal(zipEntries.size());
         endOfCentralDirectory.setThisDiskCDNum(zipEntries.size());
     }
 
+    private Zip64Eocd createZip64Eocd() {
+        Zip64Eocd newZip64Eocd = new Zip64Eocd();
+        newZip64Eocd.setDiskNumberOfCdStart(endOfCentralDirectory.getcDStartDiskNum());
+        newZip64Eocd.setDiskNumber(endOfCentralDirectory.getDiskNum());
+        newZip64Eocd.setVersionNeeded((short) 45);
+        newZip64Eocd.setVersionMadeBy((short) 45);
+        newZip64Eocd.setRecordSize(Zip64Eocd.MIN_RECORD_SIZE);
+        return newZip64Eocd;
+    }
+
+    private Zip64EocdLocator createZip64EocdLocator() {
+        Zip64EocdLocator newZip64EocdLocator = new Zip64EocdLocator();
+        newZip64EocdLocator.setDiskNumberOfZip64Eocd(endOfCentralDirectory.getcDStartDiskNum());
+        newZip64EocdLocator.setTotalNumberOfDisk(endOfCentralDirectory.getDiskNum());
+        return newZip64EocdLocator;
+    }
+
     public List<ZipEntry> getZipEntries() {
         return zipEntries;
-    }
-
-    public void setZipEntries(List<ZipEntry> zipEntries) {
-        this.zipEntries = zipEntries;
-    }
-
-    public long getSigningOffset() {
-        return signingOffset;
-    }
-
-    public void setSigningOffset(long signingOffset) {
-        this.signingOffset = signingOffset;
-    }
-
-    public byte[] getSigningBlock() {
-        return signingBlock;
-    }
-
-    public void setSigningBlock(byte[] signingBlock) {
-        this.signingBlock = signingBlock;
-    }
-
-    public long getCDOffset() {
-        return cDOffset;
-    }
-
-    public void setCDOffset(long cDOffset) {
-        this.cDOffset = cDOffset;
-    }
-
-    public long getEOCDOffset() {
-        return eOCDOffset;
-    }
-
-    public void setEOCDOffset(long eOCDOffset) {
-        this.eOCDOffset = eOCDOffset;
-    }
-
-    public EndOfCentralDirectory getEndOfCentralDirectory() {
-        return endOfCentralDirectory;
-    }
-
-    public void setEndOfCentralDirectory(EndOfCentralDirectory endOfCentralDirectory) {
-        this.endOfCentralDirectory = endOfCentralDirectory;
     }
 
     public String getFile() {
@@ -398,5 +523,9 @@ public class Zip {
 
     public void setFile(String file) {
         this.file = file;
+    }
+
+    public boolean isZip64() {
+        return isZip64;
     }
 }

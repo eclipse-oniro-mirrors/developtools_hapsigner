@@ -30,6 +30,7 @@ import com.ohos.hapsigntool.utils.LogUtils;
 import com.ohos.hapsigntool.utils.StringUtils;
 import com.ohos.hapsigntool.zip.MessageDigestZipDataOutput;
 import com.ohos.hapsigntool.zip.Zip;
+import com.ohos.hapsigntool.zip.Zip64EocdLocator;
 import com.ohos.hapsigntool.zip.ZipDataInput;
 import com.ohos.hapsigntool.zip.ZipDataOutput;
 import com.ohos.hapsigntool.zip.ZipEntry;
@@ -561,7 +562,12 @@ public class HapUtils {
         long centralDirectorySize = zipInfo.getCentralDirectorySize();
         long eocdOffset = zipInfo.getEocdOffset();
         long centralDirectoryEndOffset = centralDirectoryStartOffset + centralDirectorySize;
-        if (eocdOffset != centralDirectoryEndOffset) {
+        long expectedEocdOffset = centralDirectoryEndOffset;
+        if (zipInfo.isZip64()) {
+            expectedEocdOffset += zipInfo.getZip64Eocd().getSize();
+            expectedEocdOffset += Zip64EocdLocator.SIZE;
+        }
+        if (eocdOffset != expectedEocdOffset) {
             throw new SignatureNotFoundException("ZIP Central Directory is not immediately followed by End of Central"
                     + "Directory. CD end: " + centralDirectoryEndOffset + ", EoCD start: " + eocdOffset);
         }

@@ -122,7 +122,7 @@ public class BcPkcs7Generator implements Pkcs7Generator {
                 crls = createBerSetFromCrls(signerConfig.getX509CRLs());
             }
             SignedData signedData = new SignedData(
-                new ASN1Integer(1), algorithmIdLst, contentInfo, certs, crls, signerInfoLst);
+                new ASN1Integer(1L), algorithmIdLst, contentInfo, certs, crls, signerInfoLst);
             ContentInfo pkcs7 = new ContentInfo(PKCSObjectIdentifiers.signedData, signedData);
             signBlock = pkcs7.getEncoded(ASN1Encoding.DER);
         } catch (CertificateEncodingException | CRLException | IOException e) {
@@ -184,7 +184,7 @@ public class BcPkcs7Generator implements Pkcs7Generator {
             AlgorithmIdentifier signAlgId = SIGN_ALG_FINDER.find(signAlg);
             IssuerAndSerialNumber issuerAndSerialNumber =
                 new IssuerAndSerialNumber(certificateHolder.getIssuer(), certificateHolder.getSerialNumber());
-            return new SignerInfo(new ASN1Integer(1), issuerAndSerialNumber, digestAlgId,
+            return new SignerInfo(new ASN1Integer(1L), issuerAndSerialNumber, digestAlgId,
                     authed, signAlgId, new DEROctetString(signedHapDigest), null);
         } catch (CertificateEncodingException e) {
             throw new SignatureException("Generate signer info error", e);

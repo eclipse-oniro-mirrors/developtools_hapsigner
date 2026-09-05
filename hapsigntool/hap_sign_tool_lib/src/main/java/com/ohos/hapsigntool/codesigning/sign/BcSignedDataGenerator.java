@@ -108,7 +108,7 @@ public class BcSignedDataGenerator implements SignedDataGenerator {
         }
         Pair<DERSet, DERSet> pairDigestAndSignInfo = getSignInfo(content, signConfig);
         // Unsupported certificate revocation, SignedData's _crls is null
-        SignedData signedData = new SignedData(new ASN1Integer(1), pairDigestAndSignInfo.getFirst(),
+        SignedData signedData = new SignedData(new ASN1Integer(1L), pairDigestAndSignInfo.getFirst(),
             new ContentInfo(PKCSObjectIdentifiers.data, null), createBerSetFromLst(signConfig.getCertificates()),
             createBerSetFromLst(null), pairDigestAndSignInfo.getSecond());
         return encodingUnsignedData(content, signedData);
@@ -147,7 +147,7 @@ public class BcSignedDataGenerator implements SignedDataGenerator {
                 CodeSignErrMsg.CODE_SIGN_INTERNAL_ERROR.toString("Verify signed result failed"));
         }
         JcaX509CertificateHolder certificateHolder = getJcaX509CertificateHolder(cert);
-        return new SignerInfo(new ASN1Integer(1),
+        return new SignerInfo(new ASN1Integer(1L),
             new IssuerAndSerialNumber(certificateHolder.getIssuer(), certificateHolder.getSerialNumber()),
             DIGEST_ALG_ID_FINDER.find(hashAlgorithm.getDigestAlgorithm()), authed,
             SIGN_ALG_ID_FINDER.find(signPair.getFirst()), new DEROctetString(signBytes), null);

@@ -143,6 +143,21 @@ public class EndOfCentralDirectory {
     }
 
     /**
+     * Parse end of central directory locator from the specific byte buffer.
+     *
+     * @param byteBuffer the specific byte buffer.
+     * @return end of central directory locator
+     */
+    public static Optional<EndOfCentralDirectory> parse(ByteBuffer byteBuffer) {
+        if (byteBuffer == null || byteBuffer.remaining() < EOCD_LENGTH) {
+            return Optional.empty();
+        }
+        byte[] eocdBytes = new byte[byteBuffer.remaining()];
+        byteBuffer.get(eocdBytes);
+        return getEOCDByBytes(eocdBytes);
+    }
+
+    /**
      * change End Of Central Directory to bytes
      *
      * @return bytes
@@ -171,6 +186,16 @@ public class EndOfCentralDirectory {
         return SIGNATURE;
     }
 
+    /**
+     * Set to zip64 format.
+     */
+    public void toZip64Format() {
+        this.offset = UnsignedDecimalUtil.MAX_UNSIGNED_INT_VALUE;
+        this.cDSize = UnsignedDecimalUtil.MAX_UNSIGNED_INT_VALUE;
+        this.cDTotal = UnsignedDecimalUtil.MAX_UNSIGNED_SHORT_VALUE;
+        this.thisDiskCDNum = UnsignedDecimalUtil.MAX_UNSIGNED_SHORT_VALUE;
+    }
+
     public int getDiskNum() {
         return diskNum;
     }
@@ -192,6 +217,10 @@ public class EndOfCentralDirectory {
     }
 
     public void setThisDiskCDNum(int thisDiskCDNum) {
+        if (thisDiskCDNum >= UnsignedDecimalUtil.MAX_UNSIGNED_SHORT_VALUE) {
+            this.thisDiskCDNum = UnsignedDecimalUtil.MAX_UNSIGNED_SHORT_VALUE;
+            return;
+        }
         this.thisDiskCDNum = thisDiskCDNum;
     }
 
@@ -200,6 +229,10 @@ public class EndOfCentralDirectory {
     }
 
     public void setCDTotal(int cDTotal) {
+        if (cDTotal >= UnsignedDecimalUtil.MAX_UNSIGNED_SHORT_VALUE) {
+            this.cDTotal = UnsignedDecimalUtil.MAX_UNSIGNED_SHORT_VALUE;
+            return;
+        }
         this.cDTotal = cDTotal;
     }
 
@@ -208,6 +241,10 @@ public class EndOfCentralDirectory {
     }
 
     public void setCDSize(long cDSize) {
+        if (cDSize >= UnsignedDecimalUtil.MAX_UNSIGNED_INT_VALUE) {
+            this.cDSize = UnsignedDecimalUtil.MAX_UNSIGNED_INT_VALUE;
+            return;
+        }
         this.cDSize = cDSize;
     }
 
@@ -216,6 +253,10 @@ public class EndOfCentralDirectory {
     }
 
     public void setOffset(long offset) {
+        if (offset >= UnsignedDecimalUtil.MAX_UNSIGNED_INT_VALUE) {
+            this.offset = UnsignedDecimalUtil.MAX_UNSIGNED_INT_VALUE;
+            return;
+        }
         this.offset = offset;
     }
 
