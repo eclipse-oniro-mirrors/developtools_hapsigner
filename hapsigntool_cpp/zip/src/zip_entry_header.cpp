@@ -192,11 +192,14 @@ bool ZipEntryHeader::RebuildExtraField(bool includeZip64)
             (static_cast<uint16_t>(static_cast<uint8_t>(m_extraData[pos + 1])) << 8);
         uint16_t dataSize = static_cast<uint8_t>(m_extraData[pos + 2]) |
             (static_cast<uint16_t>(static_cast<uint8_t>(m_extraData[pos + 3])) << 8);
-        if (headerId != Zip64ExtendedInfo::HEADER_ID) {
-            newExtra.append(m_extraData, pos,
-                Zip64ExtendedInfo::EXTRA_SUBFIELD_HEADER_SIZE + dataSize);
+        int32_t subFieldLen = Zip64ExtendedInfo::EXTRA_SUBFIELD_HEADER_SIZE + dataSize;
+        if (pos + subFieldLen > extraLen) {
+            break;
         }
-        pos += Zip64ExtendedInfo::EXTRA_SUBFIELD_HEADER_SIZE + dataSize;
+        if (headerId != Zip64ExtendedInfo::HEADER_ID) {
+            newExtra.append(m_extraData, pos, subFieldLen);
+        }
+        pos += subFieldLen;
     }
     // Preserve trailing bytes that don't form a complete sub-field header (alignment padding)
     if (pos < extraLen) {

@@ -275,5 +275,20 @@ void EndOfCentralDirectory::SetIsZip64(bool isZip64)
 {
     m_isZip64 = isZip64;
 }
+
+uint64_t EndOfCentralDirectory::GetEffectiveOffset()
+{
+    return m_isZip64 ? m_offsetActual : m_offset;
+}
+
+uint64_t EndOfCentralDirectory::GetEffectiveCDSize()
+{
+    return m_isZip64 ? m_cDSizeActual : m_cDSize;
+}
+
+uint64_t EndOfCentralDirectory::GetEffectiveCDTotal()
+{
+    return m_isZip64 ? m_cDTotalActual : m_cDTotal;
+}
 } // namespace SignatureTools
 } // namespace OHOS

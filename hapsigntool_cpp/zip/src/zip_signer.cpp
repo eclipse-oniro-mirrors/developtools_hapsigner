@@ -52,8 +52,7 @@ bool ZipSigner::Init(std::ifstream& inputFile)
         return false;
     }
 
-    m_cDOffset = m_endOfCentralDirectory->IsZip64() ?
-        m_endOfCentralDirectory->GetOffsetActual() : m_endOfCentralDirectory->GetOffset();
+    m_cDOffset = m_endOfCentralDirectory->GetEffectiveOffset();
 
     /* 2. use eocd's cd offset, get cd data */
     if (!GetZipCentralDirectory(inputFile)) {
@@ -70,8 +69,7 @@ bool ZipSigner::Init(std::ifstream& inputFile)
     ZipEntry* endEntry = m_zipEntries[m_zipEntries.size() - 1];
     CentralDirectory* endCD = endEntry->GetCentralDirectory();
     ZipEntryData* endEntryData = endEntry->GetZipEntryData();
-    m_signingOffset = (endCD->IsZip64() ? endCD->GetOffsetActual() : endCD->GetOffset())
-        + endEntryData->GetLength();
+    m_signingOffset = endCD->GetEffectiveOffset() + endEntryData->GetLength();
 
     /* 4. file all data - eocd - cd - entry = sign block */
     m_signingBlock = GetSigningBlock(inputFile);
@@ -219,14 +217,12 @@ bool ZipSigner::GetZipCentralDirectory(std::ifstream& input)
 {
     input.seekg(0, std::ios::beg);
 
-    uint64_t cDtotalActual = m_endOfCentralDirectory->IsZip64() ?
-        m_endOfCentralDirectory->GetcDTotalActual() : m_endOfCentralDirectory->GetcDTotal();
+    uint64_t cDtotalActual = m_endOfCentralDirectory->GetEffectiveCDTotal();
     m_zipEntries.reserve(static_cast<size_t>(cDtotalActual));
     /* read full central directory bytes */
     std::string retStr;
 
-    uint64_t cDSizeActual = m_endOfCentralDirectory->IsZip64() ?
-        m_endOfCentralDirectory->GetcDSizeActual() : m_endOfCentralDirectory->GetcDSize();
+    uint64_t cDSizeActual = m_endOfCentralDirectory->GetEffectiveCDSize();
     int ret = FileUtils::ReadFileByOffsetAndLength(input, m_cDOffset, cDSizeActual, retStr);
     if (ret != RET_OK) {
         SIGNATURE_TOOLS_LOGE("read full central directory failed in file");
@@ -299,9 +295,9 @@ bool ZipSigner::GetZipEntries(std::ifstream& input)
     /* use central directory data, find entry data */
     for (auto& entry : m_zipEntries) {
         CentralDirectory* cd = entry->GetCentralDirectory();
-        uint64_t offset = cd->IsZip64() ? cd->GetOffsetActual() : cd->GetOffset();
-        uint64_t unCompressedSize = cd->IsZip64() ? cd->GetUnCompressedSizeActual() : cd->GetUnCompressedSize();
-        uint64_t compressedSize = cd->IsZip64() ? cd->GetCompressedSizeActual() : cd->GetCompressedSize();
+        uint64_t offset = cd->GetEffectiveOffset();
+        uint64_t unCompressedSize = cd->GetEffectiveUnCompressedSize();
+        uint64_t compressedSize = cd->GetEffectiveCompressedSize();
         uint64_t fileSize = cd->GetMethod() == FILE_UNCOMPRESS_METHOD_FLAG ? unCompressedSize : compressedSize;
 
         ZipEntryData* zipEntryData = ZipEntryData::GetZipEntry(input, offset, fileSize);
@@ -370,12 +366,14 @@ bool ZipSigner::WriteTrailingSections(std::ofstream& output)
         }
     }
 
-    if (m_isZip64 && m_zip64Eocd) {
+    if (m_isZip64) {
+        if (m_zip64Eocd == nullptr || m_zip64EocdLocator == nullptr) {
+            SIGNATURE_TOOLS_LOGE("zip64 eocd or locator is null in zip64 mode");
+            return false;
+        }
         if (!FileUtils::WriteByteToOutFile(m_zip64Eocd->ToBytes(), output)) {
             return false;
         }
-    }
-    if (m_isZip64 && m_zip64EocdLocator) {
         if (!FileUtils::WriteByteToOutFile(m_zip64EocdLocator->ToBytes(), output)) {
             return false;
         }
@@ -410,9 +408,11 @@ bool ZipSigner::ToFile(std::ifstream& input, std::ofstream& output)
     return true;
 }
 
-void ZipSigner::Alignment(int alignment)
+bool ZipSigner::Alignment(int alignment)
 {
-    Sort();
+    if (!Sort()) {
+        return false;
+    }
     bool isFirstUnRunnableFile = true;
     for (const auto& entry : m_zipEntries) {
         ZipEntryData* zipEntryData = entry->GetZipEntryData();
@@ -440,18 +440,21 @@ void ZipSigner::Alignment(int alignment)
         }
         int add = entry->Alignment(alignBytes);
         if (add > 0) {
-            ResetOffset();
+            if (!ResetOffset()) {
+                return false;
+            }
         }
     }
+    return true;
 }
 
-void ZipSigner::RemoveSignBlock()
+bool ZipSigner::RemoveSignBlock()
 {
     m_signingBlock = std::string();
-    ResetOffset();
+    return ResetOffset();
 }
 
-void ZipSigner::Sort()
+bool ZipSigner::Sort()
 {
     /* sort uncompress file (so, abc, an) - other uncompress file - compress file */
     std::sort(m_zipEntries.begin(), m_zipEntries.end(), [&](ZipEntry* entry1, ZipEntry* entry2) {
@@ -476,19 +479,19 @@ void ZipSigner::Sort()
         }
         return entry1FileName < entry2FileName;
     });
-    ResetOffset();
+    return ResetOffset();
 }
 
-void ZipSigner::UpdateEntriesForMode(bool zip64)
+bool ZipSigner::UpdateEntriesForMode(bool zip64)
 {
     for (const auto& entry : m_zipEntries) {
         if (!entry->GetCentralDirectory()->UpdateForZip64Mode(zip64)) {
             SIGNATURE_TOOLS_LOGE("UpdateForZip64Mode failed for central directory");
-            return;
+            return false;
         }
         if (!entry->GetZipEntryData()->GetZipEntryHeader()->UpdateForZip64Mode(zip64)) {
             SIGNATURE_TOOLS_LOGE("UpdateForZip64Mode failed for entry header");
-            return;
+            return false;
         }
         if (auto* desc = entry->GetZipEntryData()->GetDataDescriptor()) {
             // DataDescriptor ZIP64 mode is per-entry: only use 8-byte fields when
@@ -499,6 +502,7 @@ void ZipSigner::UpdateEntriesForMode(bool zip64)
             desc->SetIsZip64(overflow);
         }
     }
+    return true;
 }
 
 uint64_t ZipSigner::RecalcLengthsAndOffsets(bool useZip64Offset)
@@ -506,7 +510,7 @@ uint64_t ZipSigner::RecalcLengthsAndOffsets(bool useZip64Offset)
     for (const auto& entry : m_zipEntries) {
         auto* data = entry->GetZipEntryData();
         auto* desc = data->GetDataDescriptor();
-        int desLen = desc ? (desc->IsZip64() ? DataDescriptor::DES_LENGTH_ZIP64 : DataDescriptor::DES_LENGTH) : 0;
+        int desLen = desc ? desc->GetDesLength() : 0;
         data->SetLength(data->GetZipEntryHeader()->GetLength() + data->GetFileSize() + desLen);
     }
     uint64_t offset = 0;
@@ -570,47 +574,72 @@ void ZipSigner::FillEocdAndZip64(bool needZip64)
     }
 }
 
-void ZipSigner::ResetOffset()
+bool ZipSigner::DetermineZip64Needed()
 {
-    // Step 1: Determine whether ZIP64 output is needed
-    bool needZip64 = m_forceZip64 || m_isZip64 || m_zipEntries.size() > UINT16_MAX;
-    if (!needZip64) {
-        for (const auto& entry : m_zipEntries) {
-            if (entry->GetCentralDirectory()->GetCompressedSizeActual() > UINT32_MAX ||
-                entry->GetCentralDirectory()->GetUnCompressedSizeActual() > UINT32_MAX ||
-                entry->GetCentralDirectory()->GetDiskNumStartActual() > UINT16_MAX) {
-                needZip64 = true;
-                break;
-            }
+    if (m_forceZip64 || m_isZip64 || m_zipEntries.size() > UINT16_MAX) {
+        return true;
+    }
+    for (const auto& entry : m_zipEntries) {
+        if (entry->GetCentralDirectory()->GetCompressedSizeActual() > UINT32_MAX ||
+            entry->GetCentralDirectory()->GetUnCompressedSizeActual() > UINT32_MAX ||
+            entry->GetCentralDirectory()->GetDiskNumStartActual() > UINT16_MAX) {
+            return true;
         }
     }
-    // Step 2-4: Update mode → recalc → check overflow → redo if needed
-    UpdateEntriesForMode(needZip64);
+    return false;
+}
+
+bool ZipSigner::UpdateZip64OffsetsInCD()
+{
+    bool lengthChanged = false;
+    for (const auto& entry : m_zipEntries) {
+        auto* cd = entry->GetCentralDirectory();
+        uint32_t oldLength = cd->GetLength();
+        if (!cd->UpdateZip64OffsetAndRebuild(cd->GetOffsetActual())) {
+            SIGNATURE_TOOLS_LOGE("UpdateZip64OffsetAndRebuild failed");
+            return false;
+        }
+        if (cd->GetLength() != oldLength) {
+            lengthChanged = true;
+        }
+    }
+    if (lengthChanged) {
+        m_cDOffset = RecalcLengthsAndOffsets(true);
+        if (m_cDOffset == 0) {
+            SIGNATURE_TOOLS_LOGE("RecalcLengthsAndOffsets failed");
+            return false;
+        }
+    }
+    return true;
+}
+
+bool ZipSigner::ResetOffset()
+{
+    bool needZip64 = DetermineZip64Needed();
+    if (!UpdateEntriesForMode(needZip64)) {
+        return false;
+    }
     m_cDOffset = RecalcLengthsAndOffsets(false);
+    if (m_cDOffset == 0) {
+        SIGNATURE_TOOLS_LOGE("RecalcLengthsAndOffsets failed");
+        return false;
+    }
     if (!needZip64 && m_cDOffset > UINT32_MAX) {
         needZip64 = true;
-        UpdateEntriesForMode(true);
+        if (!UpdateEntriesForMode(true)) {
+            return false;
+        }
         m_cDOffset = RecalcLengthsAndOffsets(false);
-    }
-    // Step 4.5: Update Zip64 offset in CD extra field; redo if CD length changed
-    if (needZip64) {
-        bool lengthChanged = false;
-        for (const auto& entry : m_zipEntries) {
-            auto* cd = entry->GetCentralDirectory();
-            uint32_t oldLength = cd->GetLength();
-            if (!cd->UpdateZip64OffsetAndRebuild(cd->GetOffsetActual())) {
-                    SIGNATURE_TOOLS_LOGE("UpdateZip64OffsetAndRebuild failed in step 4.5");
-                }
-            if (cd->GetLength() != oldLength) {
-                lengthChanged = true;
-            }
-        }
-        if (lengthChanged) {
-            m_cDOffset = RecalcLengthsAndOffsets(true);
+        if (m_cDOffset == 0) {
+            SIGNATURE_TOOLS_LOGE("RecalcLengthsAndOffsets failed");
+            return false;
         }
     }
-    // Step 5: Fill EOCD and Zip64 structures
+    if (needZip64 && !UpdateZip64OffsetsInCD()) {
+        return false;
+    }
     FillEocdAndZip64(needZip64);
+    return true;
 }
 
 std::vector<ZipEntry*>& ZipSigner::GetZipEntries()

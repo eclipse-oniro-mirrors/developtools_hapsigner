@@ -148,6 +148,12 @@ public:
 
     void SetOffsetActual(uint64_t offset);
 
+    uint64_t GetEffectiveOffset();
+
+    uint64_t GetEffectiveCompressedSize();
+
+    uint64_t GetEffectiveUnCompressedSize();
+
     bool IsZip64();
 
     void SetIsZip64(bool isZip64);

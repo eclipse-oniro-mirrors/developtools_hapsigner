@@ -70,9 +70,9 @@ public:
      *
      * @param alignment int alignment
      */
-    void Alignment(int alignment);
+    bool Alignment(int alignment);
 
-    void RemoveSignBlock();
+    bool RemoveSignBlock();
 
     std::vector<ZipEntry*>& GetZipEntries();
 
@@ -110,15 +110,17 @@ private:
     bool GetZipEntries(std::ifstream& input);
 
     /* sort uncompress entry in the front. */
-    void Sort();
+    bool Sort();
 
-    void ResetOffset();
+    bool ResetOffset();
+    bool DetermineZip64Needed();
+    bool UpdateZip64OffsetsInCD();
 
     EndOfCentralDirectory* ParseZip64IfPresent(std::ifstream& input,
         EndOfCentralDirectory* eocd, uint64_t fileSize);
     bool ReadZip64EocdLocator(std::ifstream& input);
     bool ReadZip64Eocd(std::ifstream& input);
-    void UpdateEntriesForMode(bool zip64);
+    bool UpdateEntriesForMode(bool zip64);
     uint64_t RecalcLengthsAndOffsets(bool useZip64Offset);
     void FillEocdAndZip64(bool needZip64);
     bool WriteZipEntries(std::ifstream& input, std::ofstream& output);

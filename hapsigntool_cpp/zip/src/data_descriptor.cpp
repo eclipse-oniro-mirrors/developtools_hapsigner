@@ -83,7 +83,7 @@ std::string DataDescriptor::ToBytes()
 
 int DataDescriptor::GetDesLength()
 {
-    return DES_LENGTH;
+    return m_isZip64 ? DES_LENGTH_ZIP64 : DES_LENGTH;
 }
 
 int DataDescriptor::GetSIGNATURE()

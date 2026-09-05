@@ -565,6 +565,21 @@ void CentralDirectory::SetIsZip64(bool isZip64)
     m_isZip64 = isZip64;
 }
 
+uint64_t CentralDirectory::GetEffectiveOffset()
+{
+    return m_isZip64 ? m_offsetActual : m_offset;
+}
+
+uint64_t CentralDirectory::GetEffectiveCompressedSize()
+{
+    return m_isZip64 ? m_compressedSizeActual : m_compressedSize;
+}
+
+uint64_t CentralDirectory::GetEffectiveUnCompressedSize()
+{
+    return m_isZip64 ? m_unCompressedSizeActual : m_unCompressedSize;
+}
+
 void CentralDirectory::SetZip64ExtendedInfo(const std::optional<Zip64ExtendedInfo>& info)
 {
     m_zip64ExtendedInfo = info;

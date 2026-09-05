@@ -91,7 +91,12 @@ int SignProvider::CheckParmaAndInitConfig(SignerConfig& signerConfig, Options* o
         return COMMAND_PARAM_ERROR;
     }
     std::string inputFilePath = signParams.at(ParamConstants::PARAM_BASIC_INPUT_FILE);
-    auto fileSize = std::filesystem::file_size(inputFilePath);
+    std::error_code ec;
+    auto fileSize = std::filesystem::file_size(inputFilePath, ec);
+    if (ec) {
+        SIGNATURE_TOOLS_LOGE("Failed to get input file size: %s", ec.message().c_str());
+        return COMMAND_PARAM_ERROR;
+    }
     if (fileSize > static_cast<uint64_t>(HapUtils::MAX_INPUT_FILE_SIZE)) {
         SIGNATURE_TOOLS_LOGE("Input file size %llu exceeds 200GB limit", static_cast<unsigned long long>(fileSize));
         return COMMAND_PARAM_ERROR;
@@ -1308,8 +1313,14 @@ bool SignProvider::CopyFileAndAlignment(std::ifstream& input, std::ofstream& tmp
         PrintErrorNumberMsg("ZIP_ERROR", ZIP_ERROR, "zip init failed");
         return false;
     }
-    zip.Alignment(alignment);
-    zip.RemoveSignBlock();
+    if (!zip.Alignment(alignment)) {
+        PrintErrorNumberMsg("ZIP_ERROR", ZIP_ERROR, "zip alignment failed");
+        return false;
+    }
+    if (!zip.RemoveSignBlock()) {
+        PrintErrorNumberMsg("ZIP_ERROR", ZIP_ERROR, "zip remove sign block failed");
+        return false;
+    }
     if (!zip.ToFile(input, tmpOutput)) {
         PrintErrorNumberMsg("IO_ERROR", IO_ERROR, "zip write to file failed");
         return false;

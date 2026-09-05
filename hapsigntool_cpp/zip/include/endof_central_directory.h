@@ -117,6 +117,12 @@ public:
 
     void SetOffsetActual(uint64_t offset);
 
+    uint64_t GetEffectiveOffset();
+
+    uint64_t GetEffectiveCDSize();
+
+    uint64_t GetEffectiveCDTotal();
+
     bool IsZip64();
 
     void SetIsZip64(bool isZip64);

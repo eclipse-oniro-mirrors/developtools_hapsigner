@@ -49,7 +49,7 @@ public:
 
     std::string ToBytes();
 
-    static int GetDesLength();
+    int GetDesLength();
 
     static int GetSIGNATURE();
 
