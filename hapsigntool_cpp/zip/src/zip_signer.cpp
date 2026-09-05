@@ -154,6 +154,11 @@ bool ZipSigner::ReadZip64Eocd(std::ifstream& input)
         SIGNATURE_TOOLS_LOGE("zip64 eocd cd offset exceeds zip64 eocd offset");
         return false;
     }
+
+    if (m_zip64Eocd->GetOffset() == 0 && m_zip64Eocd->GetCDSize() > 0) {
+        SIGNATURE_TOOLS_LOGE("zip64 eocd cd offset is zero but CD size is non-zero");
+        return false;
+    }
     return true;
 }
 

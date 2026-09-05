@@ -203,8 +203,8 @@ bool HapSignerBlockUtils::GetCentralDirectoryOffset(ByteBuffer& eocd, int64_t eo
         return false;
     }
 
-    // Check for ZIP64 sentinel in CD offset — actual value must be read from Zip64 EOCD
-    if (offsetValue == 0xFFFFFFFF) {
+    // Check for ZIP64 sentinel in CD offset or CD size — actual values must be read from Zip64 EOCD
+    if (offsetValue == 0xFFFFFFFF || sizeValue == 0xFFFFFFFF) {
         centralDirectoryOffset = -1;
         return true;
     }
@@ -214,11 +214,6 @@ bool HapSignerBlockUtils::GetCentralDirectoryOffset(ByteBuffer& eocd, int64_t eo
         SIGNATURE_TOOLS_LOGE("centralDirOffset %" PRId64 " is larger than eocdOffset %" PRId64,
                              centralDirectoryOffset, eocdOffset);
         return false;
-    }
-
-    // If CD size is sentinel, can't validate cdEndOffset — skip it
-    if (sizeValue == 0xFFFFFFFF) {
-        return true;
     }
 
     int64_t centralDirectorySize = static_cast<int64_t>(sizeValue);
@@ -244,10 +239,10 @@ bool HapSignerBlockUtils::GetCentralDirectorySize(ByteBuffer& eocd, int64_t& cen
         SIGNATURE_TOOLS_LOGE("GetUInt32 failed");
         return false;
     }
-    // Check for ZIP64 sentinel value
+    // Sentinel value indicates Zip64 but caller is using non-Zip64 path
     if (cdSize == 0xFFFFFFFF) {
-        centralDirectorySize = cdSize;
-        return true;
+        SIGNATURE_TOOLS_LOGE("CD size sentinel value found but not in Zip64 mode");
+        return false;
     }
     centralDirectorySize = static_cast<int64_t>(cdSize);
     return true;
