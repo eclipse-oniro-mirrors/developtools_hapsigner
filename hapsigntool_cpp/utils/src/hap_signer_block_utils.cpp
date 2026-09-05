@@ -80,7 +80,7 @@ bool HapSignerBlockUtils::FindHapSignature(RandomAccessFile& hapFile, SignatureI
     }
 
     // Check for ZIP64 sentinel and read actual offset from Zip64 EOCD
-    if (signInfo.hapCentralDirOffset == 0xFFFFFFFF) {
+    if (signInfo.hapCentralDirOffset == -1) {
         signInfo.isZip64 = true;
         if (!GetZip64CentralDirectoryOffset(hapFile, signInfo.hapEocdOffset,
                                             signInfo.hapCentralDirOffset)) {
@@ -205,7 +205,7 @@ bool HapSignerBlockUtils::GetCentralDirectoryOffset(ByteBuffer& eocd, int64_t eo
 
     // Check for ZIP64 sentinel in CD offset — actual value must be read from Zip64 EOCD
     if (offsetValue == 0xFFFFFFFF) {
-        centralDirectoryOffset = static_cast<int64_t>(offsetValue);
+        centralDirectoryOffset = -1;
         return true;
     }
 
@@ -289,8 +289,11 @@ bool HapSignerBlockUtils::GetZip64CentralDirectoryOffset(RandomAccessFile& hapFi
 
     uint64_t zip64EocdOffset = locator.GetZip64EocdOffset();
     uint64_t eocdEndOffset = static_cast<uint64_t>(eocdOffset);
-    if (zip64EocdOffset >= eocdEndOffset ||
-        Zip64EndOfCentralDirectory::ZIP64_EOCD_LENGTH > eocdEndOffset - zip64EocdOffset) {
+    // Zip64 EOCD must end before the Locator (locatorOffset < eocdEndOffset, so this subsumes the EOCD32 upper bound)
+    uint64_t locatorOffset = eocdEndOffset -
+        Zip64EndOfCentralDirectoryLocator::ZIP64_EOCD_LOCATOR_LENGTH;
+    if (zip64EocdOffset >= locatorOffset ||
+        Zip64EndOfCentralDirectory::ZIP64_EOCD_LENGTH > locatorOffset - zip64EocdOffset) {
         SIGNATURE_TOOLS_LOGE("zip64 eocd offset out of bounds: %" PRIu64, zip64EocdOffset);
         return false;
     }
@@ -310,7 +313,7 @@ bool HapSignerBlockUtils::GetZip64CentralDirectoryOffset(RandomAccessFile& hapFi
     }
 
     int64_t cdOffset = static_cast<int64_t>(zip64Eocd->GetOffset());
-    if (cdOffset < 0 || cdOffset >= eocdOffset) {
+    if (cdOffset < 0 || cdOffset >= static_cast<int64_t>(zip64EocdOffset) || cdOffset >= eocdOffset) {
         SIGNATURE_TOOLS_LOGE("zip64 central directory offset %" PRId64
                              " is invalid (eocdOffset=%" PRId64 ")", cdOffset, eocdOffset);
         return false;

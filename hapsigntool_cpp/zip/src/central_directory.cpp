@@ -41,24 +41,8 @@ bool CentralDirectory::GetCentralDirectory(ByteBuffer& bf, CentralDirectory* cd)
         bf.GetData(&extra[0], extraLength);
         cd->SetExtraData(extra);
 
-        // Parse ZIP64 Extended Information from extra field
-        auto zip64Info = Zip64ExtendedInfo::Parse(extra, cd->GetCompressedSize(),
-            cd->GetUnCompressedSize(), cd->GetOffset(), cd->GetDiskNumStart());
-        if (zip64Info.has_value()) {
-            cd->SetIsZip64(true);
-            cd->SetZip64ExtendedInfo(zip64Info);
-            if (zip64Info->HasCompressedSize()) {
-                cd->SetCompressedSizeActual(zip64Info->GetCompressedSize());
-            }
-            if (zip64Info->HasUnCompressedSize()) {
-                cd->SetUnCompressedSizeActual(zip64Info->GetUnCompressedSize());
-            }
-            if (zip64Info->HasLocalHeaderOffset()) {
-                cd->SetOffsetActual(zip64Info->GetLocalHeaderOffset());
-            }
-            if (zip64Info->HasDiskNumStart()) {
-                cd->SetDiskNumStartActual(zip64Info->GetDiskNumStart());
-            }
+        if (!ParseZip64ExtendedInfo(extra, cd)) {
+            return false;
         }
     }
     uint16_t commentLength = cd->GetCommentLength();
@@ -69,6 +53,36 @@ bool CentralDirectory::GetCentralDirectory(ByteBuffer& bf, CentralDirectory* cd)
     }
     cd->SetLength(CD_LENGTH + fileNameLength + extraLength + commentLength);
 
+    return true;
+}
+
+bool CentralDirectory::ParseZip64ExtendedInfo(const std::string& extra, CentralDirectory* cd)
+{
+    auto zip64Info = Zip64ExtendedInfo::Parse(extra, cd->GetCompressedSize(),
+        cd->GetUnCompressedSize(), cd->GetOffset(), cd->GetDiskNumStart());
+    if (zip64Info.has_value()) {
+        cd->SetIsZip64(true);
+        cd->SetZip64ExtendedInfo(zip64Info);
+        if (zip64Info->HasCompressedSize()) {
+            cd->SetCompressedSizeActual(zip64Info->GetCompressedSize());
+        }
+        if (zip64Info->HasUnCompressedSize()) {
+            cd->SetUnCompressedSizeActual(zip64Info->GetUnCompressedSize());
+        }
+        if (zip64Info->HasLocalHeaderOffset()) {
+            cd->SetOffsetActual(zip64Info->GetLocalHeaderOffset());
+        }
+        if (zip64Info->HasDiskNumStart()) {
+            cd->SetDiskNumStartActual(zip64Info->GetDiskNumStart());
+        }
+    } else if (cd->GetCompressedSize() == UINT32_MAX ||
+               cd->GetUnCompressedSize() == UINT32_MAX ||
+               cd->GetOffset() == UINT32_MAX ||
+               cd->GetDiskNumStart() == UINT16_MAX) {
+        SIGNATURE_TOOLS_LOGE("Central Directory has sentinel values but "
+                             "Zip64 Extended Info is missing in extra field");
+        return false;
+    }
     return true;
 }
 

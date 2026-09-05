@@ -92,7 +92,10 @@ bool ZipEntryData::ReadEntryFileNameAndExtraByOffset(std::ifstream& input, ZipEn
             SIGNATURE_TOOLS_LOGE("read entry file extra failed in file");
             return false;
         }
-        entryHeader->ReadExtra(extraStr);
+        if (!entryHeader->ReadExtra(extraStr)) {
+            SIGNATURE_TOOLS_LOGE("parse entry extra field failed");
+            return false;
+        }
         offset += entryHeader->GetExtraLength();
     }
     return true;

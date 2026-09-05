@@ -128,8 +128,11 @@ bool ZipSigner::ReadZip64EocdLocator(std::ifstream& input)
 bool ZipSigner::ReadZip64Eocd(std::ifstream& input)
 {
     uint64_t zip64EocdOffset = m_zip64EocdLocator->GetZip64EocdOffset();
-    if (zip64EocdOffset >= m_eOCDOffset ||
-        Zip64EndOfCentralDirectory::ZIP64_EOCD_LENGTH > m_eOCDOffset - zip64EocdOffset) {
+    // Zip64 EOCD must end before the Locator (locatorOffset < m_eOCDOffset, so this subsumes the EOCD32 upper bound)
+    uint64_t locatorOffset = m_eOCDOffset -
+        Zip64EndOfCentralDirectoryLocator::ZIP64_EOCD_LOCATOR_LENGTH;
+    if (zip64EocdOffset >= locatorOffset ||
+        Zip64EndOfCentralDirectory::ZIP64_EOCD_LENGTH > locatorOffset - zip64EocdOffset) {
         SIGNATURE_TOOLS_LOGE("zip64 eocd offset out of bounds: %" PRIu64, zip64EocdOffset);
         return false;
     }
@@ -146,6 +149,11 @@ bool ZipSigner::ReadZip64Eocd(std::ifstream& input)
         return false;
     }
     m_zip64Eocd = new Zip64EndOfCentralDirectory(zip64Eocd.value());
+    // Lower bound: Central Directory must be before Zip64 EOCD
+    if (m_zip64Eocd->GetOffset() > zip64EocdOffset) {
+        SIGNATURE_TOOLS_LOGE("zip64 eocd cd offset exceeds zip64 eocd offset");
+        return false;
+    }
     return true;
 }
 

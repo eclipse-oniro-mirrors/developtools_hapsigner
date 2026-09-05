@@ -173,6 +173,8 @@ public:
 private:
     static void SetCentralDirectoryValues(ByteBuffer& bf, CentralDirectory* cd);
 
+    static bool ParseZip64ExtendedInfo(const std::string& extra, CentralDirectory* cd);
+
     bool RebuildExtraField(bool includeZip64);
 
     /* 2 bytes */

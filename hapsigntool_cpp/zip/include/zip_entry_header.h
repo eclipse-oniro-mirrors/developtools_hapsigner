@@ -60,7 +60,7 @@ public:
 
     void ReadFileName(const std::string& bytes);
 
-    void ReadExtra(const std::string& bytes);
+    bool ReadExtra(const std::string& bytes);
 
     std::string ToBytes();
 

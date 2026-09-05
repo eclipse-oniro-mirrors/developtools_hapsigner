@@ -177,7 +177,7 @@ bool SignProvider::InitZipOutput(std::shared_ptr<RandomAccessFile> outputHap,
 
 bool SignProvider::ParseZip64IfPresent(RandomAccessFile& outputHap, DataSourceContents& dataSrcContents)
 {
-    if (static_cast<uint64_t>(dataSrcContents.cDOffset) != 0xFFFFFFFFULL) {
+    if (dataSrcContents.cDOffset != -1) {
         return true;
     }
     dataSrcContents.isZip64 = true;
@@ -195,7 +195,8 @@ bool SignProvider::ParseZip64IfPresent(RandomAccessFile& outputHap, DataSourceCo
     }
     uint64_t zip64EocdOffset = locator.GetZip64EocdOffset();
     uint64_t eocdEndOffset = static_cast<uint64_t>(dataSrcContents.eocdPair.second);
-    if (zip64EocdOffset >= eocdEndOffset ||
+    if (zip64EocdOffset < static_cast<uint64_t>(dataSrcContents.cDOffset) ||
+        zip64EocdOffset >= eocdEndOffset ||
         Zip64EndOfCentralDirectory::ZIP64_EOCD_LENGTH > eocdEndOffset - zip64EocdOffset) {
         PrintErrorNumberMsg("ZIP_ERROR", ZIP_ERROR, "zip64 eocd offset out of bounds");
         return false;
@@ -235,7 +236,7 @@ bool SignProvider::BuildZip64EocdSegment(DataSourceContents& dataSrcContents, in
     dataSrcContents.eocdFullBuffer.PutData(dataSrcContents.eocdPair.first.GetBufferPtr(),
         eocd32Len);
     dataSrcContents.eocdFullBuffer.Flip();
-    dataSrcContents.endOfCentralDir = new ByteBufferDataSource(dataSrcContents.eocdFullBuffer);
+    dataSrcContents.endOfCentralDir = std::make_unique<ByteBufferDataSource>(dataSrcContents.eocdFullBuffer);
     return dataSrcContents.endOfCentralDir != nullptr;
 }
 
@@ -271,7 +272,7 @@ bool SignProvider::InitDataSourceContents(RandomAccessFile& outputHap, DataSourc
         return false;
     }
 
-    dataSrcContents.beforeCentralDir = outputHapIn->Slice(0, dataSrcContents.cDOffset);
+    dataSrcContents.beforeCentralDir.reset(outputHapIn->Slice(0, dataSrcContents.cDOffset));
     if (!dataSrcContents.beforeCentralDir) {
         return false;
     }
@@ -284,7 +285,7 @@ bool SignProvider::InitDataSourceContents(RandomAccessFile& outputHap, DataSourc
     if (dataSrcContents.cDByteBuffer.GetCapacity() == 0) {
         return false;
     }
-    dataSrcContents.centralDir = new ByteBufferDataSource(dataSrcContents.cDByteBuffer);
+    dataSrcContents.centralDir = std::make_unique<ByteBufferDataSource>(dataSrcContents.cDByteBuffer);
     if (!dataSrcContents.centralDir) {
         return false;
     }
@@ -293,7 +294,7 @@ bool SignProvider::InitDataSourceContents(RandomAccessFile& outputHap, DataSourc
             return false;
         }
     } else {
-        dataSrcContents.endOfCentralDir = new ByteBufferDataSource(dataSrcContents.eocdPair.first);
+        dataSrcContents.endOfCentralDir = std::make_unique<ByteBufferDataSource>(dataSrcContents.eocdPair.first);
     }
     if (!dataSrcContents.endOfCentralDir) {
         return false;
@@ -308,8 +309,8 @@ bool SignProvider::DoSignBlock(SignerConfig& signerConfig, DataSourceContents& d
         PrintErrorLog("[SignCode] AppendPropertyBlock failed", SIGN_ERROR, tmpOutputFilePath);
         return false;
     }
-    DataSource* contents[] = {dataSrcContents.beforeCentralDir,
-        dataSrcContents.centralDir, dataSrcContents.endOfCentralDir};
+    DataSource* contents[] = {dataSrcContents.beforeCentralDir.get(),
+        dataSrcContents.centralDir.get(), dataSrcContents.endOfCentralDir.get()};
     if (!SignHap::Sign(contents, sizeof(contents) / sizeof(contents[0]),
         signerConfig, optionalBlocks, signingBlock)) {
         PrintErrorLog("[SignHap] SignHap Sign failed.", SIGN_ERROR, tmpOutputFilePath);
@@ -459,8 +460,8 @@ bool SignProvider::ReSignHap(Options* options)
         return PrintErrorLog("[ReSignHap] Init Data Source Contents failed", ZIP_ERROR, tmpOutputFilePath);
     }
 
-    DataSource* contents[] = {dataSrcContents.beforeCentralDir,
-        dataSrcContents.centralDir, dataSrcContents.endOfCentralDir};
+    DataSource* contents[] = {dataSrcContents.beforeCentralDir.get(),
+        dataSrcContents.centralDir.get(), dataSrcContents.endOfCentralDir.get()};
 
     if (!AppendReCodeSignBlock(&signerConfig, tmpOutputFilePath, suffix, dataSrcContents.cDOffset, *zip)) {
         return PrintErrorLog("[SignCode] AppendPropertyBlock failed", SIGN_ERROR, tmpOutputFilePath);
@@ -1197,8 +1198,8 @@ bool SignProvider::RedoSignWithZip64(SignerConfig& signerConfig, std::shared_ptr
         PrintErrorLog("[SignCode] AppendPropertyBlock (ZIP64 retry) failed", SIGN_ERROR, tmpOutputFilePath);
         return false;
     }
-    DataSource* newContents[] = {dataSrcContents.beforeCentralDir,
-        dataSrcContents.centralDir, dataSrcContents.endOfCentralDir};
+    DataSource* newContents[] = {dataSrcContents.beforeCentralDir.get(),
+        dataSrcContents.centralDir.get(), dataSrcContents.endOfCentralDir.get()};
     signingBlock = ByteBuffer();
     if (!SignHap::Sign(newContents, sizeof(newContents) / sizeof(newContents[0]),
         signerConfig, optionalBlocks, signingBlock)) {

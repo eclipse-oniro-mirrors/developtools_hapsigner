@@ -81,7 +81,7 @@ void ZipEntryHeader::ReadFileName(const std::string& bytes)
     }
 }
 
-void ZipEntryHeader::ReadExtra(const std::string& bytes)
+bool ZipEntryHeader::ReadExtra(const std::string& bytes)
 {
     ByteBuffer bf(bytes.c_str(), bytes.size());
     if (m_extraLength > 0) {
@@ -102,9 +102,12 @@ void ZipEntryHeader::ReadExtra(const std::string& bytes)
                 m_unCompressedSizeActual = zip64Info->GetUnCompressedSize();
             }
         } else if (m_compressedSize == UINT32_MAX || m_unCompressedSize == UINT32_MAX) {
-            m_isZip64 = true;
+            SIGNATURE_TOOLS_LOGE("Local File Header has sentinel values but "
+                                 "Zip64 Extended Info is missing in extra field");
+            return false;
         }
     }
+    return true;
 }
 
 std::string ZipEntryHeader::ToBytes()

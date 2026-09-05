@@ -79,9 +79,9 @@ public:
 
 protected:
     struct DataSourceContents {
-        DataSource* beforeCentralDir = nullptr;
-        ByteBufferDataSource* centralDir = nullptr;
-        ByteBufferDataSource* endOfCentralDir = nullptr;
+        std::unique_ptr<DataSource> beforeCentralDir;
+        std::unique_ptr<ByteBufferDataSource> centralDir;
+        std::unique_ptr<ByteBufferDataSource> endOfCentralDir;
         ByteBuffer cDByteBuffer;
         std::pair<ByteBuffer, int64_t> eocdPair;
         ByteBuffer eocdFullBuffer;
@@ -89,23 +89,14 @@ protected:
         int64_t cDSize = 0LL;
         bool isZip64 = false;
         Zip64EndOfCentralDirectory zip64Eocd;
-        ~DataSourceContents()
-        {
-            delete beforeCentralDir;
-            delete centralDir;
-            delete endOfCentralDir;
-        }
         DataSourceContents() = default;
         DataSourceContents(const DataSourceContents&) = delete;
         DataSourceContents& operator=(const DataSourceContents&) = delete;
         void Reset()
         {
-            delete beforeCentralDir;
-            beforeCentralDir = nullptr;
-            delete centralDir;
-            centralDir = nullptr;
-            delete endOfCentralDir;
-            endOfCentralDir = nullptr;
+            beforeCentralDir.reset();
+            centralDir.reset();
+            endOfCentralDir.reset();
             cDByteBuffer = ByteBuffer();
             eocdPair = {};
             eocdFullBuffer = ByteBuffer();
