@@ -84,7 +84,7 @@ out/<product>/.../hapsigntool_pc_unittest --gtest_filter=VerifyElfTest.*
 
 > 注意：单测工程的 `.gni` 源文件清单与 `binary_sign_tool/` 的 `.gni` 略有差异（`binary_sign_tool` 额外含本目录覆盖版 `sign_elf.cpp`/`code_signing.cpp`/`fs_verity_generator.cpp` 等、`compare_elf.cpp`、`self_sign_sign_provider.cpp`，且不含 `zip/` 与 `codesigning/datastructure/`），同步两套实现时需双向核对。
 
-静态检查：OpenHarmony 构建链集成 `clang-tidy`/`cppcheck`，可对改动文件单独跑 `clang-tidy -p out/<product> <file>` 与 `cppcheck --enable=warning,style <file>`；改动不得引入新增告警或抬升告警级别。
+静态检查：OpenHarmony 构建链集成静态分析工具（`cppcheck` 等），可对改动文件跑 `cppcheck --enable=warning,style <file>`；C/C++ 编译告警选项随构建链启用，改动不得引入新增告警或抬升告警级别。
 
 ### 完成标准
 

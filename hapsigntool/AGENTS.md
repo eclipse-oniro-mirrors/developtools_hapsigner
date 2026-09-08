@@ -157,7 +157,7 @@ mvn -s settings.xml test
 
 - **4 空格**缩进禁 Tab；**Java 8**（`maven.compiler.source/target=8`，父 `pom.xml:13-14`，`-Xlint:all`），不得使用 Java 9+ 特性（`var`/records/`module-info`/`List.of`/`Map.of`）；shade 插件显式排除 `module-info.class`（`hap_sign_tool/pom.xml:100-117`）。
 - 包名全小写层级（`com.ohos.hapsigntool`（库）/`com.ohos.hapsigntoolcmd`（CLI cmd 层）/`com.ohos.entity`（程序化 API POJO））；类名 PascalCase（`HapSignTool`/`SignToolServiceImpl`/`BcPkcs7Generator`），缩写有时保留大写（`HAP`/`JKS`/`CMS`/`PKCS7`），有时标题化（`Hap`/`Csr`）；方法 camelCase（`signHap`/`generateP7b`/`convert2Params`）；异常类后缀 `Exception`。
-- 大括号 K&R 风格（同行开括号）；每个源文件以 Apache 2.0 版权头起始（`Copyright (c) Huawei Device Co., Ltd.`）；公开方法/常量写 Javadoc（`@param`/`@return`/`@throws`/`@since`）。
+- 大括号 K&R 风格（同行开括号）；每个源文件以 Apache 2.0 版权头起始（版权人/年份与同目录现有源文件保持一致，不得擅自更改）；公开方法/常量写 Javadoc（`@param`/`@return`/`@throws`/`@since`）。
 - 密码学：`Security.addProvider(new BouncyCastleProvider())` 静态注册（`SignToolServiceImpl.java:75`/`SignProvider.java:118`/`VerifyHap.java:101`）；签名能力 OID 嵌入证书扩展（app `{0x30,0x06,0x02,0x01,0x01,0x0A,0x01,0x00}`、profile `{...,0x0A,0x01,0x01}`，`SignToolServiceImpl.java:62-67`）。
 - 内存/口令：口令存 `char[]` 不存 `String`（`CmdUtil.java:109-111` 转 `toCharArray`；`Options.getChars`）；用毕 `adapter.releasePwd()` 清零（`SignToolServiceImpl` 多处）；`KeyStoreHelper` 口令 `char[]`（`:94`）。
 - 日志：`private static final LogUtils LOGGER = new LogUtils(<Class>.class)`，`LOGGER.info/debug/warn/error(...)`，支持 `{}` 占位（`LogUtils.java:289-311`）；`info`→`Level.INFO`、`debug`→`Level.CONFIG`、`warn`→`Level.WARNING`、`error`→`Level.SEVERE`（`:51-55`）。`OUT_HANDLER`（stdout 非严重）+ `ERR_HANDLER`（stderr 警告+，`:65-69`）。注：`ErrorMsg.java` 另用 `org.apache.logging.log4j.LogManager`，但应用日志统一走 `LogUtils`。

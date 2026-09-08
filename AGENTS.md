@@ -63,7 +63,7 @@
 ## 仓库总览
 
 ```
-developtools_hapsigner_4G
+developtools_hapsigner
 ├── autosign/                # 一键签名脚本（Python3.5+）
 ├── binary_sign_tool/        # 原生 ELF 二进制签名工具（C++17 + Java）
 │   └── AGENTS.md            # ← binary_sign_tool Agent 指引
@@ -110,7 +110,7 @@ developtools_hapsigner_4G
 - **Java 版**（`hapsigntool/`、`binary_sign_tool/java/`）：`mvn -s settings.xml clean package`（Maven3，Java 8）→ 产物 `hap-sign-tool.jar` / `binary-sign-tool.jar`
 - **C++ 版**（`hapsigntool_cpp/`、`binary_sign_tool/`）：`./build.sh --product-name ohos-sdk`（在 OpenHarmony 源码根目录执行）→ 产物 `/openharmony_master/out/sdk/packages/ohos-sdk`
 - **测试**：Java 版用 JUnit5（`mvn -s settings.xml test`）；C++ 版用 gtest（`hapsigntool_cpp_test/`，`--gtest_filter=`）
-- **静态检查/lint**：Java 版 `-Xlint:all` 已编入编译（父 `pom.xml`），`mvn -s settings.xml -DskipTests=true clean package` 可观察编译告警；C++ 版经 OpenHarmony 构建链集成 `clang-tidy`/`cppcheck`（见子目录 `AGENTS.md`）。Java/C++ 均不得引入新增告警/告警级别抬升。
+- **静态检查/lint**：Java 版 `-Xlint:all` 已编入编译（父 `pom.xml`），`mvn -s settings.xml -DskipTests=true clean package` 可观察编译告警；C++ 版经 OpenHarmony 构建链集成静态分析工具（`cppcheck` 等，见子目录 `AGENTS.md`）。Java/C++ 均不得引入新增告警/告警级别抬升。
 
 若无法运行验证（如缺 OpenHarmony 源码树、缺真实 keystore/`.p12` 证书链、缺远程签名器插件、缺板侧 fs-verity 内核能力），须说明缺失环境与未验证项，列出推荐验证步骤与预期输出关键字供人工执行，不得声称已验证。详细构建/测试/完成标准见各子目录 `AGENTS.md`。
 
