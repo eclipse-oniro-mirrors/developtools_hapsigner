@@ -4,7 +4,7 @@
 
 ## 子目录 Agent 指引索引
 
-本仓按工具实现分为三个子目录，每个子目录下有独立的 `AGENTS.md`，包含该工具的完整代码地图、知识路由、约束边界与验证闭环。**改动任一工具前，先读对应子目录的 `AGENTS.md`。**
+本仓按工具实现分为三个子目录，每个子目录下有独立的 `AGENTS.md`，包含该工具的完整代码结构、知识路由、约束边界与验证闭环。**改动任一工具前，先读对应子目录的 `AGENTS.md`。**
 
 ### [hapsigntool/AGENTS.md](hapsigntool/AGENTS.md) —— Java 版应用包签名工具
 
@@ -32,7 +32,7 @@
 
 ## 按任务定位工具
 
-| 任务 | 首选工具 | 首选文档 |
+| 任务 | 适用工具 | 对应文档 |
 | --- | --- | --- |
 | HAP/HSP/HQF 应用包签名（zip 容器） | `hapsigntool`（Java）或 `hapsigntool_cpp`（C++） | 对应 `AGENTS.md` |
 | Profile `.p7b` 签名/验签 | `hapsigntool`（Java）或 `hapsigntool_cpp`（C++） | 对应 `AGENTS.md` |
@@ -130,4 +130,4 @@ developtools_hapsigner_4G
 
 1. 确认任务涉及哪个工具（按上方"按任务定位工具"表），读对应子目录 `AGENTS.md`
 2. 涉及共享源码或签名格式常量时，按对应 `AGENTS.md` 的"双库复用模型"说明，双向/三向核对
-3. 声明："我将修改 X 工具的 Y，已读取 `<子目录>/AGENTS.md` 的 Z 锚点，遵循其约束"
+3. 声明："修改目标：X 工具的 Y；已读锚点：`<子目录>/AGENTS.md` 的 Z；遵循其约束"

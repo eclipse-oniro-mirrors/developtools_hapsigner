@@ -22,7 +22,7 @@
 
 ### 按任务类型定位代码
 
-| 任务类型 | 首选位置 | 关键锚点 |
+| 任务类型 | 目标位置 | 关键锚点 |
 | --- | --- | --- |
 | CLI 命令分发 | `cmd/src/params_run_tool.cpp` | `:60`(`ProcessCmd`)、`:313`(`DispatchParams`)、`:40`(`DISPATCH_RUN_METHOD` sign/verify)、`:49`(`GENERATOR_RUN_METHOD` generate) |
 | CLI 参数解析/校验 | `cmd/src/cmd_util.cpp` + `cmd/src/params_trust_list.cpp` + `cmd/include/help.h` | `cmd_util.cpp:353`(`Convert2Params`)、`:179`/`:209`(realpath 路径校验)、`:394`(keyAlias 小写)；`params_trust_list.cpp`(`GetTrustList` 由 `HELP_TXT` 派生)；`help.h:27-29`(USAGE) |
@@ -145,7 +145,7 @@ out/<product>/.../hapsigntool_pc_unittest --gtest_filter=VerifyElfTest.*
 1. 确认任务类别，按上表定位锚点
 2. 涉及共享源时先确认是"本目录版"还是"`binary_sign_tool` 覆盖版"（查 `binary_sign_tool/` 对应 `signature_tools_*.gni` 的 `*_src` 清单——`binary_sign_tool` 覆盖 `sign_elf.cpp`/`code_signing.cpp`/`fs_verity_generator.cpp`/`merkle_tree_builder.cpp`/`bc_pkcs7_generator.cpp`/`profile_sign_tool.cpp`/`profile_info.cpp`/`options.cpp`/`file_utils.cpp` 等，并新增 `compare_elf.cpp`/`self_sign_sign_provider.cpp`，且不含 `zip/` 与 `codesigning/datastructure/`）
 3. 根据"项目约束"确认不违反任何约束
-4. 声明："我将修改 X，已读取 Y 锚点，遵循 Z 约束"
+4. 声明："修改目标：X；已读锚点：Y；遵循约束：Z"
 
 ## 编码约定
 
