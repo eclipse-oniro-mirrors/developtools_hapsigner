@@ -18,6 +18,7 @@
 
 #include <stdint.h>
 #include <string>
+#include <vector>
 
 namespace OHOS {
 namespace SignatureTools {
@@ -91,6 +92,13 @@ static constexpr int MAX_CERTS_NUM = 3;
 const std::string CODE_SIGN_SEC_NAME = ".codesign";
 const std::string PROFILE_SEC_NAME = ".profile";
 const std::string PERMISSION_SEC_NAME = ".permission";
-} // namespace UpdateEngine
+const std::string SHSTRTAB_SEC_NAME = ".shstrtab";
+constexpr int SHSTRNDX_SIZE = 2;
+inline const std::vector<uint8_t>& GetShstrtabMagic()
+{
+    static const std::vector<uint8_t> magic = {'O', 'H', 'O', 'S', 'C', 'S', 'I', 'G'};
+    return magic;
+}
+} // namespace SignatureTools
 } // namespace OHOS
 #endif // SIGNATRUETOOLS_CONSTANT_H

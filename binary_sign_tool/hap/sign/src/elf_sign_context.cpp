@@ -1,0 +1,319 @@
+/*
+ * Copyright (c) 2026-2026 Huawei Device Co., Ltd.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+#include "elf_sign_context.h"
+
+#include <algorithm>
+#include <cstring>
+
+#include "signature_tools_log.h"
+
+namespace OHOS {
+namespace SignatureTools {
+
+bool ElfSignContext::IsSignatureName(const std::string& name)
+{
+    return name == CODE_SIGN_SEC_NAME || name == PERMISSION_SEC_NAME || name == PROFILE_SEC_NAME;
+}
+
+bool ElfSignContext::IsMagicShstrtab(const SectionInfo& sec)
+{
+    if (sec.GetNameString() != SHSTRTAB_SEC_NAME) {
+        return false;
+    }
+    const std::vector<uint8_t>& data = sec.GetData();
+    const std::vector<uint8_t>& magic = GetShstrtabMagic();
+    if (data.size() < magic.size()) {
+        return false;
+    }
+    size_t start = data.size() - magic.size();
+    for (size_t i = 0; i < magic.size(); i++) {
+        if (data[start + i] != magic[i]) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool ElfSignContext::ExtractHeaderInfo(ELFIO::elfio& reader)
+{
+    headerInfo.fileClass = reader.get_class();
+    headerInfo.encoding = reader.get_encoding();
+    headerInfo.sectionEntrySize = reader.get_section_entry_size();
+    ELFIO::Elf64_Off shoff = reader.get_sections_offset();
+    ELFIO::Elf_Half shstrndx = reader.get_section_name_str_index();
+    ELFIO::Elf_Half shnum = reader.sections.size();
+
+    if (shoff == 0) {
+        SIGNATURE_TOOLS_LOGE("[ElfSignContext] No section header table (e_shoff == 0)");
+        return false;
+    }
+    if (shstrndx == static_cast<ELFIO::Elf_Half>(ELFIO::SHN_UNDEF)) {
+        SIGNATURE_TOOLS_LOGE("[ElfSignContext] No section name string table (e_shstrndx == SHN_UNDEF)");
+        return false;
+    }
+    if (shnum == 0) {
+        SIGNATURE_TOOLS_LOGE("[ElfSignContext] No sections found (e_shnum == 0)");
+        return false;
+    }
+    if ((shstrndx & 0xFFFF) == static_cast<ELFIO::Elf_Half>(ELFIO::SHN_XINDEX)) {
+        SIGNATURE_TOOLS_LOGE("[ElfSignContext] Extended section name index not supported (e_shstrndx == SHN_XINDEX)");
+        return false;
+    }
+
+    headerInfo.shtOff = shoff;
+    headerInfo.sectionNameStrIndex = shstrndx;
+    headerInfo.shNum = shnum;
+    convertor = reader.get_convertor();
+    return true;
+}
+
+void ElfSignContext::ExtractSectionInfos(ELFIO::elfio& reader)
+{
+    origSections.clear();
+    ELFIO::Elf_Half count = reader.sections.size();
+    for (ELFIO::Elf_Half i = 0; i < count; i++) {
+        ELFIO::section* sec = reader.sections[i];
+        if (sec == nullptr) {
+            continue;
+        }
+        SectionInfo info;
+        info.SetIndex(i);
+        info.SetNameOffset(sec->get_name_string_offset());
+        info.SetType(sec->get_type());
+        info.SetFlags(sec->get_flags());
+        info.SetAddress(sec->get_address());
+        info.SetOffset(sec->get_offset());
+        info.SetSize(sec->get_size());
+        info.SetLink(sec->get_link());
+        info.SetInfo(sec->get_info());
+        info.SetAddrAlign(sec->get_addr_align());
+        info.SetEntSize(sec->get_entry_size());
+        info.SetNameString(sec->get_name());
+        info.SetNew(false);
+        if (sec->get_name() == SHSTRTAB_SEC_NAME) {
+            const char* rawData = sec->get_data();
+            ELFIO::Elf_Xword rawSize = sec->get_size();
+            if (rawData != nullptr && rawSize > 0) {
+                info.SetData(rawData, static_cast<size_t>(rawSize));
+            }
+        }
+        origSections.push_back(std::move(info));
+    }
+}
+
+bool ElfSignContext::ValidateSignatureDataAtEnd()
+{
+    int64_t maxRetainedEnd = 0;
+    int64_t minSigOffset = INT64_MAX;
+    bool hasSignature = false;
+    for (const SectionInfo& sec : origSections) {
+        if (IsSignatureName(sec.GetNameString()) || IsMagicShstrtab(sec)) {
+            hasSignature = true;
+            minSigOffset = std::min(minSigOffset, static_cast<int64_t>(sec.GetOffset()));
+        } else if (sec.GetType() != ELFIO::SHT_NULL && sec.GetType() != ELFIO::SHT_NOBITS
+                   && sec.GetSize() > 0) {
+            maxRetainedEnd = std::max(maxRetainedEnd,
+                                      static_cast<int64_t>(sec.GetOffset() + sec.GetSize()));
+        }
+    }
+    if (hasSignature && maxRetainedEnd > minSigOffset) {
+        SIGNATURE_TOOLS_LOGE("[ElfSignContext] Signature section data is not at the end of file: "
+                             "max retained end=%ld, min signature offset=%ld",
+                             maxRetainedEnd, minSigOffset);
+        return false;
+    }
+    return true;
+}
+
+bool ElfSignContext::ComputeOffset(int64_t inputFileLength)
+{
+    int origShnum = static_cast<int>(origSections.size());
+    int64_t minOffset = inputFileLength;
+    if (static_cast<int64_t>(headerInfo.shtOff + static_cast<uint64_t>(headerInfo.shNum) *
+                             headerInfo.sectionEntrySize) == inputFileLength) {
+        minOffset = static_cast<int64_t>(headerInfo.shtOff);
+    }
+
+    if (!ValidateSignatureDataAtEnd()) {
+        return false;
+    }
+
+    for (int i = origShnum - 1; i >= 0; i--) {
+        if (IsSignatureName(origSections[i].GetNameString()) ||
+            IsMagicShstrtab(origSections[i])) {
+            minOffset = std::min(minOffset, static_cast<int64_t>(origSections[i].GetOffset()));
+            continue;
+        }
+        newSections.assign(origSections.begin(), origSections.begin() + i + 1);
+        break;
+    }
+
+    for (const SectionInfo& newSection : newSections) {
+        if (IsSignatureName(newSection.GetNameString())) {
+            SIGNATURE_TOOLS_LOGE("[ElfSignContext] Can not to resign while SHT or sign section existed error");
+            return false;
+        }
+        if (newSection.GetType() != ELFIO::SHT_NULL && newSection.GetType() != ELFIO::SHT_NOBITS
+            && newSection.GetSize() > 0
+            && static_cast<int64_t>(newSection.GetOffset()) > minOffset) {
+            SIGNATURE_TOOLS_LOGE("[ElfSignContext] Can not to sign while sign section existed error: %s offset=%lu "
+                                 "> minOffset=%ld",
+                                 newSection.GetNameString().c_str(),
+                                 static_cast<unsigned long>(newSection.GetOffset()), minOffset);
+            return false;
+        }
+    }
+
+    truncateOffset = minOffset;
+    return true;
+}
+
+bool ElfSignContext::Load(ELFIO::elfio& reader, int64_t inputFileLength)
+{
+    if (!ExtractHeaderInfo(reader)) {
+        return false;
+    }
+    ExtractSectionInfos(reader);
+    return ComputeOffset(inputFileLength);
+}
+
+bool ElfSignContext::BuildNewShstrtab()
+{
+    const SectionInfo* orgNameTabSecPtr = nullptr;
+    for (const SectionInfo& sec : origSections) {
+        if (sec.GetNameString() == SHSTRTAB_SEC_NAME && !IsMagicShstrtab(sec)) {
+            orgNameTabSecPtr = &sec;
+            break;
+        }
+    }
+    if (orgNameTabSecPtr == nullptr) {
+        if (headerInfo.sectionNameStrIndex >= origSections.size()) {
+            SIGNATURE_TOOLS_LOGE("[ElfSignContext] Invalid section name string index");
+            return false;
+        }
+        orgNameTabSecPtr = &origSections[headerInfo.sectionNameStrIndex];
+    }
+    const SectionInfo& orgNameTabSec = *orgNameTabSecPtr;
+    const std::vector<uint8_t>& origData = orgNameTabSec.GetData();
+    if (origData.empty()) {
+        SIGNATURE_TOOLS_LOGE("[ElfSignContext] Failed to read .shstrtab data");
+        return false;
+    }
+
+    size_t truncateAt = origData.size();
+    if (origSections.size() != newSections.size()) {
+        size_t maxNameEnd = 0;
+        for (const SectionInfo& sec : newSections) {
+            size_t nameLen = sec.GetNameString().size();
+            size_t nameEnd = sec.GetNameOffset() + nameLen + 1;
+            maxNameEnd = std::max(maxNameEnd, nameEnd);
+        }
+        truncateAt = maxNameEnd;
+    }
+
+    std::vector<uint8_t> truncatedData(origData.begin(), origData.begin() + truncateAt);
+    const std::string& nameStr = orgNameTabSec.GetNameString();
+    const std::vector<uint8_t> nameBytes(nameStr.begin(), nameStr.end());
+    size_t nameEnd = orgNameTabSec.GetNameOffset() + nameBytes.size() + 1;
+
+    std::vector<uint8_t> newShstrtab;
+    ELFIO::Elf_Word newNameOffset;
+    if (nameEnd <= truncatedData.size()) {
+        newShstrtab = truncatedData;
+        newNameOffset = orgNameTabSec.GetNameOffset();
+    } else {
+        newShstrtab = truncatedData;
+        newShstrtab.resize(truncatedData.size() + nameBytes.size() + 1, 0);
+        newNameOffset = static_cast<ELFIO::Elf_Word>(truncatedData.size());
+        std::copy(nameBytes.begin(), nameBytes.end(), newShstrtab.begin() + newNameOffset);
+    }
+
+    SectionInfo newNameTabSec = orgNameTabSec.DeepCopy();
+    newNameTabSec.SetNameOffset(newNameOffset);
+    newNameTabSec.SetSize(static_cast<ELFIO::Elf_Xword>(newShstrtab.size()));
+    newNameTabSec.SetData(newShstrtab);
+    newNameTabSec.SetNew(true);
+    newShStrTabIndex = static_cast<ELFIO::Elf_Half>(newSections.size());
+    newNameTabSec.SetIndex(static_cast<int>(newShStrTabIndex));
+    newSections.push_back(std::move(newNameTabSec));
+
+    return true;
+}
+
+bool ElfSignContext::AddSignSection(const std::string& name, int64_t addrAlign,
+                                    const std::vector<uint8_t>& data)
+{
+    SectionInfo sec;
+    sec.SetNameString(name);
+    sec.SetType(ELFIO::SHT_PROGBITS);
+    sec.SetAddrAlign(static_cast<ELFIO::Elf_Xword>(addrAlign));
+    sec.SetData(data);
+    sec.SetIndex(static_cast<int>(newSections.size()));
+    sec.SetNew(true);
+    if (!data.empty()) {
+        sec.SetSize(static_cast<ELFIO::Elf_Xword>(data.size()));
+    }
+
+    if (newShStrTabIndex >= newSections.size()) {
+        SIGNATURE_TOOLS_LOGE("[ElfSignContext] New .shstrtab not built yet");
+        return false;
+    }
+    SectionInfo& shStrTabSec = newSections[newShStrTabIndex];
+    std::vector<uint8_t>& shStrData = const_cast<std::vector<uint8_t>&>(shStrTabSec.GetData());
+    sec.SetNameOffset(static_cast<ELFIO::Elf_Word>(shStrData.size()));
+
+    const std::vector<uint8_t> nameBytes(name.begin(), name.end());
+    shStrData.resize(shStrData.size() + nameBytes.size() + 1, 0);
+    std::copy(nameBytes.begin(), nameBytes.end(), shStrData.begin() + sec.GetNameOffset());
+    shStrTabSec.SetSize(static_cast<ELFIO::Elf_Xword>(shStrData.size()));
+
+    newSections.push_back(std::move(sec));
+    return true;
+}
+
+bool ElfSignContext::FinalizeShstrtab()
+{
+    if (newShStrTabIndex >= newSections.size()) {
+        SIGNATURE_TOOLS_LOGE("[ElfSignContext] New .shstrtab not built yet");
+        return false;
+    }
+    SectionInfo& shstrtab = newSections[newShStrTabIndex];
+    if (!shstrtab.IsNew() || shstrtab.GetNameString() != SHSTRTAB_SEC_NAME) {
+        SIGNATURE_TOOLS_LOGE("[ElfSignContext] Section at newShStrTabIndex is not the new .shstrtab");
+        return false;
+    }
+    std::vector<uint8_t>& data = const_cast<std::vector<uint8_t>&>(shstrtab.GetData());
+    if (data.empty()) {
+        SIGNATURE_TOOLS_LOGE("[ElfSignContext] New .shstrtab data is null");
+        return false;
+    }
+
+    const std::vector<uint8_t>& magic = GetShstrtabMagic();
+    size_t oldLen = data.size();
+    size_t totalAdded = SHSTRNDX_SIZE + magic.size();
+    data.resize(oldLen + totalAdded, 0);
+
+    ELFIO::Elf_Half oldShstrndx = headerInfo.sectionNameStrIndex;
+    data[oldLen] = static_cast<uint8_t>((oldShstrndx >> 8) & 0xFF);
+    data[oldLen + 1] = static_cast<uint8_t>(oldShstrndx & 0xFF);
+    std::copy(magic.begin(), magic.end(), data.begin() + oldLen + SHSTRNDX_SIZE);
+
+    shstrtab.SetSize(static_cast<ELFIO::Elf_Xword>(data.size()));
+    return true;
+}
+
+} // namespace SignatureTools
+} // namespace OHOS
