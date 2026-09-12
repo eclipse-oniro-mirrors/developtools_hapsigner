@@ -33,7 +33,7 @@ public:
     static bool IsSignatureName(const std::string& name);
     static bool IsMagicShstrtab(const SectionInfo& sec);
 
-    bool Load(ELFIO::elfio& reader, int64_t inputFileLength);
+    bool Load(ELFIO::elfio& reader, const std::string& filePath);
     bool BuildNewShstrtab();
     bool AddSignSection(const std::string& name, int64_t addrAlign, const std::vector<uint8_t>& data);
     bool FinalizeShstrtab();

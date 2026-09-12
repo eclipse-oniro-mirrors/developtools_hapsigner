@@ -187,7 +187,7 @@ public class ElfSignContext {
      * @param sec section info to check
      * @return true if this is a magic-marked .shstrtab from a previous sign
      */
-    public static boolean isMagicShstrtab(SectionInfo sec) {
+    public boolean isMagicShstrtab(SectionInfo sec) {
         if (sec == null || !ElfSignConstants.SHSTRTAB_SEC_NAME.equals(sec.getNameString())) {
             return false;
         }

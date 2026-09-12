@@ -42,6 +42,7 @@ private:
     ElfSignContext* ctx = nullptr;
     int64_t newShoff = 0;
     int64_t codesignOffset = 0;
+    bool writeFailed = false;
 };
 
 } // namespace SignatureTools

@@ -100,10 +100,10 @@ public class ElfSignWriter {
             int writeLen = data != null ? data.length : (int) sec.getSize();
             if (data != null) {
                 dest.position(pos);
-                dest.write(ByteBuffer.wrap(data));
+                writeFully(dest, ByteBuffer.wrap(data));
             } else {
                 dest.position(pos);
-                dest.write(ByteBuffer.wrap(new byte[writeLen]));
+                writeFully(dest, ByteBuffer.wrap(new byte[writeLen]));
             }
             pos += sec.getSize();
         }
@@ -120,7 +120,7 @@ public class ElfSignWriter {
             long entryPos = newShoff + (long) i * entrySize;
             ByteBuffer buf = sec.toByteBuffer(is64, byteOrder, entrySize);
             dest.position(entryPos);
-            dest.write(buf);
+            writeFully(dest, buf);
         }
         return newShoff;
     }
@@ -137,21 +137,30 @@ public class ElfSignWriter {
         buf.flip();
         int shoffPos = is64 ? 0x28 : 0x20;
         dest.position(shoffPos);
-        dest.write(buf);
+        writeFully(dest, buf);
 
         int shnumPos = is64 ? 0x3C : 0x30;
         int newShnum = ctx.getNewSections().size();
         buf.rewind();
         buf.putShort((short) newShnum).flip();
         dest.position(shnumPos);
-        dest.write(buf);
+        writeFully(dest, buf);
 
         int shstrndxPos = is64 ? 0x3E : 0x32;
         short newShstrndx = ctx.getNewShStrTabIndex();
         buf.rewind();
         buf.putShort(newShstrndx).flip();
         dest.position(shstrndxPos);
-        dest.write(buf);
+        writeFully(dest, buf);
+    }
+
+    private void writeFully(FileChannel ch, ByteBuffer buf) throws IOException {
+        while (buf.hasRemaining()) {
+            int n = ch.write(buf);
+            if (n <= 0) {
+                throw new IOException("Failed to write data: channel returned " + n + " bytes");
+            }
+        }
     }
 
     private ByteOrder getByteOrder() {
@@ -160,7 +169,7 @@ public class ElfSignWriter {
         return convertor.getByteOrder();
     }
 
-    private static long align(long pos, long align) {
+    private long align(long pos, long align) {
         if (align <= 0) {
             return pos;
         }

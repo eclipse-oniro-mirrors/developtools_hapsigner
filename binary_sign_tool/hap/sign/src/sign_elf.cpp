@@ -37,13 +37,8 @@ bool SignElf::Sign(SignerConfig& signerConfig, std::map<std::string, std::string
         SIGNATURE_TOOLS_LOGE("[SignElf] Failed to load input ELF file");
         return false;
     }
-    int64_t inputFileLength = FileUtils::GetFileLen(inputFile);
-    if (inputFileLength < 0) {
-        SIGNATURE_TOOLS_LOGE("[SignElf] Failed to get input file length");
-        return false;
-    }
     ElfSignContext ctx;
-    if (!ctx.Load(elfReader, inputFileLength)) {
+    if (!ctx.Load(elfReader, inputFile)) {
         SIGNATURE_TOOLS_LOGE("[SignElf] Failed to load ELF context");
         return false;
     }

@@ -18,6 +18,7 @@
 #include <algorithm>
 #include <cstring>
 
+#include "file_utils.h"
 #include "signature_tools_log.h"
 
 namespace OHOS {
@@ -181,8 +182,13 @@ bool ElfSignContext::ComputeOffset(int64_t inputFileLength)
     return true;
 }
 
-bool ElfSignContext::Load(ELFIO::elfio& reader, int64_t inputFileLength)
+bool ElfSignContext::Load(ELFIO::elfio& reader, const std::string& filePath)
 {
+    int64_t inputFileLength = FileUtils::GetFileLen(filePath);
+    if (inputFileLength < 0) {
+        SIGNATURE_TOOLS_LOGE("[ElfSignContext] Failed to get input file length");
+        return false;
+    }
     if (!ExtractHeaderInfo(reader)) {
         return false;
     }
