@@ -42,6 +42,7 @@ public:
     static const std::string HAP_SIGNATURE_ENTRY_NAME;
     static const std::string ENABLE_SIGN_CODE_VALUE;
     static const std::string LIBS_PATH_PREFIX;
+    static const std::string NATIVE_LIB_AN_SUFFIX;
     CodeSigning(SignerConfig* signConfig);
     CodeSigning();
 
