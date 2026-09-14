@@ -29,6 +29,7 @@ const std::vector<std::string> CodeSigning::SUPPORT_FILE_FORM = { "hap", "hsp", 
 const std::string CodeSigning::HAP_SIGNATURE_ENTRY_NAME = "Hap";
 const std::string CodeSigning::ENABLE_SIGN_CODE_VALUE = "1";
 const std::string CodeSigning::LIBS_PATH_PREFIX = "libs/";
+const std::string CodeSigning::NATIVE_LIB_AN_SUFFIX = ".an";
 
 const FsVerityHashAlgorithm FS_SHA256(1, "SHA-256", 256 / 8);
 const FsVerityHashAlgorithm FS_SHA512(2, "SHA-512", 512 / 8);
@@ -498,17 +499,16 @@ bool CodeSigning::CheckFileName(char fileName[], size_t* nameLen)
 
 bool CodeSigning::IsNativeFile(const std::string& input)
 {
-    size_t dotPos = input.rfind('.');
-    if (dotPos == std::string::npos) {
+    if (input.empty()) {
         return false;
     }
-    std::string suffix = input.substr(dotPos + 1);
-    if (suffix == "an") {
+    if (input.size() >= NATIVE_LIB_AN_SUFFIX.size() &&
+        input.compare(input.size() - NATIVE_LIB_AN_SUFFIX.size(), NATIVE_LIB_AN_SUFFIX.size(),
+                      NATIVE_LIB_AN_SUFFIX) == 0) {
         return true;
     }
-    std::string libDir = input.substr(0, LIBS_PATH_PREFIX.size());
-    int ret = LIBS_PATH_PREFIX.compare(libDir);
-    if (ret == 0) {
+    if (input.size() >= LIBS_PATH_PREFIX.size() &&
+        input.compare(0, LIBS_PATH_PREFIX.size(), LIBS_PATH_PREFIX) == 0) {
         return true;
     }
     return false;
