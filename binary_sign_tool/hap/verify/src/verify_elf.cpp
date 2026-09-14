@@ -137,7 +137,7 @@ bool VerifyElf::PrintCertChainToCmd(std::vector<X509*>& certChain)
         PrintErrorNumberMsg("IO_ERROR", IO_ERROR, "The stdout stream may have errors");
         return false;
     }
-    uint64_t format = XN_FLAG_SEP_COMMA_PLUS; // Print according to RFC2253
+    uint64_t format = XN_FLAG_SEP_COMMA_PLUS | ASN1_STRFLGS_UTF8_CONVERT; // Print according to RFC2253
     uint64_t content = X509_FLAG_NO_EXTENSIONS | X509_FLAG_NO_ATTRIBUTES | X509_FLAG_NO_HEADER | X509_FLAG_NO_SIGDUMP;
     int num = 0;
     for (auto& cert : certChain) {
