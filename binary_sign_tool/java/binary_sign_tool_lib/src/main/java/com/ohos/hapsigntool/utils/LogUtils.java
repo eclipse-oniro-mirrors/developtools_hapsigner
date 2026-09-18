@@ -29,6 +29,7 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.logging.Handler;
 import java.util.logging.Level;
+import java.util.logging.LogRecord;
 import java.util.logging.Logger;
 import java.util.logging.StreamHandler;
 import java.util.regex.Matcher;
@@ -44,6 +45,7 @@ public class LogUtils {
     private static final Map<String, Level> LEVEL_MAP = new HashMap<>();
     private static final String DEFAULT_LEVEL = "info";
     private static final Pattern PATTERN = Pattern.compile("\\{}");
+    private static final LogFormatter LOG_FORMATTER = new LogFormatter();
 
     private static final Handler OUT_HANDLER;
     private static final Handler ERR_HANDLER;
@@ -61,11 +63,10 @@ public class LogUtils {
             level = LEVEL_MAP.get(getDefaultLogLevel(configFileName));
         }
 
-        LogFormatter logFormatter = new LogFormatter();
-        OUT_HANDLER = new StreamHandler(System.out, logFormatter);
+        OUT_HANDLER = new StreamHandler(System.out, LOG_FORMATTER);
         OUT_HANDLER.setFilter(record -> record.getLevel() != Level.SEVERE && record.getLevel() != Level.WARNING);
         OUT_HANDLER.setLevel(level);
-        ERR_HANDLER = new StreamHandler(System.err, logFormatter);
+        ERR_HANDLER = new StreamHandler(System.err, LOG_FORMATTER);
         ERR_HANDLER.setLevel(Level.WARNING);
     }
 
@@ -82,6 +83,27 @@ public class LogUtils {
         logger.addHandler(OUT_HANDLER);
         logger.addHandler(ERR_HANDLER);
         logger.setLevel(level);
+    }
+
+    /**
+     * Enable or disable quiet mode.
+     *
+     * @param quiet whether quiet mode is enabled
+     */
+    public static void setQuiet(boolean quiet) {
+        OUT_HANDLER.setLevel(quiet ? Level.OFF : level);
+        ERR_HANDLER.setLevel(quiet ? Level.SEVERE : Level.WARNING);
+    }
+
+    /**
+     * Print final command result.
+     *
+     * @param result final command result
+     */
+    public void result(String result) {
+        LogRecord record = new LogRecord(Level.INFO, " INFO - " + result);
+        System.out.print(LOG_FORMATTER.format(record));
+        System.out.flush();
     }
 
     /**

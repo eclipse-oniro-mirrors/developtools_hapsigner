@@ -517,6 +517,7 @@ binary-sign-tool display-sign -inFile "signed.elf"
          ├── -outFile           #输出签名后文件，必填项
          ├── -moduleFile        #权限module.json文件，可选项
          ├── -selfSign          #是否本机自签名模式，1表示自签名，0表示证书签名，默认为0，可选项
+         ├── -quiet             #输出日志是否启用安静模式，true表示启用，false表示不启用，默认为false，可选项
 
 ##### 接口说明
 
@@ -536,11 +537,13 @@ binary-sign-tool display-sign -inFile "signed.elf"
          ├── -outFile           #输出签名后文件，必填项
          ├── -moduleFile        #权限module.json文件，可选项
          ├── -selfSign          #是否本机自签名模式，1表示自签名，0表示证书签名，默认为0，可选项
+         ├── -quiet             #输出日志是否启用安静模式，true表示启用，false表示不启用，默认为false，可选项
 
 2.输出二进制文件签名证书链信息
 
     display-sign : 输出二进制文件签名证书链信息
          ├── -inFile            #输入的已签名elf文件，必填项
+         ├── -quiet             #quiet参数对display命令不可用，可选项
 
 #### 相关仓
    不涉及

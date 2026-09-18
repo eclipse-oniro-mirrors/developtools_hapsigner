@@ -17,7 +17,12 @@ package com.ohos.hapsigntool;
 
 import com.ohos.hapsigntool.utils.LogUtils;
 
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
+
+import java.io.ByteArrayOutputStream;
+import java.io.PrintStream;
+import java.nio.charset.StandardCharsets;
 
 /**
  * Test print logs.
@@ -108,5 +113,25 @@ public class LogUtilsTest {
         LOGGER.error("arg1: {}, arg2: {}", null, null);
         LOGGER.error("arg1: {}, arg2: {}", NORMAL_CHARACTER, SPECIAL_CHARACTER);
         LOGGER.error("arg1: {}, arg2: {}", SPECIAL_CHARACTER, NORMAL_CHARACTER);
+    }
+
+    /**
+     * Test result is printed in quiet mode.
+     */
+    @Test
+    public void testPrintQuietResult() {
+        PrintStream originalOut = System.out;
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        try {
+            System.setOut(new PrintStream(output));
+            LogUtils.setQuiet(true);
+            LOGGER.result("sign success");
+            Assertions.assertTrue(new String(output.toByteArray(), StandardCharsets.UTF_8)
+                .matches("\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2}\\.\\d{3}  INFO - sign success"
+                    + System.lineSeparator()));
+        } finally {
+            LogUtils.setQuiet(false);
+            System.setOut(originalOut);
+        }
     }
 }

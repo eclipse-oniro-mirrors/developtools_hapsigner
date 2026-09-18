@@ -52,16 +52,17 @@ bool ParamsRunTool::ProcessCmd(char** args, size_t size)
         std::shared_ptr<SignToolServiceImpl> serviceApi = std::make_shared<SignToolServiceImpl>();
         ParamsSharedPtr param = std::make_shared<Params>();
         if (!CmdUtil::Convert2Params(args, size, param)) {
-            PrintMsg(param->GetMethod() + " failed");
+            PrintResult(param->GetMethod() + " failed");
             return false;
         }
         SIGNATURE_TOOLS_LOGD("%s run start time  ", param->GetMethod().c_str());
         if (!DispatchParams(param, *serviceApi)) {
             SIGNATURE_TOOLS_LOGD("%s run end time  ", param->GetMethod().c_str());
-            PrintMsg(param->GetMethod() + " failed");
+            PrintResult(param->GetMethod() + " failed");
             return false;
         }
         SIGNATURE_TOOLS_LOGD("%s run end time  ", param->GetMethod().c_str());
+        PrintResult(param->GetMethod() + " success");
     }
     return true;
 }
