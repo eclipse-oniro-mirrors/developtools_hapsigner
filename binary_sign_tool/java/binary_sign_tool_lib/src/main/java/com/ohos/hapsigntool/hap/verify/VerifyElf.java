@@ -199,7 +199,7 @@ public class VerifyElf {
         String content = new String(data, StandardCharsets.UTF_8);
         // Try to format JSON using Gson
         try {
-            Gson gson = new GsonBuilder().setPrettyPrinting().create();
+            Gson gson = new GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create();
             JsonElement jsonElement = JsonParser.parseString(content);
             content = gson.toJson(jsonElement);
         } catch (JsonParseException e) {
