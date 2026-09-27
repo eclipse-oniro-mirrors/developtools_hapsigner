@@ -57,6 +57,7 @@ const std::string Options::PROOF_FILE = "outproof";
 const std::string Options::PROFILE_FILE = "profileFile";
 const std::string Options::PROFILE_SIGNED = "profileSigned";
 const std::string Options::PWD_INPUT_MODE = "pwdInputMode";
+const std::string Options::TICKET_FILE = "ticketFile";
 
 char* Options::GetChars(const std::string& key)
 {

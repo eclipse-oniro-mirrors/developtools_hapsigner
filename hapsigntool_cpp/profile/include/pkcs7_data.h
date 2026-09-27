@@ -30,6 +30,7 @@
 #include "openssl/ec.h"
 #include "openssl/asn1t.h"
 #include "openssl/pkcs7.h"
+
 #include "signer.h"
 #include "verify_cert_openssl_utils.h"
 
@@ -90,6 +91,14 @@ public:
     int Verify(const std::string& content = "")const;
     /* get original raw content*/
     int GetContent(std::string& content) const;
+    /* add data to unauthenticatedAttributes by OID string */
+    int AddUnauthenticatedAttribute(const std::string& oid, const std::string& data);
+    /* get data from unauthenticatedAttributes by OID string */
+    int GetUnauthenticatedAttribute(const std::string& oid, std::string& data) const;
+    /* get SET-encoded authenticatedAttributes DER bytes */
+    int GetAuthenticatedAttributesSetDer(std::string& der) const;
+    /* re-encode PKCS7 to DER string */
+    int Encode(std::string& der) const;
 
     /* In C++, the certificate chain order is forward, and Java is reversed,
     which is historically the result of correcting the certificate chain order */

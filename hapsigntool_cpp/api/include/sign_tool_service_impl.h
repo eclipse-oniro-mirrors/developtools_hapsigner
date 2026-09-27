@@ -52,6 +52,8 @@ public:
     bool PrintX509CertFromMemory(X509* cert);
     bool PrintX509CertChainFromMemory(std::vector<X509*> certs);
     bool VerifyHapSigner(Options* option)override;
+    bool StapleApp(Options* options);
+    bool ValidateStaple(Options* options);
     bool X509CertVerify(X509* cert, EVP_PKEY* privateKey);
     X509_REQ* GetCsr(EVP_PKEY* keyPair, std::string signAlg, std::string subject);
     int HandleIssuerKeyAliasEmpty(Options* options);

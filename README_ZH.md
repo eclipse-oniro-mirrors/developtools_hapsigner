@@ -382,6 +382,16 @@ hap-sign-tool sign-app -keyAlias "openharmony application release" -signAlg "SHA
           ├── -permSign      # 是否启用权限签名，1表示开启权限签名，0表示关闭权限签名。可选项。默认开启权限签名，通过参数配置为0关闭。
           ├── -pwdInputMode  # 密码输入模式，0表示密码从命令行参数中获取，1表示通过控制台交互输入密吗，默认为0。可选项
 
+12.钉入公证凭据
+
+     staple-app : 将公证凭据钉入已签名的应用包
+          ├── -inFile        # 已签名的应用包，必填项
+          ├── -ticketFile    # 公证凭据文件，必填项
+
+13.验证公证凭据
+
+     validate-staple : 验证已钉入应用包的公证凭据
+          ├── -inFile        # 已钉入公证凭据的应用包，必填项
   
 #### 相关仓
    不涉及

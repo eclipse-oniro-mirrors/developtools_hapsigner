@@ -86,6 +86,14 @@ const int KEYSTORE_STRUCTURE_ERROR = -116;
  * Enum constant PROVISION_INVALID_ERROR.
  */
 const int PROVISION_INVALID_ERROR = -117;
+/**
+ * Enum constant STAPLE_ERROR.
+ */
+const int STAPLE_ERROR = -118;
+/**
+ * Enum constant STAPLE_VERIFY_ERROR.
+ */
+const int STAPLE_VERIFY_ERROR = -119;
 
 } // namespace SignatureTools
 } // namespace OHOS
