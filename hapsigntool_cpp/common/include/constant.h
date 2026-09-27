@@ -53,6 +53,7 @@ const std::string NID_EXT_KEYUSAGE_CONST = "extendedKeyUsage";
 const std::string PKCS7_EXT_SIGNATURE_OID = "1.2.840.113549.1.1.10";
 const std::string X509_EXT_OID = "1.3.6.1.4.1.2011.2.376.1.3";
 const std::string OWNERID_OID = "1.3.6.1.4.1.2011.2.376.1.4.1"; // SIGNED_ID
+const std::string NOTARIZATION_TICKET_OID = "1.3.6.1.4.1.2011.2.376.3.1";
 const std::string OWNERID_OID_SHORT_NAME = "ownerID";
 const std::string OWNERID_OID_LONG_NAME = "Code Signature Owner ID";
 const std::string DEFAULT_PROFILE_SIGNED_1 = "1";
@@ -81,6 +82,8 @@ const std::string SIGN_APP = "sign-app";
 const std::string SIGN_PROFILE = "sign-profile";
 const std::string VERIFY_APP = "verify-app";
 const std::string VERIFY_PROFILE = "verify-profile";
+const std::string STAPLE_APP = "staple-app";
+const std::string VALIDATE_STAPLE = "validate-staple";
 
 constexpr int32_t ONE_DAY_HOUR = 24;
 constexpr int32_t ONE_DAY_MINUTE = 60;

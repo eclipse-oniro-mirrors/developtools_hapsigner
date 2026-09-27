@@ -43,7 +43,9 @@ static std::unordered_map <std::string,
     {RE_SIGN_APP, ParamsRunTool::RunReSignApp},
     {SIGN_PROFILE, ParamsRunTool::RunSignProfile},
     {VERIFY_APP, ParamsRunTool::RunVerifyApp},
-    {VERIFY_PROFILE, ParamsRunTool::RunVerifyProfile}
+    {VERIFY_PROFILE, ParamsRunTool::RunVerifyProfile},
+    {STAPLE_APP, ParamsRunTool::RunStapleApp},
+    {VALIDATE_STAPLE, ParamsRunTool::RunValidateStaple}
 };
 
 static std::unordered_map <std::string,
@@ -650,6 +652,32 @@ bool ParamsRunTool::RunVerifyApp(Options* params, SignToolServiceImpl& api)
         return false;
     }
     return api.VerifyHapSigner(params);
+}
+
+bool ParamsRunTool::RunStapleApp(Options* params, SignToolServiceImpl& api)
+{
+    if (!params->Required({Options::IN_FILE, Options::TICKET_FILE})) {
+        return false;
+    }
+
+    if (!CmdUtil::UpdateParamForCheckInFile(params, {Options::IN_FILE, Options::TICKET_FILE})) {
+        return false;
+    }
+
+    return api.StapleApp(params);
+}
+
+bool ParamsRunTool::RunValidateStaple(Options* params, SignToolServiceImpl& api)
+{
+    if (!params->Required({Options::IN_FILE})) {
+        return false;
+    }
+
+    if (!CmdUtil::UpdateParamForCheckInFile(params, {Options::IN_FILE})) {
+        return false;
+    }
+
+    return api.ValidateStaple(params);
 }
 } // namespace SignatureTools
 } // namespace OHOS

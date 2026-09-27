@@ -57,6 +57,8 @@ public:
     static bool RunReSignApp(Options* params, SignToolServiceImpl& api);
     static bool RunVerifyProfile(Options* params, SignToolServiceImpl& api);
     static bool RunVerifyApp(Options* params, SignToolServiceImpl& api);
+    static bool RunStapleApp(Options* params, SignToolServiceImpl& api);
+    static bool RunValidateStaple(Options* params, SignToolServiceImpl& api);
     static bool CheckEndCertArguments(Options& params);
     static bool CheckProfile(Options& params);
     static void PrintHelp();

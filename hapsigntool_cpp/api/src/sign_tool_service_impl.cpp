@@ -14,7 +14,7 @@
  */
 
 #include "sign_tool_service_impl.h"
-#include  <ctime>
+#include <ctime>
 
 #include "pkcs7_data.h"
 #include "profile_sign_tool.h"
@@ -30,6 +30,8 @@
 #include "remote_sign_provider.h"
 #include "verify_elf.h"
 #include "verify_bin.h"
+#include "ticket_staple.h"
+#include "ticket_validate.h"
 
 namespace OHOS {
 namespace SignatureTools {
@@ -734,6 +736,16 @@ bool SignToolServiceImpl::VerifyHapSigner(Options* option)
         PrintErrorNumberMsg("NOT_SUPPORT_ERROR", NOT_SUPPORT_ERROR, "Unsupported inForm!");
         return false;
     }
+}
+
+bool SignToolServiceImpl::StapleApp(Options* options)
+{
+    return TicketStaple::StapleApp(options);
+}
+
+bool SignToolServiceImpl::ValidateStaple(Options* options)
+{
+    return TicketValidate::ValidateStaple(options);
 }
 
 } // namespace SignatureTools
