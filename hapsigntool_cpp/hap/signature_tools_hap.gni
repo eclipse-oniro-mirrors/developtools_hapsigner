@@ -19,6 +19,7 @@ signature_tools_hap_include = [
   "${signature_tools_hap}/provider/include",
   "${signature_tools_hap}/sign/include",
   "${signature_tools_hap}/utils/include",
+  "${signature_tools_hap}/ticket/include",
 ]
 
 signature_tools_hap_src = [
@@ -46,4 +47,6 @@ signature_tools_hap_src = [
   "${signature_tools_hap}/utils/src/hap_utils.cpp",
   "${signature_tools_hap}/utils/src/dynamic_lib_handle.cpp",
   "${signature_tools_hap}/sign/src/bc_pkcs7_generator.cpp",
+  "${signature_tools_hap}/ticket/src/ticket_staple.cpp",
+  "${signature_tools_hap}/ticket/src/ticket_validate.cpp",
 ]

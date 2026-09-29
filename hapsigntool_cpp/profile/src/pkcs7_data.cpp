@@ -194,6 +194,171 @@ int PKCS7Data::GetContent(std::string& originalRawData) const
     return RET_OK;
 }
 
+static int CreateAndPushAttribute(PKCS7_SIGNER_INFO* si, int nid, const std::string& data)
+{
+    ASN1_OCTET_STRING* octetStr = ASN1_OCTET_STRING_new();
+    if (octetStr == nullptr) {
+        return INVALIDPARAM_ERROR;
+    }
+    ASN1_OCTET_STRING_set(octetStr, reinterpret_cast<const unsigned char*>(data.data()),
+                          static_cast<int>(data.size()));
+    X509_ATTRIBUTE* attr = X509_ATTRIBUTE_create(nid, V_ASN1_OCTET_STRING, octetStr);
+    if (attr == nullptr) {
+        ASN1_OCTET_STRING_free(octetStr);
+        return INVALIDPARAM_ERROR;
+    }
+    if (sk_X509_ATTRIBUTE_push(si->unauth_attr, attr) != 1) {
+        X509_ATTRIBUTE_free(attr);
+        PrintErrorNumberMsg("INVALIDPARAM_ERROR", INVALIDPARAM_ERROR, "push unauth_attr failed");
+        return INVALIDPARAM_ERROR;
+    }
+    return RET_OK;
+}
+
+int PKCS7Data::AddUnauthenticatedAttribute(const std::string& oid, const std::string& data)
+{
+    if (m_p7 == nullptr || !PKCS7_type_is_signed(m_p7) || m_p7->d.sign == nullptr) {
+        PrintErrorNumberMsg("INVALIDPARAM_ERROR", INVALIDPARAM_ERROR, "pkcs7 is invalid");
+        return INVALIDPARAM_ERROR;
+    }
+    int nid = OBJ_txt2nid(oid.c_str());
+    if (nid == NID_undef) {
+        nid = OBJ_create(oid.c_str(), "NotarizationTicket", "Notarization Ticket");
+        if (nid == NID_undef) {
+            PrintErrorNumberMsg("INVALIDPARAM_ERROR", INVALIDPARAM_ERROR, "create OID failed");
+            return INVALIDPARAM_ERROR;
+        }
+    }
+    STACK_OF(PKCS7_SIGNER_INFO)* signerInfos = PKCS7_get_signer_info(m_p7);
+    if (signerInfos == nullptr || sk_PKCS7_SIGNER_INFO_num(signerInfos) == 0) {
+        PrintErrorNumberMsg("INVALIDPARAM_ERROR", INVALIDPARAM_ERROR, "no signer info found");
+        return INVALIDPARAM_ERROR;
+    }
+    PKCS7_SIGNER_INFO* si = sk_PKCS7_SIGNER_INFO_value(signerInfos, 0);
+    if (si->unauth_attr == nullptr) {
+        si->unauth_attr = sk_X509_ATTRIBUTE_new_null();
+        if (si->unauth_attr == nullptr) {
+            PrintErrorNumberMsg("INVALIDPARAM_ERROR", INVALIDPARAM_ERROR, "create unauth_attr stack failed");
+            return INVALIDPARAM_ERROR;
+        }
+    } else {
+        for (int i = sk_X509_ATTRIBUTE_num(si->unauth_attr) - 1; i >= 0; i--) {
+            X509_ATTRIBUTE* oldAttr = sk_X509_ATTRIBUTE_value(si->unauth_attr, i);
+            if (oldAttr != nullptr &&
+                OBJ_obj2nid(X509_ATTRIBUTE_get0_object(oldAttr)) == nid) {
+                sk_X509_ATTRIBUTE_delete(si->unauth_attr, i);
+                X509_ATTRIBUTE_free(oldAttr);
+            }
+        }
+    }
+    return CreateAndPushAttribute(si, nid, data);
+}
+
+int PKCS7Data::GetUnauthenticatedAttribute(const std::string& oid, std::string& data) const
+{
+    if (m_p7 == nullptr || !PKCS7_type_is_signed(m_p7) || m_p7->d.sign == nullptr) {
+        PrintErrorNumberMsg("INVALIDPARAM_ERROR", INVALIDPARAM_ERROR, "pkcs7 is invalid");
+        return INVALIDPARAM_ERROR;
+    }
+    int nid = OBJ_txt2nid(oid.c_str());
+    if (nid == NID_undef) {
+        nid = OBJ_create(oid.c_str(), "NotarizationTicket", "Notarization Ticket");
+        if (nid == NID_undef) {
+            PrintErrorNumberMsg("INVALIDPARAM_ERROR", INVALIDPARAM_ERROR, "create OID failed");
+            return INVALIDPARAM_ERROR;
+        }
+    }
+    STACK_OF(PKCS7_SIGNER_INFO)* signerInfos = PKCS7_get_signer_info(m_p7);
+    if (signerInfos == nullptr || sk_PKCS7_SIGNER_INFO_num(signerInfos) == 0) {
+        PrintErrorNumberMsg("INVALIDPARAM_ERROR", INVALIDPARAM_ERROR, "no signer info found");
+        return INVALIDPARAM_ERROR;
+    }
+    PKCS7_SIGNER_INFO* si = sk_PKCS7_SIGNER_INFO_value(signerInfos, 0);
+    if (si->unauth_attr == nullptr) {
+        PrintErrorNumberMsg("INVALIDPARAM_ERROR", INVALIDPARAM_ERROR, "no unauthenticatedAttributes found");
+        return INVALIDPARAM_ERROR;
+    }
+    int attrCount = sk_X509_ATTRIBUTE_num(si->unauth_attr);
+    for (int i = 0; i < attrCount; i++) {
+        X509_ATTRIBUTE* attr = sk_X509_ATTRIBUTE_value(si->unauth_attr, i);
+        if (attr == nullptr) {
+            continue;
+        }
+        if (OBJ_obj2nid(X509_ATTRIBUTE_get0_object(attr)) != nid) {
+            continue;
+        }
+        ASN1_TYPE* type = X509_ATTRIBUTE_get0_type(attr, 0);
+        if (type == nullptr || type->type != V_ASN1_OCTET_STRING) {
+            continue;
+        }
+        ASN1_STRING* str = type->value.octet_string;
+        if (str == nullptr) {
+            continue;
+        }
+        data.assign(reinterpret_cast<const char*>(ASN1_STRING_get0_data(str)), ASN1_STRING_length(str));
+        return RET_OK;
+    }
+    PrintErrorNumberMsg("INVALIDPARAM_ERROR", INVALIDPARAM_ERROR, "attribute not found in unauth_attr");
+    return INVALIDPARAM_ERROR;
+}
+
+int PKCS7Data::GetAuthenticatedAttributesSetDer(std::string& der) const
+{
+    if (m_p7 == nullptr || !PKCS7_type_is_signed(m_p7) || m_p7->d.sign == nullptr) {
+        return INVALIDPARAM_ERROR;
+    }
+    STACK_OF(PKCS7_SIGNER_INFO)* siStack = PKCS7_get_signer_info(m_p7);
+    if (siStack == nullptr || sk_PKCS7_SIGNER_INFO_num(siStack) == 0) {
+        return INVALIDPARAM_ERROR;
+    }
+    PKCS7_SIGNER_INFO* si = sk_PKCS7_SIGNER_INFO_value(siStack, 0);
+    if (si->auth_attr == nullptr) {
+        return INVALIDPARAM_ERROR;
+    }
+    std::string content;
+    int count = sk_X509_ATTRIBUTE_num(si->auth_attr);
+    for (int i = 0; i < count; i++) {
+        unsigned char* buf = nullptr;
+        int len = i2d_X509_ATTRIBUTE(sk_X509_ATTRIBUTE_value(si->auth_attr, i), &buf);
+        if (buf != nullptr && len > 0) {
+            content.append(reinterpret_cast<const char*>(buf), len);
+        }
+        OPENSSL_free(buf);
+    }
+    int contentLen = static_cast<int>(content.size());
+    int totalLen = ASN1_object_size(1, contentLen, V_ASN1_SET);
+    unsigned char* out = static_cast<unsigned char*>(OPENSSL_malloc(totalLen));
+    if (out == nullptr) {
+        return INVALIDPARAM_ERROR;
+    }
+    unsigned char* p = out;
+    ASN1_put_object(&p, 1, contentLen, V_ASN1_SET, V_ASN1_UNIVERSAL);
+    if (memcpy_s(p, contentLen, content.data(), contentLen) != EOK) {
+        OPENSSL_free(out);
+        return INVALIDPARAM_ERROR;
+    }
+    der.assign(reinterpret_cast<const char*>(out), totalLen);
+    OPENSSL_free(out);
+    return RET_OK;
+}
+
+int PKCS7Data::Encode(std::string& der) const
+{
+    if (m_p7 == nullptr) {
+        PrintErrorNumberMsg("INVALIDPARAM_ERROR", INVALIDPARAM_ERROR, "pkcs7 is null");
+        return INVALIDPARAM_ERROR;
+    }
+    unsigned char* outDer = nullptr;
+    int outLen = i2d_PKCS7(m_p7, &outDer);
+    if (outDer == nullptr || outLen <= 0) {
+        PrintErrorNumberMsg("INVALIDPARAM_ERROR", INVALIDPARAM_ERROR, "encode pkcs7 failed");
+        return INVALIDPARAM_ERROR;
+    }
+    der.assign(reinterpret_cast<const char*>(outDer), outLen);
+    OPENSSL_free(outDer);
+    return RET_OK;
+}
+
 static void PKCS7AddCrls(PKCS7* p7, STACK_OF(X509_CRL)* crls)
 {
     if (crls == nullptr) {

@@ -36,7 +36,9 @@ const std::vector<std::string> commands = {
     VERIFY_PROFILE + options,
     SIGN_APP + options,
     VERIFY_APP + options,
-    RE_SIGN_APP + options
+    RE_SIGN_APP + options,
+    STAPLE_APP + options,
+    VALIDATE_STAPLE + options
 };
 
 ParamsTrustList ParamsTrustList::GetInstance()

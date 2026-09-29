@@ -12,6 +12,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include <cstring>
 #include <libgen.h>
 #include <set>
 #include <unistd.h>
@@ -268,6 +269,20 @@ static bool UpdateParamForOutform(const ParamsSharedPtr& param)
     return true;
 }
 
+static bool UpdateParamForQuiet(const ParamsSharedPtr& param)
+{
+    Options* options = param->GetOptions();
+    if (options->count(Options::QUIET)) {
+        std::string quietValue = options->GetString(Options::QUIET);
+        if (quietValue != "true" && quietValue != "false") {
+            PrintErrorNumberMsg("COMMAND_ERROR", COMMAND_ERROR,
+                "not support command param '" + quietValue + "', value must be true/false");
+            return false;
+        }
+    }
+    return true;
+}
+
 static bool UpdateParam(const ParamsSharedPtr& param)
 {
     if (!UpdateParamForVariantInt(param)) {
@@ -286,6 +301,9 @@ static bool UpdateParam(const ParamsSharedPtr& param)
         return false;
     }
     if (!UpdateParamForOutform(param)) {
+        return false;
+    }
+    if (!UpdateParamForQuiet(param)) {
         return false;
     }
     return true;
@@ -348,6 +366,8 @@ bool CmdUtil::Convert2Params(char** args, const size_t size, const ParamsSharedP
     if (!UpdateParam(param)) {
         return false;
     }
+    std::string quietValue = param->GetOptions()->GetString(Options::QUIET);
+    g_quietMode = param->GetMethod() == SIGN_ELF && quietValue == "true";
     return true;
 }
 

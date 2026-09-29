@@ -45,6 +45,7 @@ const std::string SIGN_HELP_TXT = R"(
         -moduleFile : module.json file.
         -selfSign : Whether the elf file is self sign, The value 1 means enable self sign, and value 0 means disable.
     The default value is 0. It is optional.
+        -quiet : quiet mode, suppress non-result output and only output the final result. value: true/false. optional.
 
     EXAMPLE :
         sign -keyAlias "oh-app1-key-v1" -appCertFile "/home/app-release-cert.cer" -signCode "1"
@@ -55,6 +56,7 @@ const std::string SIGN_HELP_TXT = R"(
 const std::string VERIFY_HELP_TXT = R"(
     display-sign[options]:
         -inFile : display-sign elf file sign information, required fields;
+        -quiet : unused.
 
     EXAMPLE:
         display-sign -inFile "signed.elf"

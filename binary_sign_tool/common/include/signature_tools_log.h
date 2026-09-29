@@ -32,8 +32,20 @@ static const char PLACEHOLDER = '0';
 static const int PLACEHOLDERLEN = 3;
 static const int SCALE = 1000;
 
+inline bool g_quietMode = false;
+
+#define SIGNATURE_LOG_BASE(level, fmt, ...) \
+    do { \
+        printf("[%s] [%s] [%s] [%d] " fmt "\n", \
+            level, __FILE_NAME__, __FUNCTION__, __LINE__, ##__VA_ARGS__); \
+    } while (0)
+
 #define SIGNATURE_LOG(level, fmt, ...) \
-    printf("[%s] [%s] [%s] [%d] " fmt "\n", level, __FILE_NAME__, __FUNCTION__, __LINE__, ##__VA_ARGS__) \
+    do { \
+        if (!OHOS::SignatureTools::g_quietMode) { \
+            SIGNATURE_LOG_BASE(level, fmt, ##__VA_ARGS__); \
+        } \
+    } while (0)
 
 #ifdef SIGNATURE_LOG_DEBUG
 #define SIGNATURE_TOOLS_LOGI(fmt, ...) SIGNATURE_LOG("Info", fmt, ##__VA_ARGS__)
@@ -44,8 +56,8 @@ static const int SCALE = 1000;
 #endif
 
 #define SIGNATURE_TOOLS_LOGW(fmt, ...) SIGNATURE_LOG("Warn", fmt, ##__VA_ARGS__)
-#define SIGNATURE_TOOLS_LOGF(fmt, ...) SIGNATURE_LOG("Fatal", fmt, ##__VA_ARGS__)
-#define SIGNATURE_TOOLS_LOGE(fmt, ...) SIGNATURE_LOG("Error", fmt, ##__VA_ARGS__)
+#define SIGNATURE_TOOLS_LOGF(fmt, ...) SIGNATURE_LOG_BASE("Fatal", fmt, ##__VA_ARGS__)
+#define SIGNATURE_TOOLS_LOGE(fmt, ...) SIGNATURE_LOG_BASE("Error", fmt, ##__VA_ARGS__)
 
 inline std::string GetSystemTime()
 {
@@ -81,7 +93,20 @@ inline void PrintErrorNumberMsg(const std::string& command, const int code, cons
 **/
 inline void PrintMsg(const std::string& message)
 {
+    if (g_quietMode) {
+        return;
+    }
     std::cout << GetSystemTime() << " INFO  - " << message << std::endl;
+}
+
+/*
+ * Function: Print the final command result to stdout.
+ * Parametric Description: result
+ * result: Final command result.
+ **/
+inline void PrintResult(const std::string& result)
+{
+    std::cout << GetSystemTime() << " INFO  - " << result << std::endl;
 }
 } // namespace SignatureTools
 } // namespace OHOS

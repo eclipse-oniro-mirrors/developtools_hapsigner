@@ -17,7 +17,7 @@
 
 #include <string>
  /* this file use to create help.txt content and
-  * it is divided into 12 strings according
+  * it is divided into 14 strings according
   * to the functional module
   */
 namespace OHOS {
@@ -26,6 +26,7 @@ namespace SignatureTools {
 const std::string HELP_TXT_HEADER = R"(
 USAGE: <generate-keypair|generate-csr|generate-cert|generate-ca|generate-app-cert|generate-profile-cert>[options]
 USAGE: <sign-profile|verify-profile|sign-app|verify-app>[options]
+USAGE: <staple-app|validate-staple>[options]
 )";
 
 const std::string KEYPAIR_HELP_TXT = R"(
@@ -334,6 +335,23 @@ const std::string VERIFY_APP_HELP_TXT = R"(
         verify-app-inFile "/home/app1-signed.hap" -outCertChain "outCertChain.cer" -outProfile "outprofile.p7b"
 )";
 
+const std::string STAPLE_APP_HELP_TXT = R"(
+    staple-app[options]:
+        -inFile : signed app package file, required fields;
+        -ticketFile : notarization ticket file, required fields;
+
+    EXAMPLE:
+        staple-app -inFile "/home/app1-signed.hap" -ticketFile "/home/notarization.ticket"
+)";
+
+const std::string VALIDATE_STAPLE_HELP_TXT = R"(
+    validate-staple[options]:
+        -inFile : stapled app package file, required fields;
+
+    EXAMPLE:
+        validate-staple -inFile "/home/app1-stapled.hap"
+)";
+
 const std::string HELP_END_TXT = R"(
 COMMANDS :
     generate-keypair : generate key pair
@@ -347,12 +365,14 @@ COMMANDS :
     sign-app : application package signature
     verify-app : application package file verification
     resign-enterprise-app : enterprise application package re-signature
+    staple-app : staple notarization ticket to signed app package
+    validate-staple : validate notarization ticket in stapled app package
 )";
 /* help.txt all content */
 const std::string HELP_TXT = HELP_TXT_HEADER + KEYPAIR_HELP_TXT + CSR_HELP_TXT + CERT_HELP_TXT
 + CA_CERT_HELP_TXT + APP_CERT_HELP_TXT + PROFILE_CERT_HELP_TXT
 + SIGN_PROFILE_HELP_TXT + VERIFY_PROFILE_HELP_TXT + SIGN_APP_HELP_TXT + RE_SIGN_APP_HELP_TXT
-+ VERIFY_APP_HELP_TXT + HELP_END_TXT;
++ VERIFY_APP_HELP_TXT + STAPLE_APP_HELP_TXT + VALIDATE_STAPLE_HELP_TXT + HELP_END_TXT;
 }
 }
 #endif

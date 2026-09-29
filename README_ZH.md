@@ -382,6 +382,16 @@ hap-sign-tool sign-app -keyAlias "openharmony application release" -signAlg "SHA
           ├── -permSign      # 是否启用权限签名，1表示开启权限签名，0表示关闭权限签名。可选项。默认开启权限签名，通过参数配置为0关闭。
           ├── -pwdInputMode  # 密码输入模式，0表示密码从命令行参数中获取，1表示通过控制台交互输入密吗，默认为0。可选项
 
+12.钉入公证凭据
+
+     staple-app : 将公证凭据钉入已签名的应用包
+          ├── -inFile        # 已签名的应用包，必填项
+          ├── -ticketFile    # 公证凭据文件，必填项
+
+13.验证公证凭据
+
+     validate-staple : 验证已钉入应用包的公证凭据
+          ├── -inFile        # 已钉入公证凭据的应用包，必填项
   
 #### 相关仓
    不涉及
@@ -517,6 +527,7 @@ binary-sign-tool display-sign -inFile "signed.elf"
          ├── -outFile           #输出签名后文件，必填项
          ├── -moduleFile        #权限module.json文件，可选项
          ├── -selfSign          #是否本机自签名模式，1表示自签名，0表示证书签名，默认为0，可选项
+         ├── -quiet             #输出日志是否启用安静模式，true表示启用，false表示不启用，默认为false，可选项
 
 ##### 接口说明
 
@@ -536,11 +547,13 @@ binary-sign-tool display-sign -inFile "signed.elf"
          ├── -outFile           #输出签名后文件，必填项
          ├── -moduleFile        #权限module.json文件，可选项
          ├── -selfSign          #是否本机自签名模式，1表示自签名，0表示证书签名，默认为0，可选项
+         ├── -quiet             #输出日志是否启用安静模式，true表示启用，false表示不启用，默认为false，可选项
 
 2.输出二进制文件签名证书链信息
 
     display-sign : 输出二进制文件签名证书链信息
          ├── -inFile            #输入的已签名elf文件，必填项
+         ├── -quiet             #quiet参数对display命令不可用，可选项
 
 #### 相关仓
    不涉及

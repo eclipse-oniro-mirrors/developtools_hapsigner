@@ -15,9 +15,11 @@
 
 package com.ohos.hapsigntool.cmd;
 
+import com.ohos.hapsigntool.entity.Options;
 import com.ohos.hapsigntool.error.CustomException;
 import com.ohos.hapsigntool.error.ERROR;
 import com.ohos.hapsigntool.error.SignToolErrMsg;
+import com.ohos.hapsigntool.utils.LogUtils;
 import com.ohos.hapsigntool.utils.StringUtils;
 import com.ohos.hapsigntool.utils.ValidateUtils;
 
@@ -92,7 +94,18 @@ public final class CmdUtil {
                 }
             }
         }
+        validateQuietMode(params);
+        String quietValue = params.getOptions().getString(Options.QUIET, "false");
+        LogUtils.setQuiet(Method.SIGN.equals(params.getMethod()) && "true".equals(quietValue));
         return params;
+    }
+
+    private static void validateQuietMode(Params params) {
+        String quietValue = params.getOptions().getString(Options.QUIET, "false");
+        if (!"true".equals(quietValue) && !"false".equals(quietValue)) {
+            CustomException.throwException(ERROR.COMMAND_ERROR,
+                SignToolErrMsg.PARAM_CHECK_FAILED.toString(Options.QUIET, "value must be true/false"));
+        }
     }
 
     private static boolean validAndPutParam(Params params, String key, String value) {
