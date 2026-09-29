@@ -18,6 +18,7 @@
 #include <vector>
 #include <string>
 #include <fstream>
+#include <unordered_map>
 #include <contrib/minizip/unzip.h>
 
 #include "signature_tools_log.h"
@@ -39,6 +40,8 @@ public:
                           std::string fileFormat, std::string profileContent);
     static bool VerifyNativeLib(CodeSignBlock& csb, std::string& file, unzFile& zFile,
                                 std::pair<std::string, std::string>& pairResult);
+    static bool VerifyHnpLibs(CodeSignBlock& csb, std::string& file,
+                               std::pair<std::string, std::string>& pairResult);
     static bool VerifyCodeSign(std::string file, std::pair<std::string,
                                std::string>& pairResult, CodeSignBlock& csb);
     static bool VerifySingleFile(std::istream& input, int64_t length, std::vector<int8_t> signature,
@@ -48,6 +51,21 @@ public:
 private:
     static bool GenerateCodeSignBlock(const std::string& file, int64_t offset, int64_t length,
                                       CodeSignBlock& csb);
+    static bool VerifyOneHnpEntry(unzFile zFile, uLong entryCount, uLong index, CodeSignBlock& csb,
+                                  std::unordered_map<std::string, std::string>& hnpTypeMap,
+                                  std::pair<std::string, std::string>& pairResult);
+    static bool WriteHnpToTemp(unzFile zFile, std::string& tempHnpPath);
+    static bool VerifyHnpInnerLibs(const std::string& hnpEntryName, const std::string& hnpType,
+                                   const std::string& tempHnpPath, CodeSignBlock& csb,
+                                   std::pair<std::string, std::string>& pairResult);
+    static bool VerifyOneHnpLib(unzFile hnpZip, uLong libCount, uLong libIndex,
+                                const std::string& hnpEntryName, const std::string& hnpType,
+                                std::vector<std::string>& fileNames,
+                                std::vector<SignInfo>& signInfoList,
+                                std::pair<std::string, std::string>& pairResult);
+    static bool VerifyHnpLibData(unzFile hnpZip, const std::string& libPath, SignInfo signInfo,
+                                 const std::string& hnpType,
+                                 std::pair<std::string, std::string>& pairResult);
     static bool ParseSegmentHead(CodeSignBlock& csb, std::ifstream& signedHap,
                                  std::vector<int8_t>& merkleTreeBytes, int32_t& fileReadOffset);
     static bool ParseMerkleTree(CodeSignBlock& csb, int32_t readOffset, std::ifstream& signedHap,

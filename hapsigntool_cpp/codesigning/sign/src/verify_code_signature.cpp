@@ -15,6 +15,17 @@
 #include "verify_code_signature.h"
 #include "elf_sign_block.h"
 #include "constant.h"
+#include "code_signing.h"
+#include "file_utils.h"
+#include <cstdlib>
+#include <filesystem>
+#include <unistd.h>
+#include <fstream>
+#include <sstream>
+#include <unordered_map>
+#include <algorithm>
+
+namespace fs = std::filesystem;
 
 namespace OHOS {
 namespace SignatureTools {
@@ -148,17 +159,241 @@ bool VerifyCodeSignature::VerifyCodeSign(std::string file, std::pair<std::string
         return false;
     }
     bool verifyNativeLibFlag = VerifyNativeLib(csb, file, zFile, pairResult);
+    unzClose(zFile);
     if (!verifyNativeLibFlag) {
         return false;
+    }
+    // 3) verify hnp libs
+    bool verifyHnpFlag = VerifyHnpLibs(csb, file, pairResult);
+    if (!verifyHnpFlag) {
+        return false;
+    }
+    return true;
+}
+
+bool VerifyCodeSignature::VerifyHnpLibData(unzFile hnpZip, const std::string& libPath,
+    SignInfo signInfo, const std::string& hnpType,
+    std::pair<std::string, std::string>& pairResult)
+{
+    std::stringbuf sb;
+    char buf[16 * 1024] = { 0 };
+    int nRead = 0;
+    int totalRead = 0;
+    do {
+        nRead = unzReadCurrentFile(hnpZip, buf, sizeof(buf));
+        if (nRead > 0) {
+            sb.sputn(buf, nRead);
+            totalRead += nRead;
+        }
+    } while (nRead > 0);
+    unzCloseCurrentFile(hnpZip);
+    PrintMsg("verify lib: " + libPath);
+    if (totalRead != signInfo.GetDataSize()) {
+        PrintErrorNumberMsg("VERIFY_ERROR", VERIFY_ERROR, "Invalid dataSize of native lib");
+        return false;
+    }
+    std::vector<int8_t> entrySig = signInfo.GetSignature();
+    std::istream input(&sb);
+    if (!VerifySingleFile(input, totalRead, entrySig, 0, std::vector<int8_t>())) {
+        SIGNATURE_TOOLS_LOGE("verify hnp lib failed: %s", libPath.c_str());
+        return false;
+    }
+    std::string entrySigStr(entrySig.begin(), entrySig.end());
+    return CmsUtils::CheckHnpOwnerID(entrySigStr, pairResult.first, pairResult.second, hnpType);
+}
+
+bool VerifyCodeSignature::VerifyOneHnpLib(unzFile hnpZip, uLong libCount, uLong libIndex,
+    const std::string& hnpEntryName, const std::string& hnpType,
+    std::vector<std::string>& fileNames, std::vector<SignInfo>& signInfoList,
+    std::pair<std::string, std::string>& pairResult)
+{
+    unz_file_info libInfo;
+    char libName[512] = { 0 };
+    if (unzGetCurrentFileInfo(hnpZip, &libInfo, libName, sizeof(libName),
+                              nullptr, 0, nullptr, 0) != UNZ_OK) {
+        return false;
+    }
+    std::string libEntryName(libName);
+    bool isLast = (libIndex == libCount - 1);
+    if (libEntryName.empty() || libEntryName.back() == '/') {
+        if (!isLast && unzGoToNextFile(hnpZip) != UNZ_OK) {
+            return false;
+        }
+        return true;
+    }
+    std::string libPath = hnpEntryName + "!/" + libEntryName;
+    int idx = -1;
+    for (size_t k = 0; k < fileNames.size(); ++k) {
+        if (fileNames[k] == libPath) {
+            idx = static_cast<int>(k);
+            break;
+        }
+    }
+    if (idx < 0) {
+        if (!isLast && unzGoToNextFile(hnpZip) != UNZ_OK) {
+            return false;
+        }
+        return true;
+    }
+    if (unzOpenCurrentFile(hnpZip) != UNZ_OK) {
+        return false;
+    }
+    if (!VerifyHnpLibData(hnpZip, libPath, signInfoList[static_cast<size_t>(idx)], hnpType,
+                          pairResult)) {
+        return false;
+    }
+    if (!isLast && unzGoToNextFile(hnpZip) != UNZ_OK) {
+        return false;
+    }
+    return true;
+}
+
+bool VerifyCodeSignature::VerifyHnpInnerLibs(const std::string& hnpEntryName,
+    const std::string& hnpType, const std::string& tempHnpPath, CodeSignBlock& csb,
+    std::pair<std::string, std::string>& pairResult)
+{
+    unzFile hnpZip = unzOpen(tempHnpPath.c_str());
+    if (hnpZip == nullptr) {
+        PrintErrorNumberMsg("IO_ERROR", IO_ERROR, "open temp hnp file failed: " + tempHnpPath);
+        return false;
+    }
+    unz_global_info hnpGlobalInfo;
+    if (unzGetGlobalInfo(hnpZip, &hnpGlobalInfo) != UNZ_OK) {
+        unzClose(hnpZip);
+        return false;
+    }
+    std::vector<std::string>& fileNames = csb.GetSoInfoSegment().GetFileNameList();
+    std::vector<SignInfo>& signInfoList = csb.GetSoInfoSegment().GetSignInfoList();
+    for (uLong j = 0; j < hnpGlobalInfo.number_entry; ++j) {
+        if (!VerifyOneHnpLib(hnpZip, hnpGlobalInfo.number_entry, j, hnpEntryName, hnpType,
+                             fileNames, signInfoList, pairResult)) {
+            unzClose(hnpZip);
+            return false;
+        }
+    }
+    unzClose(hnpZip);
+    return true;
+}
+
+bool VerifyCodeSignature::WriteHnpToTemp(unzFile zFile, std::string& tempHnpPath)
+{
+    tempHnpPath = (fs::temp_directory_path() / "tmp-vhnp-XXXXXX").string();
+    int fd = mkstemp(tempHnpPath.data());
+    if (fd < 0) {
+        return false;
+    }
+    close(fd);
+    std::ofstream out(tempHnpPath, std::ios::binary);
+    char readBuf[16 * 1024] = { 0 };
+    int readRet = 0;
+    do {
+        readRet = unzReadCurrentFile(zFile, readBuf, sizeof(readBuf));
+        if (readRet < 0) {
+            out.close();
+            return false;
+        }
+        if (readRet > 0) {
+            out.write(readBuf, readRet);
+            if (out.fail()) {
+                out.close();
+                return false;
+            }
+        }
+    } while (readRet > 0);
+    out.close();
+    if (out.fail() || FileUtils::GetFileLen(tempHnpPath) <= 0) {
+        return false;
+    }
+    return true;
+}
+
+bool VerifyCodeSignature::VerifyOneHnpEntry(unzFile zFile, uLong entryCount, uLong index,
+    CodeSignBlock& csb, std::unordered_map<std::string, std::string>& hnpTypeMap,
+    std::pair<std::string, std::string>& pairResult)
+{
+    unz_file_info zFileInfo;
+    char fileName[512] = { 0 };
+    if (unzGetCurrentFileInfo(zFile, &zFileInfo, fileName, sizeof(fileName),
+        nullptr, 0, nullptr, 0) != UNZ_OK) {
+        return false;
+    }
+    std::string entryName(fileName);
+    if (!CodeSigning::IsHnpEntry(entryName)) {
+        if (index != entryCount - 1 && unzGoToNextFile(zFile) != UNZ_OK) {
+            return false;
+        }
+        return true;
+    }
+    auto ite = hnpTypeMap.find(HapUtils::ParseHnpPath(entryName));
+    if (ite == hnpTypeMap.end()) {
+        PrintErrorNumberMsg("VERIFY_ERROR", VERIFY_ERROR,
+            "hnp should be described in module.json: " + entryName);
+        return false;
+    }
+    if (unzOpenCurrentFile(zFile) != UNZ_OK) {
+        PrintErrorNumberMsg("IO_ERROR", IO_ERROR, "open hnp entry failed: " + entryName);
+        return false;
+    }
+    std::string tempHnpPath;
+    if (!WriteHnpToTemp(zFile, tempHnpPath)) {
+        unzCloseCurrentFile(zFile);
+        return false;
+    }
+    unzCloseCurrentFile(zFile);
+    bool ret = VerifyHnpInnerLibs(entryName, ite->second, tempHnpPath, csb, pairResult);
+    FileUtils::DelDir(tempHnpPath);
+    if (!ret) {
+        return false;
+    }
+    if (index != entryCount - 1 && unzGoToNextFile(zFile) != UNZ_OK) {
+        return false;
+    }
+    return true;
+}
+
+bool VerifyCodeSignature::VerifyHnpLibs(CodeSignBlock& csb, std::string& file,
+    std::pair<std::string, std::string>& pairResult)
+{
+    std::vector<std::string>& fileNames = csb.GetSoInfoSegment().GetFileNameList();
+    bool hasHnp = false;
+    for (size_t i = 0; i < fileNames.size(); ++i) {
+        if (fileNames[i].find("!/") != std::string::npos) {
+            hasHnp = true;
+            break;
+        }
+    }
+    if (!hasHnp) {
+        return true;
+    }
+    std::unordered_map<std::string, std::string> hnpTypeMap;
+    if (!HapUtils::GetHnpsFromJson(file, hnpTypeMap)) {
+        SIGNATURE_TOOLS_LOGE("get hnp type map from module.json failed");
+        return false;
+    }
+    unzFile zFile = unzOpen(file.c_str());
+    if (zFile == nullptr) {
+        PrintErrorNumberMsg("IO_ERROR", IO_ERROR, "open hap file: " + file + " failed");
+        return false;
+    }
+    unz_global_info zGlobalInfo;
+    if (unzGetGlobalInfo(zFile, &zGlobalInfo) != UNZ_OK) {
+        PrintErrorNumberMsg("SIGN_ERROR", SIGN_ERROR, "get hap global info failed");
+        unzClose(zFile);
+        return false;
+    }
+    for (uLong i = 0; i < zGlobalInfo.number_entry; ++i) {
+        if (!VerifyOneHnpEntry(zFile, zGlobalInfo.number_entry, i, csb, hnpTypeMap, pairResult)) {
+            unzClose(zFile);
+            return false;
+        }
     }
     unzClose(zFile);
     return true;
 }
 
 bool VerifyCodeSignature::VerifySingleFile(std::istream& input, int64_t length,
-                                           std::vector<int8_t> signature,
-                                           int64_t merkleTreeOffset,
-                                           std::vector<int8_t> inMerkleTreeBytes)
+    std::vector<int8_t> signature, int64_t merkleTreeOffset,
+    std::vector<int8_t> inMerkleTreeBytes)
 {
     std::pair<std::vector<int8_t>, std::vector<int8_t>> pairResult
         = GenerateFsVerityDigest(input, length, merkleTreeOffset);
@@ -173,7 +408,7 @@ bool VerifyCodeSignature::VerifySingleFile(std::istream& input, int64_t length,
 }
 
 bool VerifyCodeSignature::GenerateCodeSignBlock(const std::string& file, int64_t offset,
-                                                int64_t length, CodeSignBlock& csb)
+    int64_t length, CodeSignBlock& csb)
 {
     // 1) parse sign block to CodeSignBlock object
     std::ifstream signedHap(file, std::ios::binary);

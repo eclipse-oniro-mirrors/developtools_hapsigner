@@ -17,6 +17,8 @@
 
 #include <vector>
 #include <string>
+#include <future>
+#include <unordered_map>
 #include <contrib/minizip/unzip.h>
 #include <mutex>
 
@@ -42,6 +44,9 @@ public:
     static const std::string HAP_SIGNATURE_ENTRY_NAME;
     static const std::string ENABLE_SIGN_CODE_VALUE;
     static const std::string LIBS_PATH_PREFIX;
+    static const std::string NATIVE_LIB_AN_SUFFIX;
+    static const std::string HNP_PATH_PREFIX;
+    static const std::string HNP_FILE_SUFFIX;
     CodeSigning(SignerConfig* signConfig);
     CodeSigning();
 
@@ -58,9 +63,19 @@ public:
 
 public:
     static bool IsNativeFile(const std::string& input);
+    static bool IsHnpEntry(const std::string& entryName);
+    static bool IsElfFile(const char* data, int size);
     int64_t ComputeDataSize(ZipSigner& zip);
     int64_t GetTimestamp();
-    bool SignNativeLibs(const std::string &input, std::string &ownerID);
+    bool SignNativeLibs(const std::string &input, std::string &ownerID,
+                        std::vector<std::pair<std::string, SignInfo>>& outList);
+    bool SignNativeHnps(const std::string &input, const std::string &profileContent,
+                        const std::string &ownerID,
+                        std::vector<std::pair<std::string, SignInfo>>& nativeLibInfoList);
+    bool SignHnpLibs(const std::string &hnpEntryName, const std::string &tempHnpPath,
+                     const std::string &ownerID,
+                     std::vector<std::pair<std::string, SignInfo>>& nativeLibInfoList);
+    bool WriteTempHnpFile(unzFile& zFile, const std::string& tempHnpPath);
     void UpdateCodeSignBlock();
     bool GetNativeEntriesFromHap(const std::string& packageName, UnzipHandleParam& param);
     bool GetSingleFileStreamFromZip(unzFile& zFile, char fileName[],
@@ -78,6 +93,25 @@ public:
 private:
     static bool CheckUnzParam(unzFile& zFile, unz_file_info& zFileInfo, char fileName[], size_t* nameLen);
     static bool CheckFileName(char fileName[], size_t* nameLen);
+    bool SignHapEntry(const std::string &input, int64_t dataSize, int64_t offset,
+                      const std::string &profileContent, int64_t& fsvTreeOffset, std::string& ownerID);
+    bool SignAllNativeLibs(const std::string &input, const std::string &profileContent,
+                           const std::string &ownerID);
+    bool SignOneHapHnpEntry(unzFile zFile, uLong entryCount, uLong index,
+                            std::unordered_map<std::string, std::string>& hnpTypeMap,
+                            const std::string& profileContent, const std::string& ownerID,
+                            std::vector<std::pair<std::string, SignInfo>>& nativeLibInfoList);
+    bool SignOneHnpFromHap(unzFile zFile, const std::string& entryName, const std::string& hnpType,
+                           const std::string& profileContent, const std::string& ownerID,
+                           std::vector<std::pair<std::string, SignInfo>>& nativeLibInfoList);
+    bool SignOneHnpEntry(unzFile hnpZip, uLong entryCount, uLong index, const std::string& hnpEntryName,
+                         const std::string& ownerID,
+                         std::vector<std::pair<std::string, SignInfo>>& nativeLibInfoList);
+    bool SignHnpElfEntry(unzFile hnpZip, const std::string& hnpEntryName, const std::string& entryName,
+                         const std::string& ownerID,
+                         std::vector<std::pair<std::string, SignInfo>>& nativeLibInfoList);
+    bool DispatchParseZipInfo(const std::string& packageName, UnzipHandleParam& param, unz_file_pos pos,
+                              std::vector<std::future<bool>>& thread_results);
     bool HandleZipGlobalInfo(const std::string& packageName, unzFile& zFile,
                              unz_global_info& zGlobalInfo, UnzipHandleParam& param);
     bool DoNativeLibVerify(std::string fileName, std::stringbuf& sb,

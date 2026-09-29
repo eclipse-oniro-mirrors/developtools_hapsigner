@@ -92,6 +92,19 @@ bool CmsUtils::CheckOwnerID(const std::string& signature, const std::string& pro
     return true;
 }
 
+bool CmsUtils::CheckHnpOwnerID(const std::string& signature, const std::string& profileOwnerID,
+    const std::string& profileType, const std::string& hnpType)
+{
+    static const std::string HNP_RELEASE_TYPE = "release";
+    static const std::string HNP_PUBLIC_TYPE_STR = "public";
+    static const std::string HNP_SHARED_LIB_ID = "SHARED_LIB_ID";
+    std::string ownerID = profileOwnerID;
+    if (HNP_RELEASE_TYPE == profileType && HNP_PUBLIC_TYPE_STR == hnpType) {
+        ownerID = HNP_SHARED_LIB_ID;
+    }
+    return CheckOwnerID(signature, ownerID, profileType);
+}
+
 int CmsUtils::CreateNIDFromOID(const std::string& oid, const std::string& shortName,
     const std::string& longName)
 {
