@@ -83,6 +83,7 @@ public:
     static constexpr int PERMISSION_SIGN_MAGIC_LENGTH = 8;
     static constexpr int MAX_PERMISSION_SIGN_DIGEST_COUNT = 4;
     static constexpr int64_t MAX_INPUT_FILE_SIZE = 200LL * 1024 * 1024 * 1024; // 200GB
+    static constexpr int HNP_MIN_TOKENS = 3;
 
 public:
     static std::string GetAppIdentifier(const std::string& profileContent);
@@ -92,10 +93,17 @@ public:
     static const std::vector<int8_t>& GetPermissionSignMagic();
     static int GetHapSigningBlockVersion(int compatibleVersion);
     static bool ReadFileToByteBuffer(const std::string& file, ByteBuffer& buffer);
+    static std::string GetPublicHnpOwnerId(const std::string& profileContent);
+    static std::string ParseHnpPath(const std::string& path);
+    static bool GetHnpsFromJson(const std::string& hapFile,
+                                std::unordered_map<std::string, std::string>& hnpNameMap);
 
 private:
+    static bool ParseHnpPackages(const std::string& moduleContent,
+                                std::unordered_map<std::string, std::string>& hnpNameMap);
     static const int32_t MAX_APP_ID_LEN = 32;
     static const std::string HAP_DEBUG_OWNER_ID;
+    static const std::string HAP_SHARED_OWNER_ID;
     static std::set<int> HAP_SIGNATURE_OPTIONAL_BLOCK_IDS;
     static constexpr int MIN_COMPATIBLE_VERSION_FOR_SCHEMA_V3 = 8;
     static const std::vector<int8_t> HAP_SIGNING_BLOCK_MAGIC_V2;

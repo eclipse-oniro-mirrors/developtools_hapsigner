@@ -453,7 +453,8 @@ HWTEST_F(CodeSigningTest, signNativeLibs, testing::ext::TestSize.Level1)
     CodeSigning codeSigning(&signerConfig);
     std::string input = "./codeSigning/entry-default-unsigned-so.hap";
     std::string ownerID;
-    bool flag = codeSigning.SignNativeLibs(input, ownerID);
+    std::vector<std::pair<std::string, SignInfo>> nativeLibInfoList;
+    bool flag = codeSigning.SignNativeLibs(input, ownerID, nativeLibInfoList);
     EXPECT_EQ(flag, false);
 }
 

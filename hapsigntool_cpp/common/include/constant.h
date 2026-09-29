@@ -66,9 +66,16 @@ const std::string BIN = "bin";
 const std::string OUT_FORM_CERT = "cert";
 const std::string OUT_FORM_CERT_CHAIN = "certChain";
 const std::string DEBUG_STR = "debug";
+const std::string RELEASE_STR = "release";
 const std::string DEBUG_LIB_ID = "DEBUG_LIB_ID";
+const std::string SHARED_LIB_ID = "SHARED_LIB_ID";
 const std::string REMOTE_SIGN = "remoteSign";
 const std::string LOCAL_SIGN = "localSign";
+const std::string HNP_PATH_PREFIX = "hnp/";
+const std::string HNP_FILE_SUFFIX = ".hnp";
+const std::string HNP_PRIVATE_TYPE = "private";
+const std::string HNP_PUBLIC_TYPE = "public";
+const std::string MODULE_JSON_FILE = "module.json";
 
 //Corresponding to each functional module
 const std::string GENERATE_KEYPAIR = "generate-keypair";
