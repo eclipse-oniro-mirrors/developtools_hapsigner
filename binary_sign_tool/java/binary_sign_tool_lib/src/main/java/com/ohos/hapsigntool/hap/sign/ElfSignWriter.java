@@ -37,6 +37,18 @@ import java.nio.file.StandardOpenOption;
  * @since 2026/07/20
  */
 public class ElfSignWriter {
+    /**
+     * Byte alignment of the section header table offset ({@code e_shoff})
+     * for a 32-bit ELF, equal to {@code sizeof(Elf32_Addr)}.
+     */
+    private static final long SECTION_HEADER_TABLE_ALIGN_32 = 4L;
+
+    /**
+     * Byte alignment of the section header table offset ({@code e_shoff})
+     * for a 64-bit ELF, equal to {@code sizeof(Elf64_Addr)}.
+     */
+    private static final long SECTION_HEADER_TABLE_ALIGN_64 = 8L;
+
     private ElfSignContext ctx;
 
     private long newShoff;
@@ -111,8 +123,9 @@ public class ElfSignWriter {
     }
 
     private long writeSectionHeaderTable(FileChannel dest, long pos) throws IOException {
-        newShoff = align(pos, 4);
         boolean is64 = ctx.getHeaderInfo().getFileClass() == ElfTypes.ELFCLASS64;
+        long shoffAlign = is64 ? SECTION_HEADER_TABLE_ALIGN_64 : SECTION_HEADER_TABLE_ALIGN_32;
+        newShoff = align(pos, shoffAlign);
         int entrySize = ctx.getHeaderInfo().getSectionEntrySize();
         ByteOrder byteOrder = getByteOrder();
         for (int i = 0; i < ctx.getNewSections().size(); i++) {

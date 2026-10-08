@@ -26,6 +26,8 @@ namespace OHOS {
 namespace SignatureTools {
 
 static constexpr int BUFFER_SIZE = 1024 * 1024;
+static constexpr int64_t SECTION_HEADER_TABLE_ALIGN_32 = 4; // sizeof(Elf32_Addr)
+static constexpr int64_t SECTION_HEADER_TABLE_ALIGN_64 = 8; // sizeof(Elf64_Addr)
 
 int64_t ElfSignWriter::Write(const std::string& originalFile, const std::string& outputFile)
 {
@@ -130,8 +132,9 @@ int64_t ElfSignWriter::WriteNewSections(std::ofstream& dest, int64_t off)
 
 void ElfSignWriter::WriteSectionHeaderTable(std::ofstream& dest, int64_t pos)
 {
-    newShoff = Align(pos, 4);
     bool is64 = ctx->GetHeaderInfo().fileClass == ELFIO::ELFCLASS64;
+    int64_t shoffAlign = is64 ? SECTION_HEADER_TABLE_ALIGN_64 : SECTION_HEADER_TABLE_ALIGN_32;
+    newShoff = Align(pos, shoffAlign);
     int entrySize = ctx->GetHeaderInfo().sectionEntrySize;
     const auto& convertor = ctx->GetConvertor();
     std::vector<SectionInfo>& sections = ctx->GetNewSections();
@@ -158,12 +161,12 @@ void ElfSignWriter::WriteElfHeader(std::ofstream& dest)
     const auto& convertor = ctx->GetConvertor();
 
     int shoffPos = is64 ? 0x28 : 0x20;
-    uint64_t shoffVal = (*convertor)(static_cast<uint64_t>(newShoff));
     dest.seekp(shoffPos, std::ios::beg);
     if (is64) {
+        uint64_t shoffVal = (*convertor)(static_cast<uint64_t>(newShoff));
         dest.write(reinterpret_cast<const char*>(&shoffVal), sizeof(uint64_t));
     } else {
-        uint32_t shoff32 = static_cast<uint32_t>(shoffVal);
+        uint32_t shoff32 = (*convertor)(static_cast<uint32_t>(newShoff));
         dest.write(reinterpret_cast<const char*>(&shoff32), sizeof(uint32_t));
     }
     if (!dest) {

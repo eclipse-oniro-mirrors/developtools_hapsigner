@@ -196,21 +196,38 @@ bool ElfSignContext::Load(ELFIO::elfio& reader, const std::string& filePath)
     return ComputeOffset(inputFileLength);
 }
 
-bool ElfSignContext::BuildNewShstrtab()
+const SectionInfo* ElfSignContext::FindOriginalShstrtab() const
 {
-    const SectionInfo* orgNameTabSecPtr = nullptr;
     for (const SectionInfo& sec : origSections) {
         if (sec.GetNameString() == SHSTRTAB_SEC_NAME && !IsMagicShstrtab(sec)) {
-            orgNameTabSecPtr = &sec;
-            break;
+            return &sec;
         }
     }
+    if (headerInfo.sectionNameStrIndex >= origSections.size()) {
+        SIGNATURE_TOOLS_LOGE("[ElfSignContext] Invalid section name string index");
+        return nullptr;
+    }
+    return &origSections[headerInfo.sectionNameStrIndex];
+}
+
+size_t ElfSignContext::ComputeShstrtabTruncateAt(size_t origDataSize) const
+{
+    if (origSections.size() == newSections.size()) {
+        return origDataSize;
+    }
+    size_t maxNameEnd = 0;
+    for (const SectionInfo& sec : newSections) {
+        size_t nameEnd = sec.GetNameOffset() + sec.GetNameString().size() + 1;
+        maxNameEnd = std::max(maxNameEnd, nameEnd);
+    }
+    return maxNameEnd;
+}
+
+bool ElfSignContext::BuildNewShstrtab()
+{
+    const SectionInfo* orgNameTabSecPtr = FindOriginalShstrtab();
     if (orgNameTabSecPtr == nullptr) {
-        if (headerInfo.sectionNameStrIndex >= origSections.size()) {
-            SIGNATURE_TOOLS_LOGE("[ElfSignContext] Invalid section name string index");
-            return false;
-        }
-        orgNameTabSecPtr = &origSections[headerInfo.sectionNameStrIndex];
+        return false;
     }
     const SectionInfo& orgNameTabSec = *orgNameTabSecPtr;
     const std::vector<uint8_t>& origData = orgNameTabSec.GetData();
@@ -219,17 +236,7 @@ bool ElfSignContext::BuildNewShstrtab()
         return false;
     }
 
-    size_t truncateAt = origData.size();
-    if (origSections.size() != newSections.size()) {
-        size_t maxNameEnd = 0;
-        for (const SectionInfo& sec : newSections) {
-            size_t nameLen = sec.GetNameString().size();
-            size_t nameEnd = sec.GetNameOffset() + nameLen + 1;
-            maxNameEnd = std::max(maxNameEnd, nameEnd);
-        }
-        truncateAt = maxNameEnd;
-    }
-
+    size_t truncateAt = ComputeShstrtabTruncateAt(origData.size());
     std::vector<uint8_t> truncatedData(origData.begin(), origData.begin() + truncateAt);
     const std::string& nameStr = orgNameTabSec.GetNameString();
     const std::vector<uint8_t> nameBytes(nameStr.begin(), nameStr.end());

@@ -50,6 +50,8 @@ private:
     void ExtractSectionInfos(ELFIO::elfio& reader);
     bool ComputeOffset(int64_t inputFileLength);
     bool ValidateSignatureDataAtEnd();
+    const SectionInfo* FindOriginalShstrtab() const;
+    size_t ComputeShstrtabTruncateAt(size_t origDataSize) const;
 
     ElfHeaderInfo headerInfo;
     std::vector<SectionInfo> origSections;
