@@ -34,6 +34,9 @@ public:
                                          std::vector<OptionalBlock>& optionalBlocks, ByteBuffer& result);
     static bool ComputeDigests(const DigestParameter& digestParam, DataSource* contents[], int32_t len,
                                const std::vector<OptionalBlock>& optionalBlocks, ByteBuffer& result);
+    static bool GenerateHapSigningBlock(const std::string& hapSignatureSchemeBlock,
+                                        std::vector<OptionalBlock>& optionalBlocks,
+                                        int compatibleVersion, ByteBuffer& result);
 
 private:
     static constexpr int INT_SIZE = 4;
@@ -51,9 +54,6 @@ private:
     static constexpr int OPTIONAL_OFFSET_SIZE = 4;
     static void ExtractedResult(std::vector<OptionalBlock>& optionalBlocks, ByteBuffer& result,
                                 std::unordered_map<int, int>& typeAndOffsetMap);
-    static bool GenerateHapSigningBlock(const std::string& hapSignatureSchemeBlock,
-                                        std::vector<OptionalBlock>& optionalBlocks,
-                                        int compatibleVersion, ByteBuffer& result);
     static bool GenerateHapSigningBlockWithEnterpriseResign(const std::string& hapSignatureSchemeBlock,
                                                             std::vector<OptionalBlock>& optionalBlocks,
                                                             int compatibleVersion, ByteBuffer& result);

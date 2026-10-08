@@ -36,7 +36,6 @@ public:
 private:
     struct StapleContext {
         SignatureInfo signInfo;
-        ByteBuffer originalSigningBlock;
         int64_t centralDirSize = 0;
         bool isZip64 = false;
         ByteBuffer hapEocd;
@@ -48,8 +47,7 @@ private:
     static bool ExtractStapleInfo(const std::string& inFile, StapleContext& ctx);
     static bool ReadZip64Eocd(RandomAccessFile& inputFile, int64_t eocdOffset, StapleContext& ctx);
     static bool ModifyStapleData(StapleContext& ctx, const ByteBuffer& ticketData);
-    static bool RebuildSigningBlock(StapleContext& ctx, const std::string& newPkcs7Der,
-        int64_t& newSigningBlockSize);
+    static bool RebuildSigningBlock(StapleContext& ctx, const std::string& newPkcs7Der);
     static bool UpdateZipMetadata(StapleContext& ctx, int64_t newSigningBlockSize);
     static bool WriteStapleOutput(const std::string& backupFile, const std::string& tmpFile,
         StapleContext& ctx);

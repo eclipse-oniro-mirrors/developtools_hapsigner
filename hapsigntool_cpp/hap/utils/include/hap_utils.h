@@ -91,6 +91,7 @@ public:
     static std::vector<int8_t> GetHapSigningBlockMagicV3();
     static const std::vector<int8_t>& GetPermissionSignMagic();
     static int GetHapSigningBlockVersion(int compatibleVersion);
+    static int GetCompatibleVersion(int blockVersion);
     static bool ReadFileToByteBuffer(const std::string& file, ByteBuffer& buffer);
 
 private:

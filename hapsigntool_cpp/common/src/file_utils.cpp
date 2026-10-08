@@ -16,8 +16,8 @@
 #include <filesystem>
 #include <fstream>
 #include <climits>
+#include <algorithm>
 
-#include "string_utils.h"
 #include "signature_tools_errno.h"
 #include "file_utils.h"
 
@@ -66,7 +66,18 @@ std::string FileUtils::GetSuffix(std::string filePath)
 bool FileUtils::ValidFileType(const std::string& filePath, const std::initializer_list<std::string> types)
 {
     std::string suffix = GetSuffix(filePath);
-    bool flag = suffix.empty() || (StringUtils::ContainsCase(types, suffix) == false);
+    std::string lowerSuffix = suffix;
+    std::transform(lowerSuffix.begin(), lowerSuffix.end(), lowerSuffix.begin(),
+                   [](unsigned char c) { return std::tolower(c); });
+    bool flag = suffix.empty();
+    if (!flag) {
+        flag = std::none_of(types.begin(), types.end(), [&lowerSuffix](const std::string& val) {
+            std::string lowerVal = val;
+            std::transform(lowerVal.begin(), lowerVal.end(), lowerVal.begin(),
+                           [](unsigned char c) { return std::tolower(c); });
+            return lowerVal == lowerSuffix;
+        });
+    }
     if (flag) {
         PrintErrorNumberMsg("NOT_SUPPORT_ERROR", NOT_SUPPORT_ERROR, "Not support file: " + filePath);
         return false;

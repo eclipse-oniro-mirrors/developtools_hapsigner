@@ -20,6 +20,7 @@
 #include "constant.h"
 #include "hap_signer_block_utils.h"
 #include "hap_utils.h"
+#include "sign_hap.h"
 #include "zip_utils.h"
 #include "pkcs7_data.h"
 
@@ -81,14 +82,6 @@ bool TicketStaple::ExtractStapleInfo(const std::string& inFile, StapleContext& c
         PrintErrorNumberMsg("ZIP_ERROR", ZIP_ERROR, "find HAP signature failed");
         return false;
     }
-    int64_t signingBlockSize = ctx.signInfo.hapCentralDirOffset -
-        ctx.signInfo.hapSigningBlockOffset;
-    ctx.originalSigningBlock.SetCapacity(static_cast<int32_t>(signingBlockSize));
-    if (inputFile.ReadFileFullyFromOffset(ctx.originalSigningBlock,
-        ctx.signInfo.hapSigningBlockOffset) < 0) {
-        PrintErrorNumberMsg("IO_ERROR", IO_ERROR, "read original signing block failed");
-        return false;
-    }
     ctx.centralDirSize = ctx.signInfo.hapEocdOffset - ctx.signInfo.hapCentralDirOffset;
     ctx.isZip64 = ctx.signInfo.isZip64;
     if (ctx.isZip64) {
@@ -106,43 +99,29 @@ bool TicketStaple::ExtractStapleInfo(const std::string& inFile, StapleContext& c
     return true;
 }
 
-bool TicketStaple::RebuildSigningBlock(StapleContext& ctx, const std::string& newPkcs7Der,
-    int64_t& newSigningBlockSize)
+bool TicketStaple::RebuildSigningBlock(StapleContext& ctx, const std::string& newPkcs7Der)
 {
-    int64_t oldSigningBlockSize = ctx.signInfo.hapCentralDirOffset -
-        ctx.signInfo.hapSigningBlockOffset;
-    int32_t oldBlockSize = static_cast<int32_t>(oldSigningBlockSize);
-    int32_t trailerOffset = oldBlockSize - HapUtils::HAP_SIG_BLOCK_HEADER_SIZE;
-    int32_t blockCount = 0;
-    ctx.originalSigningBlock.GetInt32(trailerOffset, blockCount);
-    int32_t oldPkcs7Size = static_cast<int32_t>(ctx.signInfo.hapSignatureBlock.GetCapacity());
-    int32_t newPkcs7Size = static_cast<int32_t>(newPkcs7Der.size());
-    int32_t sizeDelta = newPkcs7Size - oldPkcs7Size;
-    newSigningBlockSize = oldSigningBlockSize + sizeDelta;
-
-    int32_t pkcs7Offset = oldBlockSize - oldPkcs7Size - HapUtils::HAP_SIG_BLOCK_HEADER_SIZE;
-    int32_t newTrailerOffset = trailerOffset + sizeDelta;
-
-    ctx.newSigningBlock.SetCapacity(static_cast<int32_t>(newSigningBlockSize));
-
-    ctx.newSigningBlock.PutData(ctx.originalSigningBlock.GetBufferPtr(), pkcs7Offset);
-    ctx.newSigningBlock.PutData(newPkcs7Der.data(), newPkcs7Size);
-    ctx.newSigningBlock.PutData(ctx.originalSigningBlock.GetBufferPtr() + trailerOffset,
-        HapUtils::HAP_SIG_BLOCK_HEADER_SIZE);
-
-    static constexpr int32_t SUB_BLOCK_HEAD_SIZE = 12;
-    static constexpr int32_t SUB_BLOCK_LENGTH_POS = sizeof(int32_t);
-    int32_t lastHeadOffset = (blockCount - 1) * SUB_BLOCK_HEAD_SIZE;
-    ctx.newSigningBlock.SetPosition(lastHeadOffset + SUB_BLOCK_LENGTH_POS);
-    ctx.newSigningBlock.PutInt32(newPkcs7Size);
-
-    ctx.newSigningBlock.SetPosition(newTrailerOffset + sizeof(int32_t));
-    ctx.newSigningBlock.PutInt64(newSigningBlockSize);
+    /* Reuse SignHap::GenerateHapSigningBlock to rebuild block from optionBlocks + new PKCS7 */
+    int compatibleVersion = HapUtils::GetCompatibleVersion(ctx.signInfo.version);
+    if (!SignHap::GenerateHapSigningBlock(newPkcs7Der, ctx.signInfo.optionBlocks,
+        compatibleVersion, ctx.newSigningBlock)) {
+        PrintErrorNumberMsg("STAPLE_ERROR", STAPLE_ERROR, "rebuild signing block failed");
+        return false;
+    }
     return true;
 }
 
 bool TicketStaple::UpdateZipMetadata(StapleContext& ctx, int64_t newSigningBlockSize)
 {
+    /*
+     * After stapling, signing block grows and CD shifts. Update:
+     *   - EOCD CD offset (Zip32: actual; Zip64: sentinel, actual in Zip64 EOCD)
+     *   - Zip64 EOCD CD offset (Zip64 only)
+     *   - Zip64 Locator Zip64 EOCD offset (Zip64 only)
+     *
+     * Stapling does not re-sign, so ZIP32->Zip64 conversion is not supported
+     * (it would change the EOCD structure covered by the digest).
+     */
     int64_t newCentralDirOffset = ctx.signInfo.hapSigningBlockOffset + newSigningBlockSize;
     if (!ctx.isZip64 && newCentralDirOffset > 0xFFFFFFFFLL) {
         PrintErrorNumberMsg("STAPLE_ERROR", STAPLE_ERROR,
@@ -174,6 +153,7 @@ bool TicketStaple::UpdateZipMetadata(StapleContext& ctx, int64_t newSigningBlock
 
 bool TicketStaple::ModifyStapleData(StapleContext& ctx, const ByteBuffer& ticketData)
 {
+    /* 1. Parse PKCS7, add ticket to unauthenticatedAttributes */
     std::string hapSigDer(ctx.signInfo.hapSignatureBlock.GetBufferPtr(),
         ctx.signInfo.hapSignatureBlock.GetCapacity());
     PKCS7Data p7Data;
@@ -186,21 +166,31 @@ bool TicketStaple::ModifyStapleData(StapleContext& ctx, const ByteBuffer& ticket
         PrintErrorNumberMsg("STAPLE_ERROR", STAPLE_ERROR, "add ticket to unauth_attr failed");
         return false;
     }
+    /* 2. Re-encode PKCS7 to DER */
     std::string newPkcs7Der;
     if (p7Data.Encode(newPkcs7Der) < 0) {
         PrintErrorNumberMsg("STAPLE_ERROR", STAPLE_ERROR, "re-encode pkcs7 failed");
         return false;
     }
-    int64_t newSigningBlockSize = 0;
-    if (!RebuildSigningBlock(ctx, newPkcs7Der, newSigningBlockSize)) {
+    /* 3. Rebuild signing block from new PKCS7 + optionBlocks */
+    if (!RebuildSigningBlock(ctx, newPkcs7Der)) {
         return false;
     }
-    return UpdateZipMetadata(ctx, newSigningBlockSize);
+    /* 4. Update ZIP metadata (EOCD/Zip64 offsets) */
+    return UpdateZipMetadata(ctx, ctx.newSigningBlock.GetCapacity());
 }
 
 bool TicketStaple::WriteStapleOutput(const std::string& backupFile,
     const std::string& tmpFile, StapleContext& ctx)
 {
+    /*
+     * Output file layout:
+     *   [zip content]                <- copy from backup
+     *   [new signing block]          <- built in memory
+     *   [central directory]          <- copy from backup
+     *   [Zip64 EOCD + Locator]       <- Zip64 only, offsets updated
+     *   [EOCD]                       <- CD offset updated
+     */
     RandomAccessFile inputFile;
     if (!inputFile.Init(backupFile)) {
         PrintErrorNumberMsg("IO_ERROR", IO_ERROR, "open backup file failed");
@@ -211,20 +201,24 @@ bool TicketStaple::WriteStapleOutput(const std::string& backupFile,
         PrintErrorNumberMsg("IO_ERROR", IO_ERROR, tmpFile + " open failed");
         return false;
     }
+    /* 1. Copy zip content before signing block */
     if (!CopyFileRange(inputFile, output, 0, ctx.signInfo.hapSigningBlockOffset,
         "read zip contents failed")) {
         output.close();
         remove(tmpFile.c_str());
         return false;
     }
+    /* 2. Write new signing block */
     ctx.newSigningBlock.SetPosition(0);
     output.write(ctx.newSigningBlock.GetBufferPtr(), ctx.newSigningBlock.GetCapacity());
+    /* 3. Copy central directory */
     if (!CopyFileRange(inputFile, output, ctx.signInfo.hapCentralDirOffset, ctx.centralDirSize,
         "read central directory failed")) {
         output.close();
         remove(tmpFile.c_str());
         return false;
     }
+    /* 4. Write Zip64 EOCD + Locator (Zip64 only) */
     if (ctx.isZip64) {
         std::string zip64EocdStr = ctx.zip64Eocd.ToBytes();
         output.write(zip64EocdStr.data(), zip64EocdStr.size());
