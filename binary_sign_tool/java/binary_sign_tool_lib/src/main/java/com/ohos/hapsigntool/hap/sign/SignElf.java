@@ -26,6 +26,7 @@ import com.ohos.hapsigntool.codesigning.sign.CodeSigning;
 import com.ohos.hapsigntool.codesigning.utils.NumberUtils;
 import com.ohos.hapsigntool.entity.ElfSignConstants;
 import com.ohos.hapsigntool.entity.ParamConstants;
+import com.ohos.hapsigntool.error.FileProcessException;
 import com.ohos.hapsigntool.error.ModuleException;
 import com.ohos.hapsigntool.error.ProfileException;
 import com.ohos.hapsigntool.hap.config.SignerConfig;
@@ -108,8 +109,14 @@ public class SignElf {
             LOGGER.error("Code sign error: {}", e.getMessage(), e);
         } catch (IOException e) {
             LOGGER.error("IO error: {}", e.getMessage(), e);
-        } catch (ProfileException | ModuleException e) {
-            LOGGER.error("Profile/Module error: {}", e.getMessage(), e);
+        } catch (FileProcessException e) {
+            if (e instanceof ProfileException) {
+                LOGGER.error("Profile error: {}", e.getMessage(), e);
+            } else if (e instanceof ModuleException) {
+                LOGGER.error("Module error: {}", e.getMessage(), e);
+            } else {
+                LOGGER.error("Error while signing ELF file: {}", e.getMessage(), e);
+            }
         } catch (ElfFormatException e) {
             LOGGER.error("ELF process error: {}", e.getMessage(), e);
         } finally {
@@ -147,8 +154,7 @@ public class SignElf {
 
     private boolean executeSignWorkflow(FileChannel inputFc, SigningContext context, SignerConfig signerConfig,
         Map<String, String> signParams)
-        throws IOException, FsVerityDigestException, CodeSignException, ProfileException, ModuleException,
-               ElfFormatException {
+        throws IOException, FsVerityDigestException, CodeSignException, FileProcessException, ElfFormatException {
         ElfSignContext ctx = new ElfSignContext();
         if (!ctx.load(inputFc)) {
             return false;

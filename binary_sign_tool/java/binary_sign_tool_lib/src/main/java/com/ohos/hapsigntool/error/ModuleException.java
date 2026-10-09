@@ -20,7 +20,7 @@ package com.ohos.hapsigntool.error;
  *
  * @since 2021/12/20
  */
-public class ModuleException extends Exception {
+public class ModuleException extends FileProcessException {
     public ModuleException(String message) {
         super(message);
     }

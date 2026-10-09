@@ -266,6 +266,33 @@ public class ElfSignContext {
     }
 
     /**
+     * Validate that every section header's {@code sh_name} falls within the
+     * section name string table (the section pointed to by {@code e_shstrndx}).
+     * A malformed ELF may carry an out-of-range {@code sh_name}; trusting it
+     * would let the {@code .shstrtab} rebuild read/allocate an absurd size, so
+     * reject such input up front.
+     *
+     * @throws ElfFormatException if {@code e_shstrndx} is invalid or any
+     * non-null section's {@code sh_name} is out of the string table range
+     */
+    public void validateSectionNameOffsets() throws ElfFormatException {
+        int shstrndx = headerInfo.getSectionNameStrIndex();
+        if (shstrndx < 0 || shstrndx >= origSections.size()) {
+            throw new ElfFormatException("Invalid section name string index: " + shstrndx);
+        }
+        long strtabSize = origSections.get(shstrndx).getSize();
+        for (SectionInfo sec : origSections) {
+            if (sec.getType() == ElfTypes.SHT_NULL) {
+                continue;
+            }
+            if ((sec.getNameOffset() & 0xFFFFFFFFL) >= strtabSize) {
+                throw new ElfFormatException("Section " + sec.getIndex() + " sh_name " + sec.getNameOffset()
+                    + " out of .shstrtab range (size=" + strtabSize + ")");
+            }
+        }
+    }
+
+    /**
      * Validate that signature section data is at the end of the file, ensuring
      * it can be safely truncated without leaving dead data from retained
      * sections. Checks that the maximum data end of retained sections does not
@@ -316,6 +343,7 @@ public class ElfSignContext {
             return false;
         }
         extractSectionInfos(elfio);
+        validateSectionNameOffsets();
         return computeOffset(inputFileLength);
     }
 
@@ -371,7 +399,10 @@ public class ElfSignContext {
                 int nameEnd = sec.getNameOffset() + sec.getNameString().getBytes(StandardCharsets.UTF_8).length + 1;
                 maxNameEnd = Math.max(maxNameEnd, nameEnd);
             }
-            truncateAt = maxNameEnd;
+            // Clamp to the real .shstrtab buffer size to prevent an out-of-range
+            // (possibly int-overflowed) truncateAt from over-allocating when
+            // section header fields are malformed.
+            truncateAt = Math.min(maxNameEnd, origData.length);
         }
         byte[] truncatedData = Arrays.copyOf(origData, truncateAt);
         byte[] nameBytes = orgNameTabSec.getNameString().getBytes(StandardCharsets.UTF_8);
@@ -389,6 +420,9 @@ public class ElfSignContext {
         SectionInfo newNameTabSec = orgNameTabSec.deepCopy();
         newNameTabSec.setNameOffset(newNameOffset);
         newNameTabSec.setSize(newShstrtab.length);
+        // ELF string tables must use alignment 1; never trust the inherited sh_addralign,
+        // a malformed value would make the writer seek to an absurd offset (huge sparse file).
+        newNameTabSec.setAddrAlign(1);
         newNameTabSec.setData(newShstrtab);
         newNameTabSec.setNew(true);
         newShStrTabIndex = (short) newSections.size();

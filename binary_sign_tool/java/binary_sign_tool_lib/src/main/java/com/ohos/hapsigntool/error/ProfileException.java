@@ -20,7 +20,7 @@ package com.ohos.hapsigntool.error;
  *
  * @since 2021/12/20
  */
-public class ProfileException extends Exception {
+public class ProfileException extends FileProcessException {
     public ProfileException(String message) {
         super(message);
     }

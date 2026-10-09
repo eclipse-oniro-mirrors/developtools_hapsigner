@@ -193,6 +193,10 @@ bool ElfSignContext::Load(ELFIO::elfio& reader, const std::string& filePath)
         return false;
     }
     ExtractSectionInfos(reader);
+    if (!ValidateSectionNameOffsets()) {
+        SIGNATURE_TOOLS_LOGE("[ElfSignContext] Malformed section header table (out-of-range sh_name)");
+        return false;
+    }
     return ComputeOffset(inputFileLength);
 }
 
@@ -210,6 +214,26 @@ const SectionInfo* ElfSignContext::FindOriginalShstrtab() const
     return &origSections[headerInfo.sectionNameStrIndex];
 }
 
+bool ElfSignContext::ValidateSectionNameOffsets() const
+{
+    if (headerInfo.sectionNameStrIndex >= origSections.size()) {
+        SIGNATURE_TOOLS_LOGE("[ElfSignContext] Invalid section name string index");
+        return false;
+    }
+    size_t strtabSize = origSections[headerInfo.sectionNameStrIndex].GetSize();
+    for (const SectionInfo& sec : origSections) {
+        if (sec.GetType() == ELFIO::SHT_NULL) {
+            continue;
+        }
+        if (static_cast<size_t>(sec.GetNameOffset()) >= strtabSize) {
+            SIGNATURE_TOOLS_LOGE("[ElfSignContext] Section %d sh_name %u out of .shstrtab range (size=%zu)",
+                sec.GetIndex(), sec.GetNameOffset(), strtabSize);
+            return false;
+        }
+    }
+    return true;
+}
+
 size_t ElfSignContext::ComputeShstrtabTruncateAt(size_t origDataSize) const
 {
     if (origSections.size() == newSections.size()) {
@@ -220,7 +244,9 @@ size_t ElfSignContext::ComputeShstrtabTruncateAt(size_t origDataSize) const
         size_t nameEnd = sec.GetNameOffset() + sec.GetNameString().size() + 1;
         maxNameEnd = std::max(maxNameEnd, nameEnd);
     }
-    return maxNameEnd;
+    // Clamp to the real .shstrtab buffer size to prevent out-of-bounds reads when
+    // section header fields are malformed.
+    return std::min(maxNameEnd, origDataSize);
 }
 
 bool ElfSignContext::BuildNewShstrtab()
@@ -257,6 +283,9 @@ bool ElfSignContext::BuildNewShstrtab()
     SectionInfo newNameTabSec = orgNameTabSec.DeepCopy();
     newNameTabSec.SetNameOffset(newNameOffset);
     newNameTabSec.SetSize(static_cast<ELFIO::Elf_Xword>(newShstrtab.size()));
+    // ELF string tables must use alignment 1; never trust the inherited sh_addralign,
+    // a malformed value would make the writer seek to an absurd offset (huge sparse file).
+    newNameTabSec.SetAddrAlign(1);
     newNameTabSec.SetData(newShstrtab);
     newNameTabSec.SetNew(true);
     newShStrTabIndex = static_cast<ELFIO::Elf_Half>(newSections.size());

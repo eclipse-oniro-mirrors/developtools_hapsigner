@@ -200,7 +200,9 @@ void ElfSignWriter::WriteElfHeader(std::ofstream& dest)
 
 int64_t ElfSignWriter::Align(int64_t pos, int64_t align)
 {
-    if (align <= 0) {
+    // sh_addralign must be 0 or a power of two. Ignore bogus (non power-of-two)
+    // values so malformed headers cannot push the layout to an absurd offset.
+    if (align <= 1 || (align & (align - 1)) != 0) {
         return pos;
     }
     int64_t remainder = pos % align;

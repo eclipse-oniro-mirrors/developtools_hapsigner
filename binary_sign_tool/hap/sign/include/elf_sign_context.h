@@ -50,6 +50,7 @@ private:
     void ExtractSectionInfos(ELFIO::elfio& reader);
     bool ComputeOffset(int64_t inputFileLength);
     bool ValidateSignatureDataAtEnd();
+    bool ValidateSectionNameOffsets() const;
     const SectionInfo* FindOriginalShstrtab() const;
     size_t ComputeShstrtabTruncateAt(size_t origDataSize) const;
 

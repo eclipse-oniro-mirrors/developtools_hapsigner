@@ -183,7 +183,9 @@ public class ElfSignWriter {
     }
 
     private long align(long pos, long align) {
-        if (align <= 0) {
+        // sh_addralign must be 0 or a power of two. Ignore bogus (non power-of-two)
+        // values so malformed headers cannot push the layout to an absurd offset.
+        if (align <= 1 || (align & (align - 1)) != 0) {
             return pos;
         }
         long remainder = pos % align;

@@ -16,27 +16,16 @@
 package com.ohos.hapsigntool.error;
 
 /**
- * ParamException.
+ * Exception that occurs if the File Process is invalid.
  *
- * @since 2024/04/06
+ * @since 2026/09/20
  */
-public class ParamException extends Exception {
-    /**
-     * ParamException
-     *
-     * @param key key
-     */
-    public ParamException(String key) {
-        super("param " + key + " is null");
+public class FileProcessException extends Exception {
+    public FileProcessException(String message) {
+        super(message);
     }
 
-    /**
-     * ParamException
-     *
-     * @param key key
-     * @param message message
-     */
-    public ParamException(String key, String message) {
-        super("param " + key + " " + message);
+    public FileProcessException(String message, Throwable cause) {
+        super(message, cause);
     }
 }
