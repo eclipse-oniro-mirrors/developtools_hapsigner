@@ -21,6 +21,8 @@
 #include <vector>
 #include <elfio.hpp>
 
+#include "elf_sign_context.h"
+#include "elf_sign_writer.h"
 #include "signer_config.h"
 #include "signature_tools_log.h"
 
@@ -33,15 +35,13 @@ public:
 private:
     static constexpr int PAGE_SIZE = 4096;
     static constexpr int PERMISSION_VERSION = 1;
+    static constexpr size_t MAX_SECTION_SIZE = static_cast<size_t>(10240);
 
     static bool loadModule(std::map<std::string, std::string>& signParams, std::string& moduleContent);
     static bool loadProfileAndSign(SignerConfig& signerConfig, std::map<std::string, std::string>& signParams,
                             std::string& p7b);
-    static bool isExecElf(ELFIO::elfio& reader);
-    static bool WriteCodeSignBlock(ELFIO::elfio& reader, std::string& tmpOutputFilePath, uint64_t& csOffset);
-    static bool WriteSection(ELFIO::elfio& reader, const std::string& content, const std::string& secName);
-    static bool WriteSecDataToFile(ELFIO::elfio& reader, SignerConfig& signerConfig,
-                                   std::map<std::string, std::string>& signParams);
+    static bool BuildNewSections(ElfSignContext& ctx, SignerConfig& signerConfig,
+                                 std::map<std::string, std::string>& signParams);
     static bool GenerateCodeSignByte(SignerConfig& signerConfig, const std::string& inputFile, uint64_t& csOffset,
                                      const std::string& selfSign);
     static bool ReplaceDataOffset(const std::string& filePath, uint64_t& csOffset, const std::vector<int8_t>& csData);

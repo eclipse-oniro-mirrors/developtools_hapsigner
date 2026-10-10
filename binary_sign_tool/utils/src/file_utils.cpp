@@ -327,6 +327,17 @@ bool FileUtils::IsRunnableFile(const std::string& name)
     return false;
 }
 
+int64_t FileUtils::GetFileLen(const std::string& file)
+{
+    std::ifstream fileStream(file, std::ios::binary | std::ios::ate);
+    if (!fileStream) {
+        return -1;
+    }
+    int64_t inputFileLength = fileStream.tellg();
+    fileStream.close();
+    return inputFileLength;
+}
+
 bool FileUtils::IsValidFile(std::string file)
 {
     struct stat fileStat;

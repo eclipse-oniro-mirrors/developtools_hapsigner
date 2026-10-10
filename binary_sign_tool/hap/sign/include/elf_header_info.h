@@ -13,30 +13,25 @@
  * limitations under the License.
  */
 
-package com.ohos.hapsigntool.error;
+#ifndef SIGNATURETOOLS_ELF_HEADER_INFO_H
+#define SIGNATURETOOLS_ELF_HEADER_INFO_H
 
-/**
- * ParamException.
- *
- * @since 2024/04/06
- */
-public class ParamException extends Exception {
-    /**
-     * ParamException
-     *
-     * @param key key
-     */
-    public ParamException(String key) {
-        super("param " + key + " is null");
-    }
+#include <cstdint>
+#include <elfio.hpp>
 
-    /**
-     * ParamException
-     *
-     * @param key key
-     * @param message message
-     */
-    public ParamException(String key, String message) {
-        super("param " + key + " " + message);
-    }
-}
+namespace OHOS {
+namespace SignatureTools {
+
+struct ElfHeaderInfo {
+    unsigned char fileClass = 0;
+    unsigned char encoding = 0;
+    ELFIO::Elf_Half sectionEntrySize = 0;
+    ELFIO::Elf_Half sectionNameStrIndex = 0;
+    ELFIO::Elf64_Off shtOff = 0;
+    ELFIO::Elf_Half shNum = 0;
+};
+
+} // namespace SignatureTools
+} // namespace OHOS
+
+#endif // SIGNATURETOOLS_ELF_HEADER_INFO_H

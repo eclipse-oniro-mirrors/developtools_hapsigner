@@ -22,6 +22,7 @@ import com.google.gson.JsonParseException;
 import com.google.gson.JsonParser;
 import com.ohos.elfio.Elfio;
 import com.ohos.elfio.Section;
+import com.ohos.hapsigntool.entity.ElfSignConstants;
 import com.ohos.hapsigntool.entity.Options;
 import com.ohos.hapsigntool.entity.ParamConstants;
 import com.ohos.hapsigntool.error.ProfileException;
@@ -62,12 +63,6 @@ public class VerifyElf {
     private static final int PAGE_SIZE = 4096;
 
     private static final int FLAG_SELF_SIGN = 1 << 4;
-
-    private static final String PROFILE_SEC_NAME = ".profile";
-
-    private static final String PERMISSION_SEC_NAME = ".permission";
-
-    private static final String CODE_SIGN_SEC_NAME = ".codesign";
 
     static {
         Security.addProvider(new BouncyCastleProvider());
@@ -184,7 +179,7 @@ public class VerifyElf {
      * @param elfio ELF file object
      */
     private void printPermissionContent(Elfio elfio) {
-        Section sec = elfio.getSection(PERMISSION_SEC_NAME);
+        Section sec = elfio.getSection(ElfSignConstants.PERMISSION_SEC_NAME);
         if (sec == null) {
             LOGGER.info("permission is not found");
             return;
@@ -294,7 +289,7 @@ public class VerifyElf {
      */
     private VerifyResult parseSignBlockAndExtract(Elfio elfio) {
         try {
-            Section sec = elfio.getSection(CODE_SIGN_SEC_NAME);
+            Section sec = elfio.getSection(ElfSignConstants.CODE_SIGN_SEC_NAME);
             if (sec == null) {
                 LOGGER.info("code signature is not found");
                 return new VerifyResult(true, VerifyResult.RET_SUCCESS, "No signature found");
@@ -370,7 +365,7 @@ public class VerifyElf {
     }
 
     private byte[] extractProfileFromSection(Elfio elfio) {
-        Section profileSec = elfio.getSection(PROFILE_SEC_NAME);
+        Section profileSec = elfio.getSection(ElfSignConstants.PROFILE_SEC_NAME);
         if (profileSec == null) {
             return null;
         }

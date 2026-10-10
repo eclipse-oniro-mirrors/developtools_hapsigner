@@ -15,6 +15,7 @@
 
 #include "sign_elf.h"
 #include <unistd.h>
+#include <fstream>
 
 #include "cJSON.h"
 #include "file_utils.h"
@@ -23,11 +24,9 @@
 #include "code_signing.h"
 #include "param_constants.h"
 #include "profile_sign_tool.h"
-#include "compare_elf.h"
 
 namespace OHOS {
 namespace SignatureTools {
-constexpr size_t MAX_SECTION_SIZE = static_cast<size_t>(10240);
 
 bool SignElf::Sign(SignerConfig& signerConfig, std::map<std::string, std::string>& signParams)
 {
@@ -37,12 +36,17 @@ bool SignElf::Sign(SignerConfig& signerConfig, std::map<std::string, std::string
         SIGNATURE_TOOLS_LOGE("[SignElf] Failed to load input ELF file");
         return false;
     }
-    elfReader.sections.del_last(CODE_SIGN_SEC_NAME);
-    elfReader.sections.del_last(PERMISSION_SEC_NAME);
-    elfReader.sections.del_last(PROFILE_SEC_NAME);
-    bool writeProfilFlag = WriteSecDataToFile(elfReader, signerConfig, signParams);
-    if (!writeProfilFlag) {
-        SIGNATURE_TOOLS_LOGE("[SignElf] WriteSecDataToFile error");
+    ElfSignContext ctx;
+    if (!ctx.Load(elfReader, inputFile)) {
+        SIGNATURE_TOOLS_LOGE("[SignElf] Failed to load ELF context");
+        return false;
+    }
+    if (!ctx.BuildNewShstrtab() || !BuildNewSections(ctx, signerConfig, signParams)) {
+        SIGNATURE_TOOLS_LOGE("[SignElf] Failed to build new .shstrtab or sign sections");
+        return false;
+    }
+    if (!ctx.FinalizeShstrtab()) {
+        SIGNATURE_TOOLS_LOGE("[SignElf] Failed to finalize .shstrtab with magic marker");
         return false;
     }
     std::string outputFile = signParams.at(ParamConstants::PARAM_BASIC_OUTPUT_FILE);
@@ -50,28 +54,62 @@ bool SignElf::Sign(SignerConfig& signerConfig, std::map<std::string, std::string
     if (access(outputFile.c_str(), F_OK) == 0 && FileUtils::IsSameFile(inputFile, outputFile)) {
         tmpOutputFile = inputFile + "-tmp-signed";
     }
-    uint64_t csOffset = 0;
-    bool writeCodeSignFlag = WriteCodeSignBlock(elfReader, tmpOutputFile, csOffset);
-    if  (!writeCodeSignFlag) {
+    ElfSignWriter writer;
+    writer.SetCtx(&ctx);
+    int64_t codesignOffset = writer.Write(inputFile, tmpOutputFile);
+    if (codesignOffset < 0) {
         unlink(tmpOutputFile.c_str());
-        SIGNATURE_TOOLS_LOGE("[SignElf] WriteCodeSignBlock error");
+        SIGNATURE_TOOLS_LOGE("[SignElf] Failed to write signed ELF file");
         return false;
     }
-
-    // Validate the saved ELF file against original before generating code signature
-    CompareElf compareElf(inputFile, tmpOutputFile);
-    if (!compareElf.Validate()) {
-        SIGNATURE_TOOLS_LOGE("[SignElf] ELF file validation failed");
-    }
-
+    PrintMsg("add codesign section success");
     std::string selfSign = signParams.at(ParamConstants::PARAM_SELF_SIGN);
+    uint64_t csOffset = static_cast<uint64_t>(codesignOffset);
     bool generateCodeSignFlag = GenerateCodeSignByte(signerConfig, tmpOutputFile, csOffset, selfSign);
-    if  (!generateCodeSignFlag) {
+    if (!generateCodeSignFlag) {
         unlink(tmpOutputFile.c_str());
         return false;
     }
     FileUtils::CopyPermissions(inputFile, tmpOutputFile);
     return FileUtils::CopyTmpFileAndDel(tmpOutputFile, outputFile);
+}
+
+bool SignElf::BuildNewSections(ElfSignContext& ctx, SignerConfig& signerConfig,
+                               std::map<std::string, std::string>& signParams)
+{
+    bool isSelfSign = signParams.at(ParamConstants::PARAM_SELF_SIGN) == ParamConstants::SELF_SIGN_TYPE_1;
+    if (!isSelfSign) {
+        std::string p7b;
+        if (!loadProfileAndSign(signerConfig, signParams, p7b)) {
+            return false;
+        }
+        if (!p7b.empty()) {
+            if (p7b.size() > MAX_SECTION_SIZE) {
+                SIGNATURE_TOOLS_LOGE("[SignElf] Profile content size exceeds maximum allowed section size (10KB)");
+                return false;
+            }
+            std::vector<uint8_t> p7bData(p7b.begin(), p7b.end());
+            ctx.AddSignSection(PROFILE_SEC_NAME, 1, p7bData);
+            PrintMsg("add profile section success");
+        }
+        std::string moduleContent;
+        if (!loadModule(signParams, moduleContent)) {
+            return false;
+        }
+        if (!moduleContent.empty()) {
+            std::string ret;
+            if (!WritePermissionVersion(moduleContent, ret)) {
+                SIGNATURE_TOOLS_LOGE("[SignElf] Write Permission Version error");
+                return false;
+            }
+            std::vector<uint8_t> permData(ret.begin(), ret.end());
+            ctx.AddSignSection(PERMISSION_SEC_NAME, 1, permData);
+            PrintMsg("add permission section success");
+        }
+    }
+    std::vector<uint8_t> placeholder(PAGE_SIZE, 0);
+    ctx.AddSignSection(CODE_SIGN_SEC_NAME, PAGE_SIZE, placeholder);
+    return true;
 }
 
 bool SignElf::loadModule(std::map<std::string, std::string>& signParams, std::string& moduleContent)
@@ -122,107 +160,11 @@ bool SignElf::loadProfileAndSign(SignerConfig& signerConfig, std::map<std::strin
     return true;
 }
 
-bool SignElf::isExecElf(ELFIO::elfio& reader)
-{
-    ELFIO::Elf64_Half eType = reader.get_type();
-    if (eType == ELFIO::ET_EXEC) {
-        return true;
-    }
-    if (eType == ELFIO::ET_DYN && reader.get_entry() > 0) {
-        return true;
-    }
-    return false;
-}
-
-bool SignElf::WriteCodeSignBlock(ELFIO::elfio& reader, std::string& outputFile, uint64_t& csOffset)
-{
-    ELFIO::section* sec = reader.sections[CODE_SIGN_SEC_NAME];
-    if (sec) {
-        SIGNATURE_TOOLS_LOGE("[SignElf] .codesign section already exists");
-        return false;
-    }
-    sec = reader.sections.add(CODE_SIGN_SEC_NAME);
-    if (!sec) {
-        SIGNATURE_TOOLS_LOGE("[SignElf] Failed to create .codesign section");
-        return false;
-    }
-    sec->set_type(ELFIO::SHT_PROGBITS);
-    sec->set_addr_align(PAGE_SIZE);
-    char codesignData[PAGE_SIZE];
-    sec->set_data(codesignData, PAGE_SIZE);
-
-    if (!reader.save(outputFile)) {
-        SIGNATURE_TOOLS_LOGE("[SignElf] Failed to save 4K data to .codesign section");
-        return false;
-    }
-    ELFIO::Elf64_Off secOff = sec->get_offset();
-    csOffset = secOff;
-    PrintMsg("add codesign section success");
-    SIGNATURE_TOOLS_LOGD("[SignElf] .codesign section offset: %lu, size: %lu", secOff, sec->get_size());
-    return true;
-}
-
-bool SignElf::WriteSection(ELFIO::elfio& reader, const std::string& content, const std::string& secName)
-{
-    ELFIO::section* sec = reader.sections[secName];
-    if (sec) {
-        SIGNATURE_TOOLS_LOGE("[SignElf] %s section already exists", secName.c_str());
-        return false;
-    }
-    sec = reader.sections.add(secName);
-    if (!sec) {
-        SIGNATURE_TOOLS_LOGE("[SignElf] Failed to create %s section", secName.c_str());
-        return false;
-    }
-    sec->set_type(ELFIO::SHT_PROGBITS);
-    sec->set_addr_align(1);
-    sec->set_data(content);
-    return true;
-}
-
-bool SignElf::WriteSecDataToFile(ELFIO::elfio& reader, SignerConfig& signerConfig,
-                                 std::map<std::string, std::string>& signParams)
-{
-    if (signParams.at(ParamConstants::PARAM_SELF_SIGN) == ParamConstants::SELF_SIGN_TYPE_1) {
-        return true;
-    }
-    std::string p7b;
-    if (!loadProfileAndSign(signerConfig, signParams, p7b)) {
-        return false;
-    }
-    if (!p7b.empty()) {
-        if (WriteSection(reader, p7b, PROFILE_SEC_NAME)) {
-            PrintMsg("add profile section success");
-        } else {
-            return false;
-        }
-    }
-    std::string moduleContent;
-    if (!loadModule(signParams, moduleContent)) {
-        return false;
-    }
-
-    if (!moduleContent.empty()) {
-        std::string ret;
-        if (!WritePermissionVersion(moduleContent, ret)) {
-            SIGNATURE_TOOLS_LOGE("[SignElf] Write Permission Version error");
-            return false;
-        }
-        if (WriteSection(reader, ret, PERMISSION_SEC_NAME)) {
-            PrintMsg("add permission section success");
-        } else {
-            return false;
-        }
-    }
-    return true;
-}
-
 bool SignElf::GenerateCodeSignByte(SignerConfig& signerConfig, const std::string& inputFile, uint64_t& csOffset,
                                    const std::string& selfSign)
 {
-    // cs offset > 0 and 4K alignment
     if (csOffset == 0 || (csOffset % PAGE_SIZE) != 0) {
-        SIGNATURE_TOOLS_LOGE("[SignElf] csOffset is not 4K alignment");
+        SIGNATURE_TOOLS_LOGE("[SignElf] Invalid code sign block off %lu, not a multiple of 4096", csOffset);
         return false;
     }
     CodeSigning codeSigning(&signerConfig, (selfSign == ParamConstants::SELF_SIGN_TYPE_1));
