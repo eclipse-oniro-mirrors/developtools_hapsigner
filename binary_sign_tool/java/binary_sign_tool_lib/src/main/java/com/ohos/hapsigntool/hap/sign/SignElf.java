@@ -32,7 +32,6 @@ import com.ohos.hapsigntool.error.ProfileException;
 import com.ohos.hapsigntool.hap.config.SignerConfig;
 import com.ohos.hapsigntool.profile.ProfileSignTool;
 import com.ohos.hapsigntool.signer.ISigner;
-import com.ohos.hapsigntool.utils.CompareElf;
 import com.ohos.hapsigntool.utils.FileUtils;
 import com.ohos.hapsigntool.utils.LogUtils;
 
@@ -175,9 +174,6 @@ public class SignElf {
         ElfSignWriter writer = new ElfSignWriter();
         writer.setCtx(ctx);
         long codesignOffset = writer.write(context.inputFile, context.tmpOutputFile);
-        if (!new CompareElf(context.inputFile, context.tmpOutputFile).validate()) {
-            LOGGER.warn("ELF file validation failed");
-        }
         boolean isSelfSign = ParamConstants.SELF_SIGN_TYPE_1.equals(signParams.get(ParamConstants.PARAM_SELF_SIGN));
         byte[] codeSignBlock = generateCodeSignBlock(context.tmpOutputFile, codesignOffset, signerConfig, isSelfSign);
         if (codeSignBlock == null) {

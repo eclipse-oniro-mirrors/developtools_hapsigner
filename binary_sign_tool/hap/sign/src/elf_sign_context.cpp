@@ -197,6 +197,14 @@ bool ElfSignContext::Load(ELFIO::elfio& reader, const std::string& filePath)
         SIGNATURE_TOOLS_LOGE("[ElfSignContext] Malformed section header table (out-of-range sh_name)");
         return false;
     }
+    if (!ValidateSegmentBounds(reader, inputFileLength)) {
+        SIGNATURE_TOOLS_LOGE("[ElfSignContext] Malformed program header table (segment data out of file)");
+        return false;
+    }
+    if (!ValidateSectionDataBounds(inputFileLength)) {
+        SIGNATURE_TOOLS_LOGE("[ElfSignContext] Malformed section header table (section data out of file)");
+        return false;
+    }
     return ComputeOffset(inputFileLength);
 }
 
@@ -228,6 +236,62 @@ bool ElfSignContext::ValidateSectionNameOffsets() const
         if (static_cast<size_t>(sec.GetNameOffset()) >= strtabSize) {
             SIGNATURE_TOOLS_LOGE("[ElfSignContext] Section %d sh_name %u out of .shstrtab range (size=%zu)",
                 sec.GetIndex(), sec.GetNameOffset(), strtabSize);
+            return false;
+        }
+    }
+    return true;
+}
+
+bool ElfSignContext::ValidateSectionDataBounds(int64_t inputFileLength) const
+{
+    if (inputFileLength <= 0) {
+        SIGNATURE_TOOLS_LOGE("[ElfSignContext] Invalid input file length %lld",
+            static_cast<long long>(inputFileLength));
+        return false;
+    }
+    uint64_t fileLength = static_cast<uint64_t>(inputFileLength);
+    for (const SectionInfo& sec : origSections) {
+        if (sec.GetType() == ELFIO::SHT_NULL || sec.GetType() == ELFIO::SHT_NOBITS || sec.GetSize() == 0) {
+            continue;
+        }
+        uint64_t offset = static_cast<uint64_t>(sec.GetOffset());
+        uint64_t size = static_cast<uint64_t>(sec.GetSize());
+        if (offset > fileLength || size > fileLength - offset) {
+            SIGNATURE_TOOLS_LOGE("[ElfSignContext] Section %d data offset=%llu size=%llu out of file length=%llu",
+                sec.GetIndex(), static_cast<unsigned long long>(offset),
+                static_cast<unsigned long long>(size), static_cast<unsigned long long>(fileLength));
+            return false;
+        }
+    }
+    return true;
+}
+
+bool ElfSignContext::ValidateSegmentBounds(ELFIO::elfio& reader, int64_t inputFileLength) const
+{
+    uint64_t fileLength = static_cast<uint64_t>(inputFileLength);
+    uint64_t phNum = static_cast<uint64_t>(reader.segments.size());
+    if (phNum == 0) {
+        return true;
+    }
+    uint64_t phOffset = static_cast<uint64_t>(reader.get_segments_offset());
+    uint64_t phTableSize = static_cast<uint64_t>(reader.get_segment_entry_size()) * phNum;
+    if (phOffset > fileLength || phTableSize > fileLength - phOffset) {
+        SIGNATURE_TOOLS_LOGE("[ElfSignContext] Program header table offset=%llu size=%llu out of file length=%llu",
+            static_cast<unsigned long long>(phOffset), static_cast<unsigned long long>(phTableSize),
+            static_cast<unsigned long long>(fileLength));
+        return false;
+    }
+    for (uint64_t i = 0; i < phNum; ++i) {
+        const ELFIO::segment* seg = reader.segments[static_cast<unsigned int>(i)];
+        if (seg == nullptr || seg->get_type() == ELFIO::PT_NULL || seg->get_file_size() == 0) {
+            continue;
+        }
+        uint64_t offset = static_cast<uint64_t>(seg->get_offset());
+        uint64_t size = static_cast<uint64_t>(seg->get_file_size());
+        if (offset > fileLength || size > fileLength - offset) {
+            SIGNATURE_TOOLS_LOGE("[ElfSignContext] Segment %llu data offset=%llu size=%llu out of file length=%llu",
+                static_cast<unsigned long long>(i), static_cast<unsigned long long>(offset),
+                static_cast<unsigned long long>(size), static_cast<unsigned long long>(fileLength));
             return false;
         }
     }

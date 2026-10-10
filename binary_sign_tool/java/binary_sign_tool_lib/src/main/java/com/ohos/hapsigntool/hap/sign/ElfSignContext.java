@@ -18,6 +18,7 @@ package com.ohos.hapsigntool.hap.sign;
 import com.ohos.elfio.ElfTypes;
 import com.ohos.elfio.Elfio;
 import com.ohos.elfio.Section;
+import com.ohos.elfio.Segment;
 import com.ohos.hapsigntool.codesigning.exception.ElfFormatException;
 import com.ohos.hapsigntool.entity.ElfSignConstants;
 import com.ohos.hapsigntool.utils.LogUtils;
@@ -293,6 +294,75 @@ public class ElfSignContext {
     }
 
     /**
+     * Validate that the program header table and every allocated segment's data
+     * range {@code [p_offset, p_offset + p_filesz)} fall inside the input file.
+     * A malformed ELF may carry a program header offset or file size that points
+     * beyond the end of file; the section side of this tool trusts such values, so
+     * reject such input up front.
+     *
+     * @param elfio loaded ELF file reader
+     * @param inputFileLength actual file size in bytes
+     * @throws ElfFormatException if the program header table or any segment's
+     * data range exceeds the file
+     */
+    public void validateSegmentBounds(Elfio elfio, long inputFileLength) throws ElfFormatException {
+        int phNum = elfio.getSegmentsCount();
+        if (phNum == 0) {
+            return;
+        }
+        long phOffset = elfio.getSegmentsOffset();
+        long phTableSize = elfio.getSegmentEntrySize() * (long) phNum;
+        if (phOffset < 0 || phOffset > inputFileLength || phTableSize > inputFileLength - phOffset) {
+            throw new ElfFormatException("Program header table offset=" + phOffset + " size=" + phTableSize
+                + " out of file length=" + inputFileLength);
+        }
+        for (int i = 0; i < phNum; i++) {
+            Segment seg = elfio.getSegment(i);
+            if (seg == null || seg.getType() == ElfTypes.PT_NULL || seg.getFileSize() == 0) {
+                continue;
+            }
+            long offset = seg.getOffset();
+            long size = seg.getFileSize();
+            if (offset < 0 || size < 0 || offset > inputFileLength || size > inputFileLength - offset) {
+                throw new ElfFormatException("Segment " + i + " data offset=" + offset + " size=" + size
+                    + " out of file length=" + inputFileLength);
+            }
+        }
+    }
+
+    /**
+     * Validate that every allocated section's data range
+     * {@code [sh_offset, sh_offset + sh_size)} falls inside the input file.
+     * A malformed ELF may carry a {@code sh_offset} or {@code sh_size} that
+     * points beyond the end of file; trusting it would sign a file whose
+     * section table describes data that does not exist, so reject such input
+     * up front.
+     *
+     * @param inputFileLength actual file size in bytes
+     * @throws ElfFormatException if the file length is invalid or any
+     * non-null, non-nobits section's data range exceeds the file
+     */
+    public void validateSectionDataBounds(long inputFileLength) throws ElfFormatException {
+        if (inputFileLength <= 0) {
+            throw new ElfFormatException("Invalid input file length: " + inputFileLength);
+        }
+        for (SectionInfo sec : origSections) {
+            if (sec.getType() == ElfTypes.SHT_NULL || sec.getType() == ElfTypes.SHT_NOBITS) {
+                continue;
+            }
+            long offset = sec.getOffset();
+            long size = sec.getSize();
+            if (size == 0) {
+                continue;
+            }
+            if (offset < 0 || size < 0 || offset > inputFileLength || size > inputFileLength - offset) {
+                throw new ElfFormatException("Section " + sec.getIndex() + " data offset=" + offset + " size=" + size
+                    + " out of file length=" + inputFileLength);
+            }
+        }
+    }
+
+    /**
      * Validate that signature section data is at the end of the file, ensuring
      * it can be safely truncated without leaving dead data from retained
      * sections. Checks that the maximum data end of retained sections does not
@@ -344,6 +414,8 @@ public class ElfSignContext {
         }
         extractSectionInfos(elfio);
         validateSectionNameOffsets();
+        validateSegmentBounds(elfio, inputFileLength);
+        validateSectionDataBounds(inputFileLength);
         return computeOffset(inputFileLength);
     }
 
