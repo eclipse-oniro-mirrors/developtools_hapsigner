@@ -46,6 +46,7 @@ private:
 
     static bool ExtractStapleInfo(const std::string& inFile, StapleContext& ctx);
     static bool ReadZip64Eocd(RandomAccessFile& inputFile, int64_t eocdOffset, StapleContext& ctx);
+    static bool ValidateInput(Options* options, const std::string& inFile);
     static bool ModifyStapleData(StapleContext& ctx, const ByteBuffer& ticketData);
     static bool RebuildSigningBlock(StapleContext& ctx, const std::string& newPkcs7Der);
     static bool UpdateZipMetadata(StapleContext& ctx, int64_t newSigningBlockSize);

@@ -234,12 +234,8 @@ bool TicketStaple::WriteStapleOutput(const std::string& backupFile,
     return true;
 }
 
-bool TicketStaple::StapleApp(Options* options)
+bool TicketStaple::ValidateInput(Options* options, const std::string& inFile)
 {
-    std::string inFile = options->GetString(Options::IN_FILE);
-    std::string backupFile = inFile + ".staplebak";
-    std::string tmpFile = inFile + ".stapletmp";
-    std::string ticketFile = options->GetString(Options::TICKET_FILE);
     /* Only .app files can be stapled */
     if (!FileUtils::ValidFileType(inFile, { "app" })) {
         return false;
@@ -250,6 +246,25 @@ bool TicketStaple::StapleApp(Options* options)
         PrintErrorNumberMsg("STAPLE_ERROR", STAPLE_ERROR, "file size exceeds 200GB limit");
         return false;
     }
+    /* Verify original signature before stapling (no output needed) */
+    VerifyHap verifyHap;
+    if (verifyHap.VerifyBeforeResign(inFile, options) != 0) {
+        PrintErrorNumberMsg("STAPLE_ERROR", STAPLE_ERROR, "verify original signature failed");
+        return false;
+    }
+    return true;
+}
+
+bool TicketStaple::StapleApp(Options* options)
+{
+    std::string inFile = options->GetString(Options::IN_FILE);
+    std::string backupFile = inFile + ".staplebak";
+    std::string tmpFile = inFile + ".stapletmp";
+    std::string ticketFile = options->GetString(Options::TICKET_FILE);
+
+    if (!ValidateInput(options, inFile)) {
+        return false;
+    }
     ByteBuffer ticketData;
     if (!HapUtils::ReadFileToByteBuffer(ticketFile, ticketData) || ticketData.GetCapacity() == 0) {
         PrintErrorNumberMsg("IO_ERROR", IO_ERROR, ticketFile + " is empty or read failed");
@@ -257,12 +272,6 @@ bool TicketStaple::StapleApp(Options* options)
     }
     StapleContext ctx;
     if (!ExtractStapleInfo(inFile, ctx)) {
-        return false;
-    }
-    /* Verify original signature before stapling (no output needed) */
-    VerifyHap verifyHap;
-    if (verifyHap.VerifyBeforeResign(inFile, options) != 0) {
-        PrintErrorNumberMsg("STAPLE_ERROR", STAPLE_ERROR, "verify original signature failed");
         return false;
     }
     if (!ModifyStapleData(ctx, ticketData)) {
