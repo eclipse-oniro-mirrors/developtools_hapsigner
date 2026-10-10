@@ -40,7 +40,6 @@ public:
      * @param hapSignatureSchemeBlock PKCS7 DER data as the signature sub-block content.
      * @param optionalBlocks Other sub-blocks (profile, property, etc.) to include.
      * @param compatibleVersion Compatibility version for magic/version selection.
-     *                          Use HapUtils::GetCompatibleVersion() to convert from blockVersion.
      * @param result Output buffer for the generated signing block.
      * @return true on success, false on size overflow or memory error.
      */
