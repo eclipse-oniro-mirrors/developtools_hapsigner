@@ -12,11 +12,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include <algorithm>
 #include <iostream>
 #include <filesystem>
 #include <fstream>
 #include <climits>
-#include <algorithm>
 
 #include "signature_tools_errno.h"
 #include "file_utils.h"
@@ -69,16 +69,13 @@ bool FileUtils::ValidFileType(const std::string& filePath, const std::initialize
     std::string lowerSuffix = suffix;
     std::transform(lowerSuffix.begin(), lowerSuffix.end(), lowerSuffix.begin(),
                    [](unsigned char c) { return std::tolower(c); });
-    bool flag = suffix.empty();
-    if (!flag) {
-        flag = std::none_of(types.begin(), types.end(), [&lowerSuffix](const std::string& val) {
-            std::string lowerVal = val;
-            std::transform(lowerVal.begin(), lowerVal.end(), lowerVal.begin(),
-                           [](unsigned char c) { return std::tolower(c); });
-            return lowerVal == lowerSuffix;
-        });
-    }
-    if (flag) {
+    bool matched = !suffix.empty() && std::any_of(types.begin(), types.end(), [&lowerSuffix](const std::string& val) {
+        std::string lowerVal = val;
+        std::transform(lowerVal.begin(), lowerVal.end(), lowerVal.begin(),
+                       [](unsigned char c) { return std::tolower(c); });
+        return lowerVal == lowerSuffix;
+    });
+    if (!matched) {
         PrintErrorNumberMsg("NOT_SUPPORT_ERROR", NOT_SUPPORT_ERROR, "Not support file: " + filePath);
         return false;
     }

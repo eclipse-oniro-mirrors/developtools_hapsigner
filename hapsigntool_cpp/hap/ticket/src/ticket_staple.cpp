@@ -18,9 +18,11 @@
 #include "signature_tools_errno.h"
 #include "signature_tools_log.h"
 #include "constant.h"
+#include "file_utils.h"
 #include "hap_signer_block_utils.h"
 #include "hap_utils.h"
 #include "sign_hap.h"
+#include "verify_hap.h"
 #include "zip_utils.h"
 #include "pkcs7_data.h"
 
@@ -238,6 +240,16 @@ bool TicketStaple::StapleApp(Options* options)
     std::string backupFile = inFile + ".staplebak";
     std::string tmpFile = inFile + ".stapletmp";
     std::string ticketFile = options->GetString(Options::TICKET_FILE);
+    /* Only .app files can be stapled */
+    if (!FileUtils::ValidFileType(inFile, { "app" })) {
+        return false;
+    }
+    /* Check file size before any processing */
+    int64_t fileLen = FileUtils::GetFileLen(inFile);
+    if (fileLen < 0 || fileLen > HapUtils::MAX_INPUT_FILE_SIZE) {
+        PrintErrorNumberMsg("STAPLE_ERROR", STAPLE_ERROR, "file size exceeds 200GB limit");
+        return false;
+    }
     ByteBuffer ticketData;
     if (!HapUtils::ReadFileToByteBuffer(ticketFile, ticketData) || ticketData.GetCapacity() == 0) {
         PrintErrorNumberMsg("IO_ERROR", IO_ERROR, ticketFile + " is empty or read failed");
@@ -245,6 +257,12 @@ bool TicketStaple::StapleApp(Options* options)
     }
     StapleContext ctx;
     if (!ExtractStapleInfo(inFile, ctx)) {
+        return false;
+    }
+    /* Verify original signature before stapling (no output needed) */
+    VerifyHap verifyHap;
+    if (verifyHap.VerifyBeforeResign(inFile, options) != 0) {
+        PrintErrorNumberMsg("STAPLE_ERROR", STAPLE_ERROR, "verify original signature failed");
         return false;
     }
     if (!ModifyStapleData(ctx, ticketData)) {

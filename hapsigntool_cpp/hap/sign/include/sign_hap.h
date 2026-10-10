@@ -34,6 +34,16 @@ public:
                                          std::vector<OptionalBlock>& optionalBlocks, ByteBuffer& result);
     static bool ComputeDigests(const DigestParameter& digestParam, DataSource* contents[], int32_t len,
                                const std::vector<OptionalBlock>& optionalBlocks, ByteBuffer& result);
+    /**
+     * Build HAP signing block from PKCS7 and optional blocks.
+     *
+     * @param hapSignatureSchemeBlock PKCS7 DER data as the signature sub-block content.
+     * @param optionalBlocks Other sub-blocks (profile, property, etc.) to include.
+     * @param compatibleVersion Compatibility version for magic/version selection.
+     *                          Use HapUtils::GetCompatibleVersion() to convert from blockVersion.
+     * @param result Output buffer for the generated signing block.
+     * @return true on success, false on size overflow or memory error.
+     */
     static bool GenerateHapSigningBlock(const std::string& hapSignatureSchemeBlock,
                                         std::vector<OptionalBlock>& optionalBlocks,
                                         int compatibleVersion, ByteBuffer& result);
