@@ -112,7 +112,7 @@ int HapUtils::GetHapSigningBlockVersion(int compatibleVersion)
 int HapUtils::GetCompatibleVersion(int blockVersion)
 {
     /* Consistent with CheckSignBlockHead: version >= 3 means V3 */
-    if (blockVersion >= HAP_SIGN_SCHEME_V3_BLOCK_VERSION) {
+    if (blockVersion == HAP_SIGN_SCHEME_V3_BLOCK_VERSION) {
         return MIN_COMPATIBLE_VERSION_FOR_SCHEMA_V3;
     }
     return 0;
