@@ -96,7 +96,7 @@ const std::string SHSTRTAB_SEC_NAME = ".shstrtab";
 constexpr int SHSTRNDX_SIZE = 2;
 inline const std::vector<uint8_t>& GetShstrtabMagic()
 {
-    static const std::vector<uint8_t> magic = {'O', 'H', 'O', 'S', 'C', 'S', 'I', 'G'};
+    static const std::vector<uint8_t> magic = {'O', 'H', 'O', 'S', 'C', 'S', 'I', 'G', '\0'};
     return magic;
 }
 } // namespace SignatureTools

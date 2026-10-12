@@ -50,7 +50,7 @@ public class ElfSignConstants {
      * not affect string table offsets because it sits after all
      * null-terminated name entries.
      */
-    public static final byte[] SHSTRTAB_MAGIC = "OHOSCSIG".getBytes(StandardCharsets.US_ASCII);
+    public static final byte[] SHSTRTAB_MAGIC = "OHOSCSIG\0".getBytes(StandardCharsets.US_ASCII);
 
     /**
      * Size in bytes of the original {@code e_shstrndx} value stored before
