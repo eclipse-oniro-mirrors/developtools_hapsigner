@@ -117,8 +117,6 @@ int HapUtils::GetCompatibleVersion(int blockVersion)
     }
     return 0;
 }
-    return 0;
-}
 
 bool HapUtils::ReadFileToByteBuffer(const std::string& file, ByteBuffer& buffer)
 {
