@@ -12,12 +12,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include <algorithm>
 #include <iostream>
 #include <filesystem>
 #include <fstream>
 #include <climits>
 
-#include "string_utils.h"
 #include "signature_tools_errno.h"
 #include "file_utils.h"
 
@@ -66,8 +66,16 @@ std::string FileUtils::GetSuffix(std::string filePath)
 bool FileUtils::ValidFileType(const std::string& filePath, const std::initializer_list<std::string> types)
 {
     std::string suffix = GetSuffix(filePath);
-    bool flag = suffix.empty() || (StringUtils::ContainsCase(types, suffix) == false);
-    if (flag) {
+    std::string lowerSuffix = suffix;
+    std::transform(lowerSuffix.begin(), lowerSuffix.end(), lowerSuffix.begin(),
+                   [](unsigned char c) { return std::tolower(c); });
+    bool matched = !suffix.empty() && std::any_of(types.begin(), types.end(), [&lowerSuffix](const std::string& val) {
+        std::string lowerVal = val;
+        std::transform(lowerVal.begin(), lowerVal.end(), lowerVal.begin(),
+                       [](unsigned char c) { return std::tolower(c); });
+        return lowerVal == lowerSuffix;
+    });
+    if (!matched) {
         PrintErrorNumberMsg("NOT_SUPPORT_ERROR", NOT_SUPPORT_ERROR, "Not support file: " + filePath);
         return false;
     }

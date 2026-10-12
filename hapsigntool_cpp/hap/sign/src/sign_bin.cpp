@@ -23,7 +23,7 @@
 #include "sign_content_info.h"
 #include "sign_head.h"
 #include "bc_pkcs7_generator.h"
-#include "params.h"
+#include "signature_algorithm_helper.h"
 
 namespace OHOS {
 namespace SignatureTools {
@@ -103,9 +103,12 @@ std::vector<int8_t> SignBin::GenerateFileDigest(const std::string& outputFile,
                                                 const std::string& signAlg)
 {
     SignatureAlgorithmHelper signatureAlgorithmClass;
-    bool getAlgOk = Params::GetSignatureAlgorithm(signAlg, signatureAlgorithmClass);
-    if (!getAlgOk) {
-        PrintErrorNumberMsg("SIGN_ERROR", SIGN_ERROR, "[SignHap] get Signature Algorithm failed.");
+    if (signAlg == ParamConstants::HAP_SIG_ALGORITHM_SHA256_ECDSA) {
+        signatureAlgorithmClass = SignatureAlgorithmHelper::ECDSA_WITH_SHA256_INSTANCE;
+    } else if (signAlg == ParamConstants::HAP_SIG_ALGORITHM_SHA384_ECDSA) {
+        signatureAlgorithmClass = SignatureAlgorithmHelper::ECDSA_WITH_SHA384_INSTANCE;
+    } else {
+        PrintErrorNumberMsg("SIGN_ERROR", SIGN_ERROR, "get Signature Algorithm failed.");
         return std::vector<int8_t>();
     }
     std::string alg = signatureAlgorithmClass.m_contentDigestAlgorithm.GetDigestAlgorithm();

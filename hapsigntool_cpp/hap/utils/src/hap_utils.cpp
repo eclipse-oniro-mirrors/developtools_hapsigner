@@ -116,6 +116,15 @@ int HapUtils::GetHapSigningBlockVersion(int compatibleVersion)
     return HAP_SIGN_SCHEME_V2_BLOCK_VERSION;
 }
 
+int HapUtils::GetCompatibleVersion(int blockVersion)
+{
+    /* Currently only V2 and V3 are supported */
+    if (blockVersion == HAP_SIGN_SCHEME_V3_BLOCK_VERSION) {
+        return MIN_COMPATIBLE_VERSION_FOR_SCHEMA_V3;
+    }
+    return 0;
+}
+
 bool HapUtils::ReadFileToByteBuffer(const std::string& file, ByteBuffer& buffer)
 {
     std::string ret;

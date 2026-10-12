@@ -92,6 +92,7 @@ public:
     static std::vector<int8_t> GetHapSigningBlockMagicV3();
     static const std::vector<int8_t>& GetPermissionSignMagic();
     static int GetHapSigningBlockVersion(int compatibleVersion);
+    static int GetCompatibleVersion(int blockVersion);
     static bool ReadFileToByteBuffer(const std::string& file, ByteBuffer& buffer);
     static std::string GetPublicHnpOwnerId(const std::string& profileContent);
     static std::string ParseHnpPath(const std::string& path);

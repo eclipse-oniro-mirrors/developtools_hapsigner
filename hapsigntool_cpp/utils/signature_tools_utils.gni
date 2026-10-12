@@ -17,7 +17,6 @@ signature_tools_utils_include = [ "${signature_tools_utils}/include" ]
 signature_tools_utils_src = [
   "${signature_tools_utils}/src/cert_dn_utils.cpp",
   "${signature_tools_utils}/src/verify_cert_openssl_utils.cpp",
-  "${signature_tools_utils}/src/file_utils.cpp",
   "${signature_tools_utils}/src/key_store_helper.cpp",
   "${signature_tools_utils}/src/hap_signer_block_utils.cpp",
   "${signature_tools_utils}/src/string_utils.cpp",
