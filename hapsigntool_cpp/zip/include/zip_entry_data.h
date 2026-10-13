@@ -75,6 +75,12 @@ public:
 
     void SetLength(uint64_t length);
 
+    void SetInlineData(const std::string& data);
+
+    const std::string& GetInlineData();
+
+    bool HasInlineData();
+
 private:
     static bool ReadEntryFileNameAndExtraByOffset(std::ifstream& input, ZipEntryHeader* entryHeader,
         uint64_t& offset);
@@ -86,6 +92,8 @@ private:
     uint64_t m_fileSize = 0;
 
     DataDescriptor* m_dataDescriptor;
+
+    std::string m_inlineData;
 
     uint64_t m_length = 0;
 };

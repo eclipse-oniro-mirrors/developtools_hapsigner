@@ -206,6 +206,7 @@ private:
     bool ParseZip64IfPresent(RandomAccessFile& outputHap, DataSourceContents& dataSrcContents);
     bool ComputeCentralDirectorySize(DataSourceContents& dataSrcContents, int64_t& cDSize);
     bool BuildZip64EocdSegment(DataSourceContents& dataSrcContents, int64_t cDSize);
+    bool GenerateAndAddBitMap(std::ifstream& input, ZipSigner& zip, int alignment);
 
     static std::vector<std::string> VALID_SIGN_ALG_NAME;
     static constexpr int FOUR_BYTE = 4;
@@ -217,6 +218,7 @@ private:
     static constexpr int ADDITIONAL_BLOCK_COUNT = 1; // The num of subblock head before codesign block in property block
     std::string profileContent;
     std::string tmpOutputFilePath;
+    std::string m_fileSuffix;
 };
 } // namespace SignatureTools
 } // namespace OHOS

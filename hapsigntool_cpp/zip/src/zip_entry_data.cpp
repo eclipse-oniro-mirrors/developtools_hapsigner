@@ -145,5 +145,20 @@ void ZipEntryData::SetLength(uint64_t length)
 {
     m_length = length;
 }
+
+void ZipEntryData::SetInlineData(const std::string& data)
+{
+    m_inlineData = data;
+}
+
+const std::string& ZipEntryData::GetInlineData()
+{
+    return m_inlineData;
+}
+
+bool ZipEntryData::HasInlineData()
+{
+    return !m_inlineData.empty();
+}
 } // namespace SignatureTools
 } // namespace OHOS

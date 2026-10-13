@@ -140,14 +140,14 @@ HWTEST_F(SignInfoTest, getSize, testing::ext::TestSize.Level1)
 }
 
 /**
- * @tc.name: parseMerkleTreeExtension
+ * @tc.name: ParseExtensionList
  * @tc.desc: The data has the wrong extensionType in the SignInfo
  * @tc.size: MEDIUM
  * @tc.type: FUNC
  * @tc.level Level 1
  * @tc.require: SR000H63TL
  */
-HWTEST_F(SignInfoTest, parseMerkleTreeExtension, testing::ext::TestSize.Level1)
+HWTEST_F(SignInfoTest, ParseExtensionList, testing::ext::TestSize.Level1)
 {
     std::shared_ptr<SignInfo> api = std::make_shared<SignInfo>();
 
@@ -159,7 +159,7 @@ HWTEST_F(SignInfoTest, parseMerkleTreeExtension, testing::ext::TestSize.Level1)
     ByteBuffer bf((int32_t)bytes.size());
     bf.PutData((char*)bytes.data(), bytes.size());
 
-    std::vector<MerkleTreeExtension*> extensionVec = api->ParseMerkleTreeExtension(&bf, 1);
+    std::vector<Extension*> extensionVec = api->ParseExtensionList(&bf, 1);
 
     EXPECT_EQ(extensionVec.size(), 0);
 }

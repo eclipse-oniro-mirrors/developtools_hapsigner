@@ -16,6 +16,7 @@
 #include <algorithm>
 #include <cinttypes>
 #include <filesystem>
+#include <zlib.h>
 
 #include "file_utils.h"
 #include "zip_entry.h"
@@ -23,6 +24,11 @@
 
 namespace OHOS {
 namespace SignatureTools {
+static const std::string BIT_MAP_FILENAME = ".pages.info";
+static const int BITMAP_ZIP_VERSION = 20;
+static const int SORT_PRIORITY_RUNNABLE = 0;
+static const int SORT_PRIORITY_BITMAP = 1;
+static const int SORT_PRIORITY_OTHER = 2;
 bool ZipSigner::Init(std::ifstream& inputFile)
 {
     if (!inputFile.good()) {
@@ -333,12 +339,19 @@ bool ZipSigner::WriteZipEntries(std::ifstream& input, std::ofstream& output)
             return false;
         }
 
-        uint64_t fileOffset = zipEntryData->GetFileOffset();
-        uint64_t fileSize = zipEntryData->GetFileSize();
-        bool isSuccess = FileUtils::AppendWriteFileByOffsetToFile(input, output, fileOffset, fileSize);
-        if (!isSuccess) {
-            SIGNATURE_TOOLS_LOGE("write zip data failed");
-            return false;
+        if (zipEntryData->HasInlineData()) {
+            if (!FileUtils::WriteByteToOutFile(zipEntryData->GetInlineData(), output)) {
+                SIGNATURE_TOOLS_LOGE("write inline zip data failed");
+                return false;
+            }
+        } else {
+            uint64_t fileOffset = zipEntryData->GetFileOffset();
+            uint64_t fileSize = zipEntryData->GetFileSize();
+            bool isSuccess = FileUtils::AppendWriteFileByOffsetToFile(input, output, fileOffset, fileSize);
+            if (!isSuccess) {
+                SIGNATURE_TOOLS_LOGE("write zip data failed");
+                return false;
+            }
         }
         DataDescriptor* dataDescriptor = zipEntryData->GetDataDescriptor();
         if (dataDescriptor) {
@@ -422,9 +435,10 @@ bool ZipSigner::Alignment(int alignment)
             break;
         }
         int alignBytes;
-        if (method == FILE_UNCOMPRESS_METHOD_FLAG &&
-            FileUtils::IsRunnableFile(zipEntryData->GetZipEntryHeader()->GetFileName())) {
-            /* .abc and .so file align 4096 byte. */
+        if ((method == FILE_UNCOMPRESS_METHOD_FLAG &&
+            FileUtils::IsRunnableFile(zipEntryData->GetZipEntryHeader()->GetFileName())) ||
+            zipEntryData->GetZipEntryHeader()->GetFileName() == BIT_MAP_FILENAME) {
+            /* .abc and .so file and bitmap align 4096 byte. */
             alignBytes = 4096;
         } else if (isFirstUnRunnableFile) {
             /* the first file after runnable file, align 4096 byte. */
@@ -456,7 +470,7 @@ bool ZipSigner::RemoveSignBlock()
 
 bool ZipSigner::Sort()
 {
-    /* sort uncompress file (so, abc, an) - other uncompress file - compress file */
+    /* sort uncompress file (so, abc, an) - bitmap - other uncompress file - compress file */
     std::sort(m_zipEntries.begin(), m_zipEntries.end(), [&](ZipEntry* entry1, ZipEntry* entry2) {
         short entry1Method = entry1->GetZipEntryData()->GetZipEntryHeader()->GetMethod();
         short entry2Method = entry2->GetZipEntryData()->GetZipEntryHeader()->GetMethod();
@@ -465,13 +479,14 @@ bool ZipSigner::Sort()
         if (entry1Method == FILE_UNCOMPRESS_METHOD_FLAG && entry2Method == FILE_UNCOMPRESS_METHOD_FLAG) {
             bool isRunnableFile1 = FileUtils::IsRunnableFile(entry1FileName);
             bool isRunnableFile2 = FileUtils::IsRunnableFile(entry2FileName);
-            if (isRunnableFile1 && isRunnableFile2) {
-                return entry1FileName < entry2FileName;
-            } else if (isRunnableFile1) {
-                return true;
-            } else if (isRunnableFile2) {
-                return false;
+            bool isBitMap1 = entry1FileName == BIT_MAP_FILENAME;
+            bool isBitMap2 = entry2FileName == BIT_MAP_FILENAME;
+            int priority1 = isRunnableFile1 ? SORT_PRIORITY_RUNNABLE : (isBitMap1 ? SORT_PRIORITY_BITMAP : SORT_PRIORITY_OTHER);
+            int priority2 = isRunnableFile2 ? SORT_PRIORITY_RUNNABLE : (isBitMap2 ? SORT_PRIORITY_BITMAP : SORT_PRIORITY_OTHER);
+            if (priority1 != priority2) {
+                return priority1 < priority2;
             }
+            return entry1FileName < entry2FileName;
         } else if (entry1Method == FILE_UNCOMPRESS_METHOD_FLAG) {
             return true;
         } else if (entry2Method == FILE_UNCOMPRESS_METHOD_FLAG) {
@@ -645,6 +660,81 @@ bool ZipSigner::ResetOffset()
 std::vector<ZipEntry*>& ZipSigner::GetZipEntries()
 {
     return m_zipEntries;
+}
+
+bool ZipSigner::AddBitMap(const std::vector<int8_t>& data)
+{
+    if (data.empty()) {
+        SIGNATURE_TOOLS_LOGI("AddBitMap: bitmap is empty, skip adding .pages.info");
+        return true;
+    }
+    for (auto it = m_zipEntries.begin(); it != m_zipEntries.end();) {
+        if ((*it)->GetZipEntryData()->GetZipEntryHeader()->GetFileName() == BIT_MAP_FILENAME) {
+            delete *it;
+            it = m_zipEntries.erase(it);
+        } else {
+            ++it;
+        }
+    }
+    uint32_t len = static_cast<uint32_t>(data.size());
+    unsigned long crc = crc32(0L, reinterpret_cast<const unsigned char*>(data.data()), len);
+    int crcInt = static_cast<int>(crc);
+    std::string bitmapStr(reinterpret_cast<const char*>(data.data()), data.size());
+
+    ZipEntryHeader* header = CreateBitMapHeader(len, crcInt);
+    ZipEntryData* entryData = new ZipEntryData();
+    entryData->SetZipEntryHeader(header);
+    entryData->SetFileOffset(0);
+    entryData->SetFileSize(len);
+    entryData->SetInlineData(bitmapStr);
+    entryData->SetLength(header->GetLength() + len);
+
+    CentralDirectory* cd = CreateBitMapCentralDirectory(len, crcInt);
+    ZipEntry* entry = new ZipEntry();
+    entry->SetZipEntryData(entryData);
+    entry->SetCentralDirectory(cd);
+    m_zipEntries.push_back(entry);
+    SIGNATURE_TOOLS_LOGI("AddBitMap: add .pages.info entry, size=%u, crc=%d", len, crcInt);
+    return true;
+}
+
+ZipEntryHeader* ZipSigner::CreateBitMapHeader(uint32_t len, int crcInt)
+{
+    ZipEntryHeader* header = new ZipEntryHeader();
+    header->SetVersion(BITMAP_ZIP_VERSION);
+    header->SetFlag(0);
+    header->SetMethod(FILE_UNCOMPRESS_METHOD_FLAG);
+    header->SetCrc32(crcInt);
+    header->SetCompressedSize(len);
+    header->SetCompressedSizeActual(len);
+    header->SetUnCompressedSize(len);
+    header->SetUnCompressedSizeActual(len);
+    header->SetFileName(BIT_MAP_FILENAME);
+    header->SetFileNameLength(static_cast<uint16_t>(BIT_MAP_FILENAME.size()));
+    header->SetExtraLength(0);
+    header->SetLength(ZipEntryHeader::HEADER_LENGTH + static_cast<uint16_t>(BIT_MAP_FILENAME.size()));
+    return header;
+}
+
+CentralDirectory* ZipSigner::CreateBitMapCentralDirectory(uint32_t len, int crcInt)
+{
+    CentralDirectory* cd = new CentralDirectory();
+    cd->SetVersion(BITMAP_ZIP_VERSION);
+    cd->SetVersionExtra(BITMAP_ZIP_VERSION);
+    cd->SetFlag(0);
+    cd->SetMethod(FILE_UNCOMPRESS_METHOD_FLAG);
+    cd->SetCrc32(crcInt);
+    cd->SetCompressedSize(len);
+    cd->SetCompressedSizeActual(len);
+    cd->SetUnCompressedSize(len);
+    cd->SetUnCompressedSizeActual(len);
+    cd->SetFileName(BIT_MAP_FILENAME);
+    cd->SetFileNameLength(static_cast<uint16_t>(BIT_MAP_FILENAME.size()));
+    cd->SetExtraLength(0);
+    cd->SetCommentLength(0);
+    cd->SetOffset(0);
+    cd->SetLength(CentralDirectory::CD_LENGTH + static_cast<uint16_t>(BIT_MAP_FILENAME.size()));
+    return cd;
 }
 
 void ZipSigner::SetZipEntries(const std::vector<ZipEntry*>& zipEntries)
