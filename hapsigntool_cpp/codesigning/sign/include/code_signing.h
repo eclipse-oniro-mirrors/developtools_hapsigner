@@ -35,6 +35,7 @@
 #include "bc_signeddata_generator.h"
 #include "unzip_handle_param.h"
 #include "code_sign_block.h"
+#include "page_info_extension.h"
 
 namespace OHOS {
 namespace SignatureTools {
@@ -66,6 +67,7 @@ public:
     static bool IsHnpEntry(const std::string& entryName);
     static bool IsElfFile(const char* data, int size);
     int64_t ComputeDataSize(ZipSigner& zip);
+    void CreatePageInfoExtension(ZipEntry* entry);
     int64_t GetTimestamp();
     bool SignNativeLibs(const std::string &input, std::string &ownerID,
                         std::vector<std::pair<std::string, SignInfo>>& outList);
@@ -89,12 +91,15 @@ public:
     SignerConfig* m_signConfig;
     CodeSignBlock m_codeSignBlock;
     std::mutex m_mutex;
+    PageInfoExtension* m_pageInfoExtension = nullptr;
 
 private:
     static bool CheckUnzParam(unzFile& zFile, unz_file_info& zFileInfo, char fileName[], size_t* nameLen);
     static bool CheckFileName(char fileName[], size_t* nameLen);
     bool SignHapEntry(const std::string &input, int64_t dataSize, int64_t offset,
                       const std::string &profileContent, int64_t& fsvTreeOffset, std::string& ownerID);
+    bool AddPageInfoExtensionToSignInfo(SignInfo& signInfo, FsVerityGenerator& gen,
+                                        const std::string &ownerID);
     bool SignAllNativeLibs(const std::string &input, const std::string &profileContent,
                            const std::string &ownerID);
     bool SignOneHapHnpEntry(unzFile zFile, uLong entryCount, uLong index,

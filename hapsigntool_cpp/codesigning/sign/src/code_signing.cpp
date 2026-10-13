@@ -27,6 +27,7 @@
 #include "verify_code_signature.h"
 #include "code_signing.h"
 #include "constant.h"
+#include "page_info_extension.h"
 
 namespace fs = std::filesystem;
 
@@ -138,6 +139,19 @@ bool CodeSigning::SignAllNativeLibs(const std::string &input, const std::string 
     return true;
 }
 
+void CodeSigning::CreatePageInfoExtension(ZipEntry* entry)
+{
+    if (entry == nullptr) {
+        return;
+    }
+    int64_t bitmapOff = entry->GetCentralDirectory()->GetOffset()
+        + ZipEntryHeader::HEADER_LENGTH
+        + entry->GetZipEntryData()->GetZipEntryHeader()->GetFileNameLength()
+        + entry->GetZipEntryData()->GetZipEntryHeader()->GetExtraLength();
+    int64_t bitmapSize = bitmapOff / CodeSignBlock::PAGE_SIZE_4K * PageInfoExtension::DEFAULT_UNIT_SIZE;
+    m_pageInfoExtension = new PageInfoExtension(bitmapOff, bitmapSize);
+}
+
 int64_t CodeSigning::ComputeDataSize(ZipSigner& zip)
 {
     const std::string BIT_MAP_FILENAME = ".pages.info";
@@ -151,6 +165,7 @@ int64_t CodeSigning::ComputeDataSize(ZipSigner& zip)
         }
 
         if (zipEntryHeader->GetFileName() == BIT_MAP_FILENAME) {
+            CreatePageInfoExtension(entry);
             continue;
         }
         // if the first file is not uncompressed abc or so, set dataSize to zero
@@ -178,12 +193,33 @@ int64_t CodeSigning::GetTimestamp()
     return nowSeconds.time_since_epoch().count();
 }
 
+bool CodeSigning::AddPageInfoExtensionToSignInfo(SignInfo& signInfo, FsVerityGenerator& gen,
+                                                 const std::string &ownerID)
+{
+    if (m_pageInfoExtension == nullptr) {
+        return true;
+    }
+    std::vector<int8_t> fsVerityDigestV2 = gen.GetFsVerityDigestV2();
+    std::vector<int8_t> signatureV2;
+    if (!GenerateSignature(fsVerityDigestV2, ownerID, signatureV2)) {
+        SIGNATURE_TOOLS_LOGE("SignFile GenerateSignature V2 Fail");
+        return false;
+    }
+    m_pageInfoExtension->SetSignature(signatureV2);
+    signInfo.AddExtension(m_pageInfoExtension);
+    SIGNATURE_TOOLS_LOGI("%s", m_pageInfoExtension->ToString().c_str());
+    m_pageInfoExtension = nullptr; // ownership transferred to signInfo
+    return true;
+}
+
 bool CodeSigning::SignFile(std::istream& inputStream, int64_t fileSize, bool storeTree,
                            int64_t fsvTreeOffset, const std::string &ownerID,
                            std::pair<SignInfo, std::vector<int8_t>>& ret)
 {
     std::unique_ptr<FsVerityGenerator> fsVerityGenerator =
         std::make_unique<FsVerityGenerator>();
+    // Set pageInfoExtension BEFORE GenerateFsVerityDigest so V2 digest is computed
+    fsVerityGenerator->SetPageInfoExtension(m_pageInfoExtension);
     if (!fsVerityGenerator->GenerateFsVerityDigest(inputStream, fileSize, fsvTreeOffset)) {
         SIGNATURE_TOOLS_LOGE("SignFile GenerateFsVerityDigest Fail");
         return false;
@@ -202,18 +238,20 @@ bool CodeSigning::SignFile(std::istream& inputStream, int64_t fileSize, bool sto
     int saltSize = fsVerityGenerator->GetSaltSize();
     std::vector<int8_t> salt = fsVerityGenerator->GetSalt();
     SignInfo signInfo(saltSize, flags, fileSize, salt, signature);
-    // if store merkle tree in sign info
     if (storeTree) {
         int merkleTreeSize = fsVerityGenerator->GetTreeBytes().empty() ? 0
             : fsVerityGenerator->GetTreeBytes().size();
         MerkleTreeExtension* merkleTreeExtension = new MerkleTreeExtension(merkleTreeSize,
-                                                                           fsvTreeOffset,
-                                                                           fsVerityGenerator->GetRootHash());
+                                                                            fsvTreeOffset,
+                                                                            fsVerityGenerator->GetRootHash());
         if (merkleTreeExtension == nullptr) {
             PrintErrorNumberMsg("SIGN_ERROR", SIGN_ERROR, "system failed to allocate memory for MerkleTreeExtension");
             return false;
         }
         signInfo.AddExtension(merkleTreeExtension);
+        if (!AddPageInfoExtensionToSignInfo(signInfo, *fsVerityGenerator, ownerID)) {
+            return false;
+        }
     }
     ret = std::make_pair(signInfo, fsVerityGenerator->GetTreeBytes());
     return true;

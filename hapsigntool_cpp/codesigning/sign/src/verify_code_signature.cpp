@@ -395,16 +395,19 @@ bool VerifyCodeSignature::VerifySingleFile(std::istream& input, int64_t length,
     std::vector<int8_t> signature, int64_t merkleTreeOffset,
     std::vector<int8_t> inMerkleTreeBytes)
 {
-    std::pair<std::vector<int8_t>, std::vector<int8_t>> pairResult
-        = GenerateFsVerityDigest(input, length, merkleTreeOffset);
-    std::vector<int8_t> generatedMerkleTreeBytes = pairResult.second;
+    std::unique_ptr<FsVerityGenerator> fsVerityGenerator = std::make_unique<FsVerityGenerator>();
+    fsVerityGenerator->GenerateFsVerityDigest(input, length, merkleTreeOffset);
+    std::vector<int8_t> generatedMerkleTreeBytes = fsVerityGenerator->GetTreeBytes();
     // For native libs, inMerkleTreeBytes is null, skip check here
     bool verifyFlag = (!inMerkleTreeBytes.empty()) && !AreVectorsEqual(inMerkleTreeBytes, generatedMerkleTreeBytes);
     if (verifyFlag) {
         PrintErrorNumberMsg("VERIFY_ERROR", VERIFY_ERROR, "verify merkle tree bytes failed");
         return false;
     }
-    return CmsUtils::VerifySignDataWithUnsignedDataDigest(pairResult.first, signature);
+    if (!CmsUtils::VerifySignDataWithUnsignedDataDigest(fsVerityGenerator->GetFsVerityDigest(), signature)) {
+        return false;
+    }
+    return true;
 }
 
 bool VerifyCodeSignature::GenerateCodeSignBlock(const std::string& file, int64_t offset,
@@ -545,14 +548,6 @@ int64_t VerifyCodeSignature::GetAlignmentAddr(int64_t alignment, int64_t input)
     } else {
         return input + (alignment - residual);
     }
-}
-
-std::pair<std::vector<int8_t>, std::vector<int8_t>> VerifyCodeSignature::GenerateFsVerityDigest(
-    std::istream& inputStream, int64_t size, int64_t merkleTreeOffset)
-{
-    std::unique_ptr<FsVerityGenerator> fsVerityGenerator = std::make_unique<FsVerityGenerator>();
-    fsVerityGenerator->GenerateFsVerityDigest(inputStream, size, merkleTreeOffset);
-    return std::make_pair(fsVerityGenerator->GetFsVerityDigest(), fsVerityGenerator->GetTreeBytes());
 }
 
 bool VerifyCodeSignature::AreVectorsEqual(const std::vector<int8_t>& vec1, const std::vector<int8_t>& vec2)

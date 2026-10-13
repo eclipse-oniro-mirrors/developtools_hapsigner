@@ -46,6 +46,11 @@ bool Extension::IsType(int32_t type)
     return this->type == type;
 }
 
+void Extension::SetSize(int32_t size)
+{
+    this->size = size;
+}
+
 void Extension::ToByteArray(std::vector<int8_t>& ret)
 {
     std::unique_ptr<ByteBuffer> bf = std::make_unique<ByteBuffer>

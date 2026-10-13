@@ -42,7 +42,6 @@ bool FsVerityGenerator::GenerateFsVerityDigest(std::istream& inputStream, long s
     }
     int flags = fsvTreeOffset == 0 ? 0 : FsVerityDescriptor::FLAG_STORE_MERKLE_TREE_OFFSET;
     std::shared_ptr<MerkleTree> merkleTree_ptr(merkleTree);
-    // sign size is 0, cs version is 0
     std::unique_ptr<FsVerityDescriptor::Builder> builder = std::make_unique<FsVerityDescriptor::Builder>();
     builder->SetFileSize(size)
         .SetHashAlgorithm(FS_SHA256.GetId())
@@ -68,7 +67,35 @@ bool FsVerityGenerator::GenerateFsVerityDigest(std::istream& inputStream, long s
     FsVerityDigest::GetFsVerityDigest(FS_SHA256.GetId(), digest, fsVerityDigest);
     treeBytes = merkleTree_ptr->tree;
     rootHash = merkleTree_ptr->rootHash;
+    if (pageInfoExtension != nullptr && flags != 0) {
+        GenerateDigestV2(*builder, flags);
+    }
     return true;
+}
+
+void FsVerityGenerator::GenerateDigestV2(FsVerityDescriptor::Builder& builder, int flags)
+{
+    std::vector<int8_t> fsVerityDescriptorV2;
+    builder.Build().GetByteForGenerateDigestCsv2(
+        pageInfoExtension->GetMapOffset(),
+        pageInfoExtension->GetMapSize(),
+        pageInfoExtension->GetUnitSize(),
+        fsVerityDescriptorV2);
+    if (fsVerityDescriptorV2.empty()) {
+        return;
+    }
+    std::vector<int8_t> digestV2;
+    DigestUtils digestUtilsV2(HASH_SHA256);
+    std::stringstream ssV2;
+    for (const auto& elem : fsVerityDescriptorV2) {
+        ssV2 << elem;
+    }
+    digestUtilsV2.AddData(ssV2.str());
+    std::string resultV2 = digestUtilsV2.Result(DigestUtils::Type::BINARY);
+    for (int i = 0; i < resultV2.size(); i++) {
+        digestV2.push_back(resultV2[i]);
+    }
+    FsVerityDigest::GetFsVerityDigest(FS_SHA256.GetId(), digestV2, fsVerityDigestV2);
 }
 } // namespace SignatureTools
 } // namespace OHOS

@@ -126,6 +126,37 @@ void FsVerityDescriptor::GetByteForGenerateDigest(std::vector<int8_t> &ret)
     return;
 }
 
+void FsVerityDescriptor::GetByteForGenerateDigestCsv2(int64_t mapOffset, int64_t mapSize,
+    uint8_t unitSize, std::vector<int8_t>& ret)
+{
+    std::unique_ptr<ByteBuffer> buffer = std::make_unique<ByteBuffer>(ByteBuffer(DESCRIPTOR_SIZE));
+    buffer->PutByte(CODE_SIGN_VERSION);
+    buffer->PutByte(hashAlgorithm);
+    buffer->PutByte(log2BlockSize);
+    if (saltSize > SALT_SIZE) {
+        PrintErrorNumberMsg("SIGN_ERROR", SIGN_ERROR, "Salt is too long");
+        ret = std::vector<int8_t>();
+        return;
+    }
+    buffer->PutByte(saltSize);
+    buffer->PutInt32(0);
+    buffer->PutInt64(fileSize);
+    WriteBytesWithSize(buffer.get(), rawRootHash, ROOT_HASH_FILED_SIZE);
+    WriteBytesWithSize(buffer.get(), salt, SALT_SIZE);
+    buffer->PutInt32((unitSize << 1) | flags);
+    buffer->PutInt32(static_cast<int32_t>(mapSize));
+    buffer->PutInt64(merkleTreeOffset);
+    buffer->PutInt64(mapOffset);
+    std::vector<int8_t> emptyVector;
+    WriteBytesWithSize(buffer.get(), emptyVector, RESERVED_SIZE_AFTER_TREE_OFFSET - sizeof(int64_t));
+    buffer->PutByte(CODE_SIGN_VERSION_V2);
+    buffer->Flip();
+    char dataArr[DESCRIPTOR_SIZE] = { 0 };
+    buffer->GetData(dataArr, DESCRIPTOR_SIZE);
+    ret = std::vector<int8_t>(dataArr, dataArr + DESCRIPTOR_SIZE);
+    return;
+}
+
 void FsVerityDescriptor::WriteBytesWithSize(ByteBuffer* buffer, std::vector<int8_t>& src, int size)
 {
     int pos = buffer->GetPosition();
