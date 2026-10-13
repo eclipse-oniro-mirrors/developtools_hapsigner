@@ -325,6 +325,14 @@ bool SignProvider::DoSignBlock(SignerConfig& signerConfig, DataSourceContents& d
     return true;
 }
 
+bool SignProvider::IsEocdOverflow(int64_t newCentralDirectoryOffset, const DataSourceContents& dataSrcContents,
+                                 ZipSigner& zip)
+{
+    return newCentralDirectoryOffset > UINT32_MAX ||
+        dataSrcContents.cDSize > UINT32_MAX ||
+        static_cast<uint64_t>(zip.GetZipEntries().size()) > UINT16_MAX;
+}
+
 bool SignProvider::Sign(Options* options)
 {
     bool isPathOverlap = false;
@@ -366,10 +374,7 @@ bool SignProvider::Sign(Options* options)
     }
 
     int64_t newCentralDirectoryOffset = dataSrcContents.cDOffset + signingBlock.GetCapacity();
-    bool eocdOverflow = newCentralDirectoryOffset > UINT32_MAX ||
-        dataSrcContents.cDSize > UINT32_MAX ||
-        static_cast<uint64_t>(zip->GetZipEntries().size()) > UINT16_MAX;
-    if (!dataSrcContents.isZip64 && eocdOverflow) {
+    if (!dataSrcContents.isZip64 && IsEocdOverflow(newCentralDirectoryOffset, dataSrcContents, *zip)) {
         if (!RedoSignWithZip64(signerConfig, zip, outputHap, dataSrcContents, signingBlock)) {
             return false;
         }

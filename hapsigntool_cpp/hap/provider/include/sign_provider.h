@@ -155,6 +155,8 @@ private:
     bool RedoSignWithZip64(SignerConfig& signerConfig, std::shared_ptr<ZipSigner>& zip,
                            std::shared_ptr<RandomAccessFile>& outputHap,
                            DataSourceContents& dataSrcContents, ByteBuffer& signingBlock);
+    bool IsEocdOverflow(int64_t newCentralDirectoryOffset, const DataSourceContents& dataSrcContents,
+                        ZipSigner& zip);
     bool DoSignBlock(SignerConfig& signerConfig, DataSourceContents& dataSrcContents,
                      const std::string& suffix, ZipSigner& zip, ByteBuffer& signingBlock);
 

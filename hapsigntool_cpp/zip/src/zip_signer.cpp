@@ -481,8 +481,10 @@ bool ZipSigner::Sort()
             bool isRunnableFile2 = FileUtils::IsRunnableFile(entry2FileName);
             bool isBitMap1 = entry1FileName == BIT_MAP_FILENAME;
             bool isBitMap2 = entry2FileName == BIT_MAP_FILENAME;
-            int priority1 = isRunnableFile1 ? SORT_PRIORITY_RUNNABLE : (isBitMap1 ? SORT_PRIORITY_BITMAP : SORT_PRIORITY_OTHER);
-            int priority2 = isRunnableFile2 ? SORT_PRIORITY_RUNNABLE : (isBitMap2 ? SORT_PRIORITY_BITMAP : SORT_PRIORITY_OTHER);
+            int priority1 = isRunnableFile1 ? SORT_PRIORITY_RUNNABLE :
+                (isBitMap1 ? SORT_PRIORITY_BITMAP : SORT_PRIORITY_OTHER);
+            int priority2 = isRunnableFile2 ? SORT_PRIORITY_RUNNABLE :
+                (isBitMap2 ? SORT_PRIORITY_BITMAP : SORT_PRIORITY_OTHER);
             if (priority1 != priority2) {
                 return priority1 < priority2;
             }
