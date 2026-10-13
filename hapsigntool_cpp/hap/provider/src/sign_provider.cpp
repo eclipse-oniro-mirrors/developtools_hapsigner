@@ -326,7 +326,7 @@ bool SignProvider::DoSignBlock(SignerConfig& signerConfig, DataSourceContents& d
 }
 
 bool SignProvider::IsEocdOverflow(int64_t newCentralDirectoryOffset, const DataSourceContents& dataSrcContents,
-                                 ZipSigner& zip)
+                                  ZipSigner& zip)
 {
     return newCentralDirectoryOffset > UINT32_MAX ||
         dataSrcContents.cDSize > UINT32_MAX ||
