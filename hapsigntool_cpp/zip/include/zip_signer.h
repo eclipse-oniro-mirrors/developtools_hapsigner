@@ -74,6 +74,13 @@ public:
 
     bool RemoveSignBlock();
 
+    bool AddBitMap(const std::vector<int8_t>& data);
+
+private:
+    ZipEntryHeader* CreateBitMapHeader(uint32_t len, int crcInt);
+    CentralDirectory* CreateBitMapCentralDirectory(uint32_t len, int crcInt);
+public:
+
     std::vector<ZipEntry*>& GetZipEntries();
 
     void SetZipEntries(const std::vector<ZipEntry*>& zipEntries);

@@ -34,6 +34,8 @@ public:
     static const int NUM_THREE;
     static const int NUM_FOUR;
     static const std::string LIBS_PATH_PREFIX;
+    static const std::string ABC_FILE_SUFFIX;
+    static const std::string NATIVE_LIB_AN_SUFFIX;
     static constexpr int FILE_BUFFER_BLOCK = 1024 * 1024;
     FileUtils() = delete;
     // judge is or not empty

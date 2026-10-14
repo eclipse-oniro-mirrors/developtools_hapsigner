@@ -29,6 +29,8 @@ const int FileUtils::NUM_TWO = 2;
 const int FileUtils::NUM_THREE = 3;
 const int FileUtils::NUM_FOUR = 4;
 const std::string FileUtils::LIBS_PATH_PREFIX = "libs/";
+const std::string FileUtils::ABC_FILE_SUFFIX = ".abc";
+const std::string FileUtils::NATIVE_LIB_AN_SUFFIX = ".an";
 bool FileUtils::IsEmpty(std::string cs)
 {
     if (cs.length() == 0) {
@@ -396,19 +398,17 @@ bool FileUtils::IsRunnableFile(const std::string& name)
     if (name.empty()) {
         return false;
     }
-    size_t dotPos = name.rfind('.');
-    if (dotPos == std::string::npos) {
-        return false;
-    }
-    std::string suffix = name.substr(dotPos + 1);
-    if (suffix == "an" || suffix == "abc") {
+    if (name.size() >= NATIVE_LIB_AN_SUFFIX.size() &&
+        name.compare(name.size() - NATIVE_LIB_AN_SUFFIX.size(), NATIVE_LIB_AN_SUFFIX.size(),
+        NATIVE_LIB_AN_SUFFIX) == 0) {
         return true;
     }
-    std::string libDir = name.substr(0, LIBS_PATH_PREFIX.size());
-    if (LIBS_PATH_PREFIX.compare(libDir) == 0) {
+    if (name.size() >= ABC_FILE_SUFFIX.size() &&
+        name.compare(name.size() - ABC_FILE_SUFFIX.size(), ABC_FILE_SUFFIX.size(), ABC_FILE_SUFFIX) == 0) {
         return true;
     }
-    return false;
+    return name.size() >= LIBS_PATH_PREFIX.size() &&
+           name.compare(0, LIBS_PATH_PREFIX.size(), LIBS_PATH_PREFIX) == 0;
 }
 
 bool FileUtils::IsValidFile(std::string file)

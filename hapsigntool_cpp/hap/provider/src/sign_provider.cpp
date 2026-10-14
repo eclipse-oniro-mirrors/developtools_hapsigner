@@ -28,6 +28,7 @@
 #include "string_utils.h"
 #include "file_utils.h"
 #include "pkcs7_data.h"
+#include "page_info_generator.h"
 #include "zip64_end_of_central_directory.h"
 #include "zip64_end_of_central_directory_locator.h"
 #include "sign_elf.h"
@@ -324,6 +325,14 @@ bool SignProvider::DoSignBlock(SignerConfig& signerConfig, DataSourceContents& d
     return true;
 }
 
+bool SignProvider::IsEocdOverflow(int64_t newCentralDirectoryOffset, const DataSourceContents& dataSrcContents,
+                                  ZipSigner& zip)
+{
+    return newCentralDirectoryOffset > UINT32_MAX ||
+        dataSrcContents.cDSize > UINT32_MAX ||
+        static_cast<uint64_t>(zip.GetZipEntries().size()) > UINT16_MAX;
+}
+
 bool SignProvider::Sign(Options* options)
 {
     bool isPathOverlap = false;
@@ -332,6 +341,8 @@ bool SignProvider::Sign(Options* options)
     if (CheckParmaAndInitConfig(signerConfig, options, suffix) != RET_OK) {
         return PrintErrorLog("Check Parma And Init Config failed", COMMAND_PARAM_ERROR);
     }
+    m_fileSuffix = suffix;
+    std::transform(m_fileSuffix.begin(), m_fileSuffix.end(), m_fileSuffix.begin(), ::tolower);
     // Since CheckParmaAndInitConfig has already validated all parameters, it is possible to directly use at
     std::string inputFilePath = signParams.at(ParamConstants::PARAM_BASIC_INPUT_FILE);
     auto [inputStream, tmpOutput, tmpOutPath] = PrepareIOStreams(inputFilePath,
@@ -363,10 +374,7 @@ bool SignProvider::Sign(Options* options)
     }
 
     int64_t newCentralDirectoryOffset = dataSrcContents.cDOffset + signingBlock.GetCapacity();
-    bool eocdOverflow = newCentralDirectoryOffset > UINT32_MAX ||
-        dataSrcContents.cDSize > UINT32_MAX ||
-        static_cast<uint64_t>(zip->GetZipEntries().size()) > UINT16_MAX;
-    if (!dataSrcContents.isZip64 && eocdOverflow) {
+    if (!dataSrcContents.isZip64 && IsEocdOverflow(newCentralDirectoryOffset, dataSrcContents, *zip)) {
         if (!RedoSignWithZip64(signerConfig, zip, outputHap, dataSrcContents, signingBlock)) {
             return false;
         }
@@ -1317,12 +1325,38 @@ bool SignProvider::CopyFileAndAlignment(std::ifstream& input, std::ofstream& tmp
         PrintErrorNumberMsg("ZIP_ERROR", ZIP_ERROR, "zip alignment failed");
         return false;
     }
+    if (!GenerateAndAddBitMap(input, zip, alignment)) {
+        return false;
+    }
     if (!zip.RemoveSignBlock()) {
         PrintErrorNumberMsg("ZIP_ERROR", ZIP_ERROR, "zip remove sign block failed");
         return false;
     }
     if (!zip.ToFile(input, tmpOutput)) {
         PrintErrorNumberMsg("IO_ERROR", IO_ERROR, "zip write to file failed");
+        return false;
+    }
+    return true;
+}
+
+bool SignProvider::GenerateAndAddBitMap(std::ifstream& input, ZipSigner& zip, int alignment)
+{
+    bool enableCodeSign = signParams.at(ParamConstants::PARAM_SIGN_CODE) == CodeSigning::ENABLE_SIGN_CODE_VALUE;
+    if (!enableCodeSign || !IsCodeSignAndPermSignSupportedFile(m_fileSuffix)) {
+        return true;
+    }
+    PageInfoGenerator pageInfoGenerator(zip, input);
+    std::vector<int8_t> bitMap = pageInfoGenerator.GenerateBitMap();
+    if (bitMap.empty()) {
+        SIGNATURE_TOOLS_LOGI("no runnable libs, skip generating bitmap");
+        return true;
+    }
+    if (!zip.AddBitMap(bitMap)) {
+        PrintErrorNumberMsg("SIGN_ERROR", SIGN_ERROR, "add bitmap entry failed");
+        return false;
+    }
+    if (!zip.Alignment(alignment)) {
+        PrintErrorNumberMsg("ZIP_ERROR", ZIP_ERROR, "zip re-alignment after bitmap failed");
         return false;
     }
     return true;
