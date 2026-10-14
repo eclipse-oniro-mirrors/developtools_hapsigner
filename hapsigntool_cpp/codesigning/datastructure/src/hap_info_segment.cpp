@@ -82,7 +82,7 @@ HapInfoSegment HapInfoSegment::FromByteArray(std::vector<int8_t>& bytes)
                             "Invalid dataSize, the dataSize must be an integer multiple of 4096.");
         return HapInfoSegment();
     }
-    if (inHapSignInfo.GetExtensionNum() != SignInfo::MAX_EXTENSION_NUM) {
+    if (inHapSignInfo.GetExtensionNum() > SignInfo::MAX_EXTENSION_NUM) {
         PrintErrorNumberMsg("VERIFY_ERROR", VERIFY_ERROR,
                             "The extension number of HapInfoSegment is incorrect.");
         return HapInfoSegment();

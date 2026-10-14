@@ -33,8 +33,9 @@ public:
     virtual int32_t GetSize();
     virtual void ToByteArray(std::vector<int8_t>& ret);
     bool IsType(int32_t type);
+    void SetSize(int32_t size);
 
-private:
+protected:
     int32_t type;
     int32_t size;
 };

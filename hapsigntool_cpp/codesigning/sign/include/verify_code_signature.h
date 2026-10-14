@@ -71,9 +71,6 @@ private:
     static bool ParseMerkleTree(CodeSignBlock& csb, int32_t readOffset, std::ifstream& signedHap,
                                 int64_t computedTreeOffset);
     static int64_t GetAlignmentAddr(int64_t alignment, int64_t input);
-    static std::pair<std::vector<int8_t>, std::vector<int8_t>> GenerateFsVerityDigest(std::istream& inputStream,
-                                                                                      int64_t size,
-                                                                                      int64_t merkleTreeOffset);
 };
 } // namespace SignatureTools
 } // namespace OHOS

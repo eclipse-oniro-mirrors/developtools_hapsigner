@@ -23,6 +23,7 @@
 #include "merkle_tree_builder.h"
 #include "fs_verity_descriptor.h"
 #include "fs_verity_digest.h"
+#include "page_info_extension.h"
 
 namespace OHOS {
 namespace SignatureTools {
@@ -31,9 +32,16 @@ public:
     MerkleTree* GenerateMerkleTree(std::istream& inputStream, long size,
                                    const FsVerityHashAlgorithm& fsVerityHashAlgorithm);
     bool GenerateFsVerityDigest(std::istream& inputStream, long size, long fsvTreeOffset);
+    void GenerateDigestV2(FsVerityDescriptor::Builder& builder, int flags);
+    void SetPageInfoExtension(PageInfoExtension* ext) { pageInfoExtension = ext; }
     std::vector<int8_t> GetFsVerityDigest()
     {
         return fsVerityDigest;
+    }
+
+    std::vector<int8_t> GetFsVerityDigestV2()
+    {
+        return fsVerityDigestV2;
     }
 
     std::vector<int8_t> Getsalt()
@@ -78,8 +86,10 @@ private:
     static const FsVerityHashAlgorithm FS_VERITY_HASH_ALGORITHM;
     static const int8_t LOG_2_OF_FSVERITY_HASH_PAGE_SIZE;
     std::vector<int8_t> fsVerityDigest;
+    std::vector<int8_t> fsVerityDigestV2;
     std::vector<int8_t> treeBytes;
     std::vector<int8_t> rootHash;
+    PageInfoExtension* pageInfoExtension = nullptr;
 };
 } // namespace SignatureTools
 } // namespace OHOS

@@ -23,6 +23,7 @@ signature_tools_codesigning_src = [
   "${signature_tools_codesigning}/datastructure/src/code_sign_block.cpp",
   "${signature_tools_codesigning}/datastructure/src/code_sign_block_header.cpp",
   "${signature_tools_codesigning}/datastructure/src/extension.cpp",
+  "${signature_tools_codesigning}/datastructure/src/page_info_extension.cpp",
   "${signature_tools_codesigning}/datastructure/src/fs_verity_info_segment.cpp",
   "${signature_tools_codesigning}/datastructure/src/hap_info_segment.cpp",
   "${signature_tools_codesigning}/datastructure/src/merkle_tree_extension.cpp",
@@ -42,5 +43,6 @@ signature_tools_codesigning_src = [
   "${signature_tools_codesigning}/utils/src/cms_utils.cpp",
   "${signature_tools_codesigning}/sign/src/bc_signeddata_generator.cpp",
   "${signature_tools_codesigning}/sign/src/code_signing.cpp",
+  "${signature_tools_codesigning}/sign/src/page_info_generator.cpp",
   "${signature_tools_codesigning}/sign/src/verify_code_signature.cpp",
 ]

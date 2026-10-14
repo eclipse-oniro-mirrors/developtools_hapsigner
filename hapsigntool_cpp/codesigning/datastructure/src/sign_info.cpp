@@ -51,7 +51,7 @@ SignInfo::SignInfo(int32_t saltSize,
                                             - (sigSize % SignInfo::SIGNATURE_ALIGNMENT))
                                             % SignInfo::SIGNATURE_ALIGNMENT, 0);
     extensionNum = 0;
-    extensionOffset = 0;
+    extensionOffset = SIGN_INFO_SIZE_WITHOUT_SIGNATURE + sigSize + static_cast<int32_t>(zeroPadding.size());
 }
 
 SignInfo::SignInfo(int32_t saltSize,
@@ -63,7 +63,7 @@ SignInfo::SignInfo(int32_t saltSize,
                    int32_t extensionOffset,
                    const std::vector<int8_t>& signature,
                    const std::vector<int8_t>& zeroPadding,
-                   const std::vector<MerkleTreeExtension*>& extensionList)
+                   const std::vector<Extension*>& extensionList)
 {
     this->saltSize = saltSize;
     this->sigSize = sigSize;
@@ -88,9 +88,18 @@ SignInfo::SignInfo(const SignInfo& other)
     this->extensionOffset = other.extensionOffset;
     this->signature = other.signature;
     this->zeroPadding = other.zeroPadding;
-    for (MerkleTreeExtension* ext : other.extensionList) {
-        MerkleTreeExtension* extTmp = new MerkleTreeExtension(*ext);
-        this->extensionList.push_back(extTmp);
+    for (Extension* ext : other.extensionList) {
+        if (ext == nullptr) {
+            this->extensionList.push_back(nullptr);
+        } else if (ext->IsType(MerkleTreeExtension::MERKLE_TREE_INLINED)) {
+            MerkleTreeExtension* mte = static_cast<MerkleTreeExtension*>(ext);
+            this->extensionList.push_back(new MerkleTreeExtension(*mte));
+        } else if (ext->IsType(PageInfoExtension::PAGE_INFO_INLINED)) {
+            PageInfoExtension* pie = static_cast<PageInfoExtension*>(ext);
+            this->extensionList.push_back(new PageInfoExtension(*pie));
+        } else {
+            this->extensionList.push_back(nullptr);
+        }
     }
 }
 
@@ -108,9 +117,18 @@ SignInfo& SignInfo::operator=(const SignInfo& other)
     this->extensionOffset = other.extensionOffset;
     this->signature = other.signature;
     this->zeroPadding = other.zeroPadding;
-    for (MerkleTreeExtension* ext : other.extensionList) {
-        MerkleTreeExtension* extTmp = new MerkleTreeExtension(*ext);
-        this->extensionList.push_back(extTmp);
+    for (Extension* ext : other.extensionList) {
+        if (ext == nullptr) {
+            this->extensionList.push_back(nullptr);
+        } else if (ext->IsType(MerkleTreeExtension::MERKLE_TREE_INLINED)) {
+            MerkleTreeExtension* mte = static_cast<MerkleTreeExtension*>(ext);
+            this->extensionList.push_back(new MerkleTreeExtension(*mte));
+        } else if (ext->IsType(PageInfoExtension::PAGE_INFO_INLINED)) {
+            PageInfoExtension* pie = static_cast<PageInfoExtension*>(ext);
+            this->extensionList.push_back(new PageInfoExtension(*pie));
+        } else {
+            this->extensionList.push_back(nullptr);
+        }
     }
     return *this;
 }
@@ -134,9 +152,8 @@ int32_t SignInfo::GetSize()
     return blockSize;
 }
 
-void SignInfo::AddExtension(MerkleTreeExtension* extension)
+void SignInfo::AddExtension(Extension* extension)
 {
-    extensionOffset = GetSize();
     extensionList.push_back(extension);
     extensionNum = extensionList.size();
 }
@@ -192,30 +209,46 @@ void SignInfo::ToByteArray(std::vector<int8_t> &ret)
     return;
 }
 
-std::vector<MerkleTreeExtension*> SignInfo::ParseMerkleTreeExtension(ByteBuffer* bf, int32_t inExtensionNum)
+std::vector<Extension*> SignInfo::ParseExtensionList(ByteBuffer* bf, int32_t inExtensionNum)
 {
-    std::vector<MerkleTreeExtension*> inExtensionList;
-    if (inExtensionNum == 1) {
-        // parse merkle tree extension
+    std::vector<Extension*> inExtensionList;
+    for (int32_t i = 0; i < inExtensionNum; ++i) {
         int32_t extensionType = 0;
         bf->GetInt32(extensionType);
-        if (extensionType != MerkleTreeExtension::MERKLE_TREE_INLINED) {
-            PrintErrorNumberMsg("VERIFY_ERROR", VERIFY_ERROR,
-                                "The extension type of SignInfo is incorrect.");
-            return inExtensionList;
-        }
         int32_t extensionSize = 0;
         bf->GetInt32(extensionSize);
-        if (extensionSize != MerkleTreeExtension::MERKLE_TREE_EXTENSION_DATA_SIZE) {
+        if (extensionType == MerkleTreeExtension::MERKLE_TREE_INLINED) {
+            if (extensionSize != MerkleTreeExtension::MERKLE_TREE_EXTENSION_DATA_SIZE) {
+                PrintErrorNumberMsg("VERIFY_ERROR", VERIFY_ERROR,
+                                    "The extension size of SignInfo is incorrect.");
+                return inExtensionList;
+            }
+            std::vector<int8_t> merkleTreeData(MerkleTreeExtension::MERKLE_TREE_EXTENSION_DATA_SIZE, 0);
+            bf->GetByte(merkleTreeData.data(), merkleTreeData.size());
+            MerkleTreeExtension* pMte = MerkleTreeExtension::FromByteArray(merkleTreeData);
+            if (pMte) {
+                inExtensionList.push_back(pMte);
+            }
+        } else if (extensionType == PageInfoExtension::PAGE_INFO_INLINED) {
+            if (extensionSize < PageInfoExtension::PAGE_INFO_EXTENSION_DATA_SIZE_WITHOUT_SIGN) {
+                PrintErrorNumberMsg("VERIFY_ERROR", VERIFY_ERROR,
+                                    "The page info extension size is incorrect.");
+                return inExtensionList;
+            }
+            std::vector<int8_t> pageInfoData(extensionSize, 0);
+            bf->GetByte(pageInfoData.data(), pageInfoData.size());
+            PageInfoExtension* pageInfoExt = PageInfoExtension::FromByteArray(pageInfoData);
+            if (pageInfoExt != nullptr) {
+                inExtensionList.push_back(pageInfoExt);
+            } else {
+                inExtensionList.push_back(new Extension(extensionType, extensionSize));
+            }
+        } else {
             PrintErrorNumberMsg("VERIFY_ERROR", VERIFY_ERROR,
-                                "The extension size of SignInfo is incorrect.");
-            return inExtensionList;
-        }
-        std::vector<int8_t> merkleTreeExtension(MerkleTreeExtension::MERKLE_TREE_EXTENSION_DATA_SIZE, 0);
-        bf->GetByte(merkleTreeExtension.data(), merkleTreeExtension.size());
-        MerkleTreeExtension* pMerkleTreeExtension = MerkleTreeExtension::FromByteArray(merkleTreeExtension);
-        if (pMerkleTreeExtension) {
-            inExtensionList.push_back(pMerkleTreeExtension);
+                                "Unknown extension type of SignInfo.");
+            // Skip unknown extension data
+            std::vector<int8_t> skipData(extensionSize, 0);
+            bf->GetByte(skipData.data(), skipData.size());
         }
     }
     return inExtensionList;
@@ -266,7 +299,7 @@ SignInfo SignInfo::FromByteArray(std::vector<int8_t> bytes)
     std::vector<int8_t> inZeroPadding((SignInfo::SIGNATURE_ALIGNMENT - (inSigSize % SignInfo::SIGNATURE_ALIGNMENT))
                                       % SignInfo::SIGNATURE_ALIGNMENT, 0);
     bf->GetByte(inZeroPadding.data(), inZeroPadding.size());
-    std::vector<MerkleTreeExtension*> inExtensionList = ParseMerkleTreeExtension(bf.get(), inExtensionNum);
+    std::vector<Extension*> inExtensionList = ParseExtensionList(bf.get(), inExtensionNum);
     return SignInfo(inSaltSize, inSigSize, inFlags, inDataSize, inSalt, inExtensionNum, inExtensionOffset,
                     inSignature, inZeroPadding, inExtensionList);
 }

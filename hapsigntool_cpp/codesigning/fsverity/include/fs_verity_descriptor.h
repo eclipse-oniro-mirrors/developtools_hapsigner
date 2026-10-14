@@ -31,6 +31,7 @@ public:
     static const int FLAG_STORE_MERKLE_TREE_OFFSET = 0x1;
     static const int FS_VERITY_DESCRIPTOR_TYPE = 0x1;
     static const uint8_t CODE_SIGN_VERSION = 0x1;
+    static const uint8_t CODE_SIGN_VERSION_V2 = 0x2;
     static const int DESCRIPTOR_SIZE = 256;
     static const int ROOT_HASH_FILED_SIZE = 64;
     static const int SALT_SIZE = 32;
@@ -57,6 +58,8 @@ public:
     static FsVerityDescriptor FromByteArray(std::vector<int8_t>& bytes);
     void ToByteArray(std::vector<int8_t> &ret);
     void GetByteForGenerateDigest(std::vector<int8_t>& ret);
+    void GetByteForGenerateDigestCsv2(int64_t mapOffset, int64_t mapSize, uint8_t unitSize,
+                                       std::vector<int8_t>& ret);
     
     FsVerityDescriptor(Builder& builder)
     {
