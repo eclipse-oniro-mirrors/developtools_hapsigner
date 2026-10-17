@@ -38,7 +38,7 @@ bool TicketStaple::CopyFileRange(RandomAccessFile& inputFile, std::ofstream& out
         ByteBuffer chunkBuffer(static_cast<int32_t>(readSize));
         int32_t readRet = inputFile.ReadFileFullyFromOffset(chunkBuffer, offset);
         if (readRet < 0) {
-            PrintErrorNumberMsg("IO_ERROR", IO_ERROR, errMsg);
+            PrintErrorNumberMsg(SignToolErrMsg::FILE_READ_FAILED, errMsg);
             return false;
         }
         output.write(chunkBuffer.GetBufferPtr(), readSize);
@@ -53,20 +53,20 @@ bool TicketStaple::ReadZip64Eocd(RandomAccessFile& inputFile, int64_t eocdOffset
 {
     Zip64EndOfCentralDirectoryLocator locator;
     if (!HapSignerBlockUtils::FindZip64EocdLocator(inputFile, eocdOffset, locator)) {
-        PrintErrorNumberMsg("ZIP_ERROR", ZIP_ERROR, "find zip64 eocd locator failed");
+        PrintErrorNumberMsg(SignToolErrMsg::ZIP_FORMAT_FAILED, "find zip64 eocd locator failed");
         return false;
     }
     ctx.zip64Locator = locator;
     ByteBuffer zip64EocdBuffer(Zip64EndOfCentralDirectory::ZIP64_EOCD_LENGTH);
     if (inputFile.ReadFileFullyFromOffset(zip64EocdBuffer,
         static_cast<int64_t>(locator.GetZip64EocdOffset())) < 0) {
-        PrintErrorNumberMsg("ZIP_ERROR", ZIP_ERROR, "read zip64 eocd failed");
+        PrintErrorNumberMsg(SignToolErrMsg::ZIP_FORMAT_FAILED, "read zip64 eocd failed");
         return false;
     }
     std::string zip64EocdStr(zip64EocdBuffer.GetBufferPtr(), zip64EocdBuffer.GetLimit());
     auto parsed = Zip64EndOfCentralDirectory::GetByBytes(zip64EocdStr);
     if (!parsed) {
-        PrintErrorNumberMsg("ZIP_ERROR", ZIP_ERROR, "parse zip64 eocd failed");
+        PrintErrorNumberMsg(SignToolErrMsg::ZIP_FORMAT_FAILED, "parse zip64 eocd failed");
         return false;
     }
     ctx.zip64Eocd = parsed.value();
@@ -77,11 +77,11 @@ bool TicketStaple::ExtractStapleInfo(const std::string& inFile, StapleContext& c
 {
     RandomAccessFile inputFile;
     if (!inputFile.Init(inFile)) {
-        PrintErrorNumberMsg("IO_ERROR", IO_ERROR, "open input file failed: " + inFile);
+        PrintErrorNumberMsg(SignToolErrMsg::FILE_READ_FAILED, "open input file failed: " + inFile);
         return false;
     }
     if (!HapSignerBlockUtils::FindHapSignature(inputFile, ctx.signInfo)) {
-        PrintErrorNumberMsg("ZIP_ERROR", ZIP_ERROR, "find HAP signature failed");
+        PrintErrorNumberMsg(SignToolErrMsg::ZIP_FORMAT_FAILED, "find HAP signature failed");
         return false;
     }
     ctx.centralDirSize = ctx.signInfo.hapEocdOffset - ctx.signInfo.hapCentralDirOffset;
@@ -95,7 +95,7 @@ bool TicketStaple::ExtractStapleInfo(const std::string& inFile, StapleContext& c
     }
     ctx.hapEocd = ctx.signInfo.hapEocd;
     if (ctx.centralDirSize < 0) {
-        PrintErrorNumberMsg("ZIP_ERROR", ZIP_ERROR, "invalid central directory size");
+        PrintErrorNumberMsg(SignToolErrMsg::ZIP_FORMAT_FAILED, "invalid central directory size");
         return false;
     }
     return true;
@@ -107,7 +107,7 @@ bool TicketStaple::RebuildSigningBlock(StapleContext& ctx, const std::string& ne
     int compatibleVersion = HapUtils::GetCompatibleVersion(ctx.signInfo.version);
     if (!SignHap::GenerateHapSigningBlock(newPkcs7Der, ctx.signInfo.optionBlocks,
         compatibleVersion, ctx.newSigningBlock)) {
-        PrintErrorNumberMsg("STAPLE_ERROR", STAPLE_ERROR, "rebuild signing block failed");
+        PrintErrorNumberMsg(SignToolErrMsg::STAPLE_FAILED, "rebuild signing block failed");
         return false;
     }
     return true;
@@ -126,7 +126,7 @@ bool TicketStaple::UpdateZipMetadata(StapleContext& ctx, int64_t newSigningBlock
      */
     int64_t newCentralDirOffset = ctx.signInfo.hapSigningBlockOffset + newSigningBlockSize;
     if (!ctx.isZip64 && newCentralDirOffset > 0xFFFFFFFFLL) {
-        PrintErrorNumberMsg("STAPLE_ERROR", STAPLE_ERROR,
+        PrintErrorNumberMsg(SignToolErrMsg::STAPLE_FAILED,
             "staple would exceed 4GB limit, zip64 conversion requires re-signing");
         return false;
     }
@@ -136,14 +136,14 @@ bool TicketStaple::UpdateZipMetadata(StapleContext& ctx, int64_t newSigningBlock
     int64_t newFileSize = newCentralDirOffset + ctx.centralDirSize +
         zip64Overhead + ctx.hapEocd.GetCapacity();
     if (newFileSize > HapUtils::MAX_INPUT_FILE_SIZE) {
-        PrintErrorNumberMsg("STAPLE_ERROR", STAPLE_ERROR,
+        PrintErrorNumberMsg(SignToolErrMsg::STAPLE_FAILED,
             "stapled file size exceeds 200GB limit");
         return false;
     }
     ctx.hapEocd.SetPosition(0);
     if (!ZipUtils::SetCentralDirectoryOffset(ctx.hapEocd, newCentralDirOffset,
         ctx.isZip64 ? &ctx.zip64Eocd : nullptr)) {
-        PrintErrorNumberMsg("STAPLE_ERROR", STAPLE_ERROR, "set central directory offset failed");
+        PrintErrorNumberMsg(SignToolErrMsg::STAPLE_FAILED, "set central directory offset failed");
         return false;
     }
     if (ctx.isZip64) {
@@ -160,18 +160,18 @@ bool TicketStaple::ModifyStapleData(StapleContext& ctx, const ByteBuffer& ticket
         ctx.signInfo.hapSignatureBlock.GetCapacity());
     PKCS7Data p7Data;
     if (p7Data.Parse(hapSigDer) < 0) {
-        PrintErrorNumberMsg("PARSE_ERROR", PARSE_ERROR, "parse hap signature pkcs7 failed");
+        PrintErrorNumberMsg(SignToolErrMsg::VERIFY_FAILED, "parse hap signature pkcs7 failed");
         return false;
     }
     std::string ticketStr(ticketData.GetBufferPtr(), ticketData.GetCapacity());
     if (p7Data.AddUnauthenticatedAttribute(NOTARIZATION_TICKET_OID, ticketStr) < 0) {
-        PrintErrorNumberMsg("STAPLE_ERROR", STAPLE_ERROR, "add ticket to unauth_attr failed");
+        PrintErrorNumberMsg(SignToolErrMsg::STAPLE_FAILED, "add ticket to unauth_attr failed");
         return false;
     }
     /* 2. Re-encode PKCS7 to DER */
     std::string newPkcs7Der;
     if (p7Data.Encode(newPkcs7Der) < 0) {
-        PrintErrorNumberMsg("STAPLE_ERROR", STAPLE_ERROR, "re-encode pkcs7 failed");
+        PrintErrorNumberMsg(SignToolErrMsg::STAPLE_FAILED, "re-encode pkcs7 failed");
         return false;
     }
     /* 3. Rebuild signing block from new PKCS7 + optionBlocks */
@@ -195,12 +195,12 @@ bool TicketStaple::WriteStapleOutput(const std::string& backupFile,
      */
     RandomAccessFile inputFile;
     if (!inputFile.Init(backupFile)) {
-        PrintErrorNumberMsg("IO_ERROR", IO_ERROR, "open backup file failed");
+        PrintErrorNumberMsg(SignToolErrMsg::FILE_READ_FAILED, "open backup file failed");
         return false;
     }
     std::ofstream output(tmpFile, std::ios::binary | std::ios::trunc);
     if (!output.is_open()) {
-        PrintErrorNumberMsg("IO_ERROR", IO_ERROR, tmpFile + " open failed");
+        PrintErrorNumberMsg(SignToolErrMsg::FILE_READ_FAILED, tmpFile + " open failed");
         return false;
     }
     /* 1. Copy zip content before signing block */
@@ -243,13 +243,13 @@ bool TicketStaple::ValidateInput(Options* options, const std::string& inFile)
     /* Check file size before any processing */
     int64_t fileLen = FileUtils::GetFileLen(inFile);
     if (fileLen < 0 || fileLen > HapUtils::MAX_INPUT_FILE_SIZE) {
-        PrintErrorNumberMsg("STAPLE_ERROR", STAPLE_ERROR, "file size exceeds 200GB limit");
+        PrintErrorNumberMsg(SignToolErrMsg::STAPLE_FAILED, "file size exceeds 200GB limit");
         return false;
     }
     /* Verify original signature before stapling (no output needed) */
     VerifyHap verifyHap;
     if (verifyHap.VerifyBeforeResign(inFile, options) != 0) {
-        PrintErrorNumberMsg("STAPLE_ERROR", STAPLE_ERROR, "verify original signature failed");
+        PrintErrorNumberMsg(SignToolErrMsg::STAPLE_FAILED, "verify original signature failed");
         return false;
     }
     return true;
@@ -267,7 +267,7 @@ bool TicketStaple::StapleApp(Options* options)
     }
     ByteBuffer ticketData;
     if (!HapUtils::ReadFileToByteBuffer(ticketFile, ticketData) || ticketData.GetCapacity() == 0) {
-        PrintErrorNumberMsg("IO_ERROR", IO_ERROR, ticketFile + " is empty or read failed");
+        PrintErrorNumberMsg(SignToolErrMsg::FILE_READ_FAILED, ticketFile + " is empty or read failed");
         return false;
     }
     StapleContext ctx;
@@ -278,31 +278,31 @@ bool TicketStaple::StapleApp(Options* options)
         return false;
     }
     if (rename(inFile.c_str(), backupFile.c_str()) != 0) {
-        PrintErrorNumberMsg("IO_ERROR", IO_ERROR, "backup original file failed: " + inFile);
+        PrintErrorNumberMsg(SignToolErrMsg::FILE_READ_FAILED, "backup original file failed: " + inFile);
         return false;
     }
     if (!WriteStapleOutput(backupFile, tmpFile, ctx)) {
         if (remove(tmpFile.c_str()) != 0) {
-            PrintErrorNumberMsg("IO_ERROR", IO_ERROR, "remove " + tmpFile + " failed");
+            PrintErrorNumberMsg(SignToolErrMsg::FILE_IO_FAILED, "remove " + tmpFile + " failed");
         }
         if (rename(backupFile.c_str(), inFile.c_str()) != 0) {
-            PrintErrorNumberMsg("IO_ERROR", IO_ERROR, "restore " + backupFile + " failed");
+            PrintErrorNumberMsg(SignToolErrMsg::FILE_IO_FAILED, "restore " + backupFile + " failed");
         }
         return false;
     }
     if (rename(tmpFile.c_str(), inFile.c_str()) != 0) {
-        PrintErrorNumberMsg("IO_ERROR", IO_ERROR,
+        PrintErrorNumberMsg(SignToolErrMsg::FILE_READ_FAILED,
             "rename " + tmpFile + " to " + inFile + " failed");
         if (remove(tmpFile.c_str()) != 0) {
-            PrintErrorNumberMsg("IO_ERROR", IO_ERROR, "remove " + tmpFile + " failed");
+            PrintErrorNumberMsg(SignToolErrMsg::FILE_IO_FAILED, "remove " + tmpFile + " failed");
         }
         if (rename(backupFile.c_str(), inFile.c_str()) != 0) {
-            PrintErrorNumberMsg("IO_ERROR", IO_ERROR, "restore " + backupFile + " failed");
+            PrintErrorNumberMsg(SignToolErrMsg::FILE_IO_FAILED, "restore " + backupFile + " failed");
         }
         return false;
     }
     if (remove(backupFile.c_str()) != 0) {
-        PrintErrorNumberMsg("IO_ERROR", IO_ERROR, "remove " + backupFile + " failed");
+        PrintErrorNumberMsg(SignToolErrMsg::FILE_IO_FAILED, "remove " + backupFile + " failed");
     }
     return true;
 }

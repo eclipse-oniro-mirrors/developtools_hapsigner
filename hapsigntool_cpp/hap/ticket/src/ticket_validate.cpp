@@ -125,11 +125,11 @@ bool TicketValidate::ExtractTicketP7b(const SignatureInfo& signInfo, std::string
         signInfo.hapSignatureBlock.GetCapacity());
     PKCS7Data p7Data;
     if (p7Data.Parse(hapSigDer) < 0) {
-        PrintErrorNumberMsg("PARSE_ERROR", PARSE_ERROR, "parse hap signature pkcs7 failed");
+        PrintErrorNumberMsg(SignToolErrMsg::VERIFY_FAILED, "parse hap signature pkcs7 failed");
         return false;
     }
     if (p7Data.GetUnauthenticatedAttribute(NOTARIZATION_TICKET_OID, ticketP7b) < 0) {
-        PrintErrorNumberMsg("STAPLE_VERIFY_ERROR", STAPLE_VERIFY_ERROR,
+        PrintErrorNumberMsg(SignToolErrMsg::STAPLE_VERIFY_FAILED,
             "notarization ticket not found in unauth_attr");
         return false;
     }
@@ -158,26 +158,26 @@ bool TicketValidate::ParseTicketJson(const std::string& ticketJson, ValidateCont
 {
     cJSON* root = cJSON_ParseWithOpts(ticketJson.c_str(), nullptr, 1);
     if (root == nullptr) {
-        PrintErrorNumberMsg("PARSE_ERROR", PARSE_ERROR, "parse notarization ticket JSON failed");
+        PrintErrorNumberMsg(SignToolErrMsg::VERIFY_FAILED, "parse notarization ticket JSON failed");
         return false;
     }
     cJSON* version = cJSON_GetObjectItem(root, "version");
     if (!cJSON_IsNumber(version) || version->valueint != 1) {
-        PrintErrorNumberMsg("NOT_SUPPORT_ERROR", NOT_SUPPORT_ERROR,
+        PrintErrorNumberMsg(SignToolErrMsg::UNSUPPORTED_METHOD,
             "unsupported notarization ticket version");
         cJSON_Delete(root);
         return false;
     }
     cJSON* appPkg = cJSON_GetObjectItem(root, "appPackage");
     if (appPkg == nullptr) {
-        PrintErrorNumberMsg("PARSE_ERROR", PARSE_ERROR, "appPackage not found in notarization ticket");
+        PrintErrorNumberMsg(SignToolErrMsg::VERIFY_FAILED, "appPackage not found in notarization ticket");
         cJSON_Delete(root);
         return false;
     }
     cJSON* devId = cJSON_GetObjectItem(appPkg, "developerId");
     cJSON* bName = cJSON_GetObjectItem(appPkg, "bundleName");
     if (!cJSON_IsString(devId) || !cJSON_IsString(bName)) {
-        PrintErrorNumberMsg("PARSE_ERROR", PARSE_ERROR,
+        PrintErrorNumberMsg(SignToolErrMsg::VERIFY_FAILED,
             "developerId/bundleName not found in appPackage");
         cJSON_Delete(root);
         return false;
@@ -186,7 +186,7 @@ bool TicketValidate::ParseTicketJson(const std::string& ticketJson, ValidateCont
     ctx.bundleName = cJSON_GetStringValue(bName);
     ctx.packageHash = FindHashField(appPkg, ctx.packageHashType);
     if (ctx.packageHash.empty()) {
-        PrintErrorNumberMsg("PARSE_ERROR", PARSE_ERROR, "hash digest not found in appPackage");
+        PrintErrorNumberMsg(SignToolErrMsg::VERIFY_FAILED, "hash digest not found in appPackage");
         cJSON_Delete(root);
         return false;
     }
@@ -203,13 +203,13 @@ bool TicketValidate::GetProfileFromBlocks(const std::vector<OptionalBlock>& opti
             std::string profileRaw(block.optionalBlockValue.GetBufferPtr(),
                 block.optionalBlockValue.GetCapacity());
             if (VerifyHap::GetProfileContent(profileRaw, profileContent) < 0) {
-                PrintErrorNumberMsg("PARSE_ERROR", PARSE_ERROR, "parse profile content failed");
+                PrintErrorNumberMsg(SignToolErrMsg::VERIFY_PROFILE_FAILED, "parse profile content failed");
                 return false;
             }
             return true;
         }
     }
-    PrintErrorNumberMsg("PARSE_ERROR", PARSE_ERROR, "profile block not found");
+    PrintErrorNumberMsg(SignToolErrMsg::VERIFY_FAILED, "profile block not found");
     return false;
 }
 
@@ -217,23 +217,23 @@ bool TicketValidate::ComputeEntryHash(unzFile zFile, const std::string& filePath
     TicketHashType hashType, std::string& hashHex)
 {
     if (unzLocateFile(zFile, filePath.c_str(), 0) != UNZ_OK) {
-        PrintErrorNumberMsg("STAPLE_VERIFY_ERROR", STAPLE_VERIFY_ERROR,
+        PrintErrorNumberMsg(SignToolErrMsg::STAPLE_VERIFY_FAILED,
             "entry not found: " + filePath);
         return false;
     }
     unz_file_info info;
     if (unzGetCurrentFileInfo(zFile, &info, NULL, 0, NULL, 0, NULL, 0) != UNZ_OK) {
-        PrintErrorNumberMsg("IO_ERROR", IO_ERROR, "get entry info failed: " + filePath);
+        PrintErrorNumberMsg(SignToolErrMsg::FILE_READ_FAILED, "get entry info failed: " + filePath);
         return false;
     }
     if (unzOpenCurrentFile(zFile) != UNZ_OK) {
-        PrintErrorNumberMsg("IO_ERROR", IO_ERROR, "open entry failed: " + filePath);
+        PrintErrorNumberMsg(SignToolErrMsg::FILE_READ_FAILED, "open entry failed: " + filePath);
         return false;
     }
     hashHex = ComputeHashHexStream(zFile, hashType);
     unzCloseCurrentFile(zFile);
     if (hashHex.empty()) {
-        PrintErrorNumberMsg("IO_ERROR", IO_ERROR, "read entry failed: " + filePath);
+        PrintErrorNumberMsg(SignToolErrMsg::FILE_READ_FAILED, "read entry failed: " + filePath);
         return false;
     }
     return true;
@@ -247,7 +247,7 @@ bool TicketValidate::VerifySubPackageHashes(const std::string& appFile,
     }
     unzFile zFile = unzOpen(appFile.c_str());
     if (zFile == NULL) {
-        PrintErrorNumberMsg("IO_ERROR", IO_ERROR, "open app file failed: " + appFile);
+        PrintErrorNumberMsg(SignToolErrMsg::FILE_READ_FAILED, "open app file failed: " + appFile);
         return false;
     }
     for (const auto& entry : fileHashes) {
@@ -257,7 +257,7 @@ bool TicketValidate::VerifySubPackageHashes(const std::string& appFile,
             return false;
         }
         if (hashHex != entry.hashValue) {
-            PrintErrorNumberMsg("STAPLE_VERIFY_ERROR", STAPLE_VERIFY_ERROR, "entry hash mismatch");
+            PrintErrorNumberMsg(SignToolErrMsg::STAPLE_VERIFY_FAILED, "entry hash mismatch");
             unzClose(zFile);
             return false;
         }
@@ -270,17 +270,17 @@ bool TicketValidate::VerifyTicketPkcs7(const std::string& ticketP7b, std::string
 {
     PKCS7Data p7Data;
     if (p7Data.Parse(ticketP7b) < 0) {
-        PrintErrorNumberMsg("PARSE_ERROR", PARSE_ERROR,
+        PrintErrorNumberMsg(SignToolErrMsg::VERIFY_FAILED,
             "parse notarization ticket pkcs7 failed");
         return false;
     }
     if (p7Data.Verify() < 0) {
-        PrintErrorNumberMsg("STAPLE_VERIFY_ERROR", STAPLE_VERIFY_ERROR,
+        PrintErrorNumberMsg(SignToolErrMsg::STAPLE_VERIFY_FAILED,
             "notarization ticket signature verification failed");
         return false;
     }
     if (p7Data.GetContent(ticketJson) < 0) {
-        PrintErrorNumberMsg("PARSE_ERROR", PARSE_ERROR,
+        PrintErrorNumberMsg(SignToolErrMsg::VERIFY_FAILED,
             "get notarization ticket content failed");
         return false;
     }
@@ -294,19 +294,19 @@ bool TicketValidate::VerifyPackageHash(const std::string& packageHash, TicketHas
         signInfo.hapSignatureBlock.GetCapacity());
     PKCS7Data p7Data;
     if (p7Data.Parse(hapSigDer) < 0) {
-        PrintErrorNumberMsg("PARSE_ERROR", PARSE_ERROR, "parse hap signature pkcs7 failed");
+        PrintErrorNumberMsg(SignToolErrMsg::VERIFY_FAILED, "parse hap signature pkcs7 failed");
         return false;
     }
     std::string authAttrDer;
     if (p7Data.GetAuthenticatedAttributesSetDer(authAttrDer) < 0) {
-        PrintErrorNumberMsg("PARSE_ERROR", PARSE_ERROR,
+        PrintErrorNumberMsg(SignToolErrMsg::VERIFY_FAILED,
             "get authenticatedAttributes SET DER failed");
         return false;
     }
     std::string hashHex = ComputeHashHex(authAttrDer.data(),
         static_cast<int>(authAttrDer.size()), hashType);
     if (hashHex != packageHash) {
-        PrintErrorNumberMsg("STAPLE_VERIFY_ERROR", STAPLE_VERIFY_ERROR, "packageHash mismatch");
+        PrintErrorNumberMsg(SignToolErrMsg::STAPLE_VERIFY_FAILED, "packageHash mismatch");
         return false;
     }
     return true;
@@ -316,13 +316,13 @@ bool TicketValidate::VerifyProfileAssociation(const ProfileInfo& profileInfo,
     const std::string& devId, const std::string& bundleName)
 {
     if (profileInfo.bundleInfo.developerId != devId) {
-        PrintErrorNumberMsg("STAPLE_VERIFY_ERROR", STAPLE_VERIFY_ERROR,
+        PrintErrorNumberMsg(SignToolErrMsg::STAPLE_VERIFY_FAILED,
             "developerId mismatch: profile=" + profileInfo.bundleInfo.developerId +
             ", ticket=" + devId);
         return false;
     }
     if (profileInfo.bundleInfo.bundleName != bundleName) {
-        PrintErrorNumberMsg("STAPLE_VERIFY_ERROR", STAPLE_VERIFY_ERROR,
+        PrintErrorNumberMsg(SignToolErrMsg::STAPLE_VERIFY_FAILED,
             "bundleName mismatch: profile=" + profileInfo.bundleInfo.bundleName +
             ", ticket=" + bundleName);
         return false;
@@ -334,11 +334,11 @@ bool TicketValidate::ExtractValidateInfo(ValidateContext& ctx)
 {
     RandomAccessFile inputFile;
     if (!inputFile.Init(ctx.inFile)) {
-        PrintErrorNumberMsg("IO_ERROR", IO_ERROR, ctx.inFile + " init failed");
+        PrintErrorNumberMsg(SignToolErrMsg::FILE_READ_FAILED, ctx.inFile + " init failed");
         return false;
     }
     if (!HapSignerBlockUtils::FindHapSignature(inputFile, ctx.signInfo)) {
-        PrintErrorNumberMsg("ZIP_ERROR", ZIP_ERROR,
+        PrintErrorNumberMsg(SignToolErrMsg::ZIP_FORMAT_FAILED,
             "find HAP signature in " + ctx.inFile + " failed");
         return false;
     }
@@ -358,7 +358,7 @@ bool TicketValidate::ExtractValidateInfo(ValidateContext& ctx)
         return false;
     }
     if (ParseProvision(profileContent, ctx.profileInfo) != PROVISION_OK) {
-        PrintErrorNumberMsg("PARSE_ERROR", PARSE_ERROR, "parse provision failed");
+        PrintErrorNumberMsg(SignToolErrMsg::VERIFY_PROFILE_FAILED, "parse provision failed");
         return false;
     }
     return true;

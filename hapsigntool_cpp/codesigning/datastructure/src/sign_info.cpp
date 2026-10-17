@@ -219,7 +219,7 @@ std::vector<Extension*> SignInfo::ParseExtensionList(ByteBuffer* bf, int32_t inE
         bf->GetInt32(extensionSize);
         if (extensionType == MerkleTreeExtension::MERKLE_TREE_INLINED) {
             if (extensionSize != MerkleTreeExtension::MERKLE_TREE_EXTENSION_DATA_SIZE) {
-                PrintErrorNumberMsg("VERIFY_ERROR", VERIFY_ERROR,
+                PrintErrorNumberMsg(SignToolErrMsg::VERIFY_FAILED,
                                     "The extension size of SignInfo is incorrect.");
                 return inExtensionList;
             }
@@ -231,7 +231,7 @@ std::vector<Extension*> SignInfo::ParseExtensionList(ByteBuffer* bf, int32_t inE
             }
         } else if (extensionType == PageInfoExtension::PAGE_INFO_INLINED) {
             if (extensionSize < PageInfoExtension::PAGE_INFO_EXTENSION_DATA_SIZE_WITHOUT_SIGN) {
-                PrintErrorNumberMsg("VERIFY_ERROR", VERIFY_ERROR,
+                PrintErrorNumberMsg(SignToolErrMsg::VERIFY_FAILED,
                                     "The page info extension size is incorrect.");
                 return inExtensionList;
             }
@@ -244,7 +244,7 @@ std::vector<Extension*> SignInfo::ParseExtensionList(ByteBuffer* bf, int32_t inE
                 inExtensionList.push_back(new Extension(extensionType, extensionSize));
             }
         } else {
-            PrintErrorNumberMsg("VERIFY_ERROR", VERIFY_ERROR,
+            PrintErrorNumberMsg(SignToolErrMsg::VERIFY_FAILED,
                                 "Unknown extension type of SignInfo.");
             // Skip unknown extension data
             std::vector<int8_t> skipData(extensionSize, 0);

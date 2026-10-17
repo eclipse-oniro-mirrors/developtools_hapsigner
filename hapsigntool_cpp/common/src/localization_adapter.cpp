@@ -171,7 +171,7 @@ int LocalizationAdapter::IssuerKeyStoreFile(EVP_PKEY** keyPair, bool autoCreate)
     }
 
     if (!fileStatus && !keyStore.empty() && !autoCreate) {
-        PrintErrorNumberMsg("KEY_ALIAS_ERROR", KEY_ALIAS_ERROR, "keyAlias: '"
+        PrintErrorNumberMsg(SignToolErrMsg::KEY_ALIAS_NOT_FOUND, "keyAlias: '"
                             + keyAlias + "' is not exist in" + keyStore);
     }
 
@@ -271,7 +271,7 @@ std::vector<X509*> LocalizationAdapter::GetCertsFromFile(std::string& certPath, 
     // Read And Get Cert
     BIO* bio = BIO_new_file(certPath.c_str(), "rb");
     if (!bio) {
-        PrintErrorNumberMsg("IO_ERROR", IO_ERROR, "open file:" + certPath + "failed");
+        PrintErrorNumberMsg(SignToolErrMsg::FILE_READ_FAILED, "open file:" + certPath + "failed");
         DigestCommon::GetOpensslErrorMessage();
         BIO_free(bio);
         return certs;

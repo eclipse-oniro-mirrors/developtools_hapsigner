@@ -65,7 +65,7 @@ void FsVerityInfoSegment::ToByteArray(std::vector<int8_t>& ret)
 FsVerityInfoSegment FsVerityInfoSegment::FromByteArray(const std::vector<int8_t>& bytes)
 {
     if (bytes.size() != FS_VERITY_INFO_SEGMENT_SIZE) {
-        PrintErrorNumberMsg("VERIFY_ERROR", VERIFY_ERROR,
+        PrintErrorNumberMsg(SignToolErrMsg::VERIFY_FAILED,
                             "The signed size of FsVerityInfoSegment is incorrect");
         return FsVerityInfoSegment();
     }
@@ -76,7 +76,7 @@ FsVerityInfoSegment FsVerityInfoSegment::FromByteArray(const std::vector<int8_t>
     int inMagic;
     bf.GetInt32(inMagic);
     if (inMagic != MAGIC) {
-        PrintErrorNumberMsg("VERIFY_ERROR", VERIFY_ERROR,
+        PrintErrorNumberMsg(SignToolErrMsg::VERIFY_FAILED,
                             "The magic number of FsVerityInfoSegment is incorrect");
         return FsVerityInfoSegment();
     }
@@ -84,7 +84,7 @@ FsVerityInfoSegment FsVerityInfoSegment::FromByteArray(const std::vector<int8_t>
     int8_t inVersion;
     bf.GetInt8(inVersion);
     if (inVersion != FsVerityDescriptor::VERSION) {
-        PrintErrorNumberMsg("VERIFY_ERROR", VERIFY_ERROR,
+        PrintErrorNumberMsg(SignToolErrMsg::VERIFY_FAILED,
                             "The version of FsVerityInfoSegment is incorrect");
         return FsVerityInfoSegment();
     }
@@ -92,7 +92,7 @@ FsVerityInfoSegment FsVerityInfoSegment::FromByteArray(const std::vector<int8_t>
     int8_t inHashAlgorithm;
     bf.GetInt8(inHashAlgorithm);
     if (inHashAlgorithm != FsVerityGenerator::GetFsVerityHashAlgorithm()) {
-        PrintErrorNumberMsg("VERIFY_ERROR", VERIFY_ERROR,
+        PrintErrorNumberMsg(SignToolErrMsg::ALGORITHM_NOT_SUPPORT_ERROR,
                             "The hash algorithm of FsVerityInfoSegment is incorrect");
         return FsVerityInfoSegment();
     }
@@ -100,7 +100,7 @@ FsVerityInfoSegment FsVerityInfoSegment::FromByteArray(const std::vector<int8_t>
     int8_t inLog2BlockSize;
     bf.GetInt8(inLog2BlockSize);
     if (inLog2BlockSize != FsVerityGenerator::GetLog2BlockSize()) {
-        PrintErrorNumberMsg("VERIFY_ERROR", VERIFY_ERROR,
+        PrintErrorNumberMsg(SignToolErrMsg::PAGE_INFO_ERROR,
                             "The log block size of FsVerityInfoSegment is incorrect");
         return FsVerityInfoSegment();
     }

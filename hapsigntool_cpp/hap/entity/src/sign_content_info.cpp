@@ -60,14 +60,14 @@ std::vector<int8_t> SignContentInfo::GetByteContent()
     if ((index = ByteArrayUtils::InsertCharToByteArray(ret, index, m_version)) < 0 ||
         (index = ByteArrayUtils::InsertShortToByteArray(ret, ret.size(), index, m_size)) < 0 ||
         (index = ByteArrayUtils::InsertShortToByteArray(ret, ret.size(), index, m_numOfBlocks)) < 0) {
-        PrintErrorNumberMsg("SIGN_ERROR", SIGN_ERROR,
+        PrintErrorNumberMsg(SignToolErrMsg::SIGNATURE_FAILED,
                             "Failed to insert version, size, or number of blocks into byte array.");
         return std::vector<int8_t>();
     }
 
     for (const auto& tmp : m_hashData) {
         if (index >= ret.size()) {
-            PrintErrorNumberMsg("SIGN_ERROR", SIGN_ERROR,
+            PrintErrorNumberMsg(SignToolErrMsg::SIGNATURE_FAILED,
                                 "The index is out of bounds of the byte array when trying to write the type field.");
             return std::vector<int8_t>();
         }
@@ -75,7 +75,7 @@ std::vector<int8_t> SignContentInfo::GetByteContent()
         index++;
 
         if (index >= ret.size()) {
-            PrintErrorNumberMsg("SIGN_ERROR", SIGN_ERROR,
+            PrintErrorNumberMsg(SignToolErrMsg::SIGNATURE_FAILED,
                                 "The index is out of bounds of the byte array when trying to write the tag field.");
             return std::vector<int8_t>();
         }
@@ -85,7 +85,7 @@ std::vector<int8_t> SignContentInfo::GetByteContent()
         if ((index = ByteArrayUtils::InsertShortToByteArray(ret, ret.size(), index, tmp.m_algId)) < 0 ||
             (index = ByteArrayUtils::InsertIntToByteArray(ret, index, tmp.m_length)) < 0 ||
             (index = ByteArrayUtils::InsertBytesToByteArray(ret, index, tmp.m_hash, tmp.m_hash.size())) < 0) {
-            PrintErrorNumberMsg("SIGN_ERROR", SIGN_ERROR,
+            PrintErrorNumberMsg(SignToolErrMsg::SIGNATURE_FAILED,
                                 "Failed to insert algorithm ID, length, or hash into byte array.");
             return std::vector<int8_t>();
         }

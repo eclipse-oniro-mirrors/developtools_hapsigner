@@ -68,7 +68,7 @@ bool VerifyCodeSignature::VerifyElf(std::string file, int64_t offset, int64_t le
     // 1) parse sign block to ElfSignBlock object
     std::ifstream signedElf(file, std::ios::binary);
     if (!signedElf.is_open()) {
-        PrintErrorNumberMsg("IO_ERROR", IO_ERROR, "open file: " + file + "failed");
+        PrintErrorNumberMsg(SignToolErrMsg::FILE_READ_FAILED, "open file: " + file + "failed");
         return false;
     }
     signedElf.seekg(offset, std::ios::beg);
@@ -128,7 +128,7 @@ bool VerifyCodeSignature::VerifyCodeSign(std::string file, std::pair<std::string
     // 1) verify hap
     std::ifstream hap(file, std::ios::binary);
     if (!hap.is_open()) {
-        PrintErrorNumberMsg("IO_ERROR", IO_ERROR, "open file: " + file + "failed");
+        PrintErrorNumberMsg(SignToolErrMsg::FILE_READ_FAILED, "open file: " + file + "failed");
         return false;
     }
     int64_t dataSize = csb.GetHapInfoSegment().GetSignInfo().GetDataSize();
@@ -155,7 +155,7 @@ bool VerifyCodeSignature::VerifyCodeSign(std::string file, std::pair<std::string
     // 2) verify native libs
     unzFile zFile = unzOpen(file.c_str());
     if (zFile == NULL) {
-        PrintErrorNumberMsg("IO_ERROR", IO_ERROR, "unzOpen file: " + file + "failed");
+        PrintErrorNumberMsg(SignToolErrMsg::READ_ZIP_FAILED, "unzOpen file: " + file + "failed");
         return false;
     }
     bool verifyNativeLibFlag = VerifyNativeLib(csb, file, zFile, pairResult);
@@ -189,7 +189,7 @@ bool VerifyCodeSignature::VerifyHnpLibData(unzFile hnpZip, const std::string& li
     unzCloseCurrentFile(hnpZip);
     PrintMsg("verify lib: " + libPath);
     if (totalRead != signInfo.GetDataSize()) {
-        PrintErrorNumberMsg("VERIFY_ERROR", VERIFY_ERROR, "Invalid dataSize of native lib");
+        PrintErrorNumberMsg(SignToolErrMsg::VERIFY_FAILED,"Invalid dataSize of native lib");
         return false;
     }
     std::vector<int8_t> entrySig = signInfo.GetSignature();
@@ -254,7 +254,7 @@ bool VerifyCodeSignature::VerifyHnpInnerLibs(const std::string& hnpEntryName,
 {
     unzFile hnpZip = unzOpen(tempHnpPath.c_str());
     if (hnpZip == nullptr) {
-        PrintErrorNumberMsg("IO_ERROR", IO_ERROR, "open temp hnp file failed: " + tempHnpPath);
+        PrintErrorNumberMsg(SignToolErrMsg::FILE_READ_FAILED, "open temp hnp file failed: " + tempHnpPath);
         return false;
     }
     unz_global_info hnpGlobalInfo;
@@ -326,12 +326,12 @@ bool VerifyCodeSignature::VerifyOneHnpEntry(unzFile zFile, uLong entryCount, uLo
     }
     auto ite = hnpTypeMap.find(HapUtils::ParseHnpPath(entryName));
     if (ite == hnpTypeMap.end()) {
-        PrintErrorNumberMsg("VERIFY_ERROR", VERIFY_ERROR,
+        PrintErrorNumberMsg(SignToolErrMsg::VERIFY_FAILED,
             "hnp should be described in module.json: " + entryName);
         return false;
     }
     if (unzOpenCurrentFile(zFile) != UNZ_OK) {
-        PrintErrorNumberMsg("IO_ERROR", IO_ERROR, "open hnp entry failed: " + entryName);
+        PrintErrorNumberMsg(SignToolErrMsg::FILE_READ_FAILED, "open hnp entry failed: " + entryName);
         return false;
     }
     std::string tempHnpPath;
@@ -372,12 +372,12 @@ bool VerifyCodeSignature::VerifyHnpLibs(CodeSignBlock& csb, std::string& file,
     }
     unzFile zFile = unzOpen(file.c_str());
     if (zFile == nullptr) {
-        PrintErrorNumberMsg("IO_ERROR", IO_ERROR, "open hap file: " + file + " failed");
+        PrintErrorNumberMsg(SignToolErrMsg::FILE_READ_FAILED, "open hap file: " + file + " failed");
         return false;
     }
     unz_global_info zGlobalInfo;
     if (unzGetGlobalInfo(zFile, &zGlobalInfo) != UNZ_OK) {
-        PrintErrorNumberMsg("SIGN_ERROR", SIGN_ERROR, "get hap global info failed");
+        PrintErrorNumberMsg(SignToolErrMsg::CODE_SIGN_INTERNAL_ERROR, "get hap global info failed");
         unzClose(zFile);
         return false;
     }
@@ -401,7 +401,7 @@ bool VerifyCodeSignature::VerifySingleFile(std::istream& input, int64_t length,
     // For native libs, inMerkleTreeBytes is null, skip check here
     bool verifyFlag = (!inMerkleTreeBytes.empty()) && !AreVectorsEqual(inMerkleTreeBytes, generatedMerkleTreeBytes);
     if (verifyFlag) {
-        PrintErrorNumberMsg("VERIFY_ERROR", VERIFY_ERROR, "verify merkle tree bytes failed");
+        PrintErrorNumberMsg(SignToolErrMsg::VERIFY_FAILED,"verify merkle tree bytes failed");
         return false;
     }
     if (!CmsUtils::VerifySignDataWithUnsignedDataDigest(fsVerityGenerator->GetFsVerityDigest(), signature)) {
@@ -416,7 +416,7 @@ bool VerifyCodeSignature::GenerateCodeSignBlock(const std::string& file, int64_t
     // 1) parse sign block to CodeSignBlock object
     std::ifstream signedHap(file, std::ios::binary);
     if (!signedHap.is_open()) {
-        PrintErrorNumberMsg("IO_ERROR", IO_ERROR, "open file: " + file + "failed");
+        PrintErrorNumberMsg(SignToolErrMsg::FILE_READ_FAILED, "open file: " + file + "failed");
         return false;
     }
     int32_t fileReadOffset = 0;
@@ -437,7 +437,7 @@ bool VerifyCodeSignature::GenerateCodeSignBlock(const std::string& file, int64_t
     csb.SetCodeSignBlockHeader(*codeSignBlockHeader);
     int64_t headerBlockSize = csb.GetCodeSignBlockHeader().GetBlockSize();
     if (headerBlockSize != length) {
-        PrintErrorNumberMsg("VERIFY_ERROR", VERIFY_ERROR,
+        PrintErrorNumberMsg(SignToolErrMsg::VERIFY_FAILED,
             "Invalid code Sign block size of setCodeSignBlockHeader");
         signedHap.close();
         return false;
@@ -468,7 +468,7 @@ bool VerifyCodeSignature::ParseSegmentHead(CodeSignBlock& csb, std::ifstream& si
 {
     for (auto& segmentHeader : csb.GetSegmentHeaderList()) {
         if (fileReadOffset > segmentHeader.GetSegmentOffset()) {
-            PrintErrorNumberMsg("VERIFY_ERROR", VERIFY_ERROR, "Invaild offset of merkle tree and segment header");
+            PrintErrorNumberMsg(SignToolErrMsg::VERIFY_FAILED,"Invaild offset of merkle tree and segment header");
             return false;
         }
         // get merkle tree bytes
@@ -513,7 +513,7 @@ bool VerifyCodeSignature::ParseMerkleTree(CodeSignBlock& csb, int32_t readOffset
     }
     int32_t blockSize = csb.GetCodeSignBlockHeader().GetBlockSize();
     if (fileReadOffset != blockSize) {
-        PrintErrorNumberMsg("VERIFY_ERROR", VERIFY_ERROR,
+        PrintErrorNumberMsg(SignToolErrMsg::VERIFY_FAILED,
             "Invalid blockSize of getCodeSignBlockHeader");
         return false;
     }
@@ -529,7 +529,7 @@ bool VerifyCodeSignature::ParseMerkleTree(CodeSignBlock& csb, int32_t readOffset
         bool merkleTreeFlag = computedTreeOffset != mte->GetMerkleTreeOffset() ||
             merkleTreeBytes.size() != mte->GetMerkleTreeSize();
         if (merkleTreeFlag) {
-            PrintErrorNumberMsg("VERIFY_ERROR", VERIFY_ERROR, "Invalid merkle tree offset or tree size");
+            PrintErrorNumberMsg(SignToolErrMsg::VERIFY_FAILED,"Invalid merkle tree offset or tree size");
             return false;
         }
         csb.AddOneMerkleTree(CodeSigning::HAP_SIGNATURE_ENTRY_NAME, merkleTreeBytes);

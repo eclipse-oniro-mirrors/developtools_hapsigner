@@ -32,7 +32,7 @@ bool CmdUtil::String2Bool(Options* options, const std::string& option)
     } else if (val == "0" || val == "false" || val == "FALSE") {
         (*options)[option] = false;
     } else {
-        PrintErrorNumberMsg("COMMAND_PARAM_ERROR", COMMAND_PARAM_ERROR,
+        PrintErrorNumberMsg(SignToolErrMsg::PARAM_CHECK_FAILED,
                             val + " is not valid value for " + "-" + option);
         return false;
     }
@@ -48,13 +48,13 @@ static bool UpdateParamForVariantCertInt(const ParamsSharedPtr& param)
         std::string val = options->GetString(Options::VALIDITY);
         for (char x : val) {
             if (!isdigit(x)) {
-                PrintErrorNumberMsg("COMMAND_PARAM_ERROR", COMMAND_PARAM_ERROR, "Invalid parameter '"
+                PrintErrorNumberMsg(SignToolErrMsg::PARAM_CHECK_FAILED, "Invalid parameter '"
                                     + val + "', You should fill in the numbers");
                 return false;
             }
         }
         if (!StringUtils::CheckStringToInt(val, validity)) {
-            PrintErrorNumberMsg("COMMAND_PARAM_ERROR", COMMAND_PARAM_ERROR, "Invalid parameter '"
+            PrintErrorNumberMsg(SignToolErrMsg::PARAM_CHECK_FAILED, "Invalid parameter '"
                                 + val + "'");
             return false;
         }
@@ -82,7 +82,7 @@ static bool UpdateParamForVariantInt(const ParamsSharedPtr& param)
         } else if (keySize == "NIST-P-384") {
             (*options)[Options::KEY_SIZE] = NIST_P_384;
         } else {
-            PrintErrorNumberMsg("COMMAND_ERROR", COMMAND_ERROR, "not supported '" + keySize
+            PrintErrorNumberMsg(SignToolErrMsg::NO_SUCH_SIGNATURE, "not supported '" + keySize
                                 + "' Key algorithms length");
             return false;
         }
@@ -91,7 +91,7 @@ static bool UpdateParamForVariantInt(const ParamsSharedPtr& param)
         int basicConstraintsPathLen = 0;
         std::string val = options->GetString(Options::BASIC_CONSTRAINTS_PATH_LEN);
         if (!StringUtils::CheckStringToInt(val, basicConstraintsPathLen)) {
-            PrintErrorNumberMsg("COMMAND_PARAM_ERROR", COMMAND_PARAM_ERROR, "Invalid parameter '"
+            PrintErrorNumberMsg(SignToolErrMsg::PARAM_CHECK_FAILED, "Invalid parameter '"
                                 + val + "', You should fill in the numbers");
             return false;
         }
@@ -141,7 +141,7 @@ static bool UpdateParamForVariantBoolProfileSigned(const ParamsSharedPtr& param)
         } else if (val == "0" || val == "false" || val == "FALSE") {
             (*options)[Options::PROFILE_SIGNED] = DEFAULT_PROFILE_SIGNED_0;
         } else {
-            PrintErrorNumberMsg("COMMAND_PARAM_ERROR", COMMAND_PARAM_ERROR,
+            PrintErrorNumberMsg(SignToolErrMsg::PARAM_CHECK_FAILED,
                                 val + "is not valid value for "+"-" + Options::PROFILE_SIGNED);
             return false;
         }
@@ -172,12 +172,12 @@ bool CmdUtil::UpdateParamForCheckOutFile(Options* options, const std::initialize
             }
             char realFilePath[PATH_MAX + 1] = {0x00};
             if (parentPath.size() > PATH_MAX) {
-                PrintErrorNumberMsg("FILE_NOT_FOUND", FILE_NOT_FOUND, "'" + outFilePath + "' File path longer than '"
+                PrintErrorNumberMsg(SignToolErrMsg::FILE_NOT_EXIST, "'" + outFilePath + "' File path longer than '"
                                     + std::to_string(PATH_MAX) + "' characters");
                 return false;
             }
             if (realpath(parentPath.c_str(), realFilePath) == nullptr) {
-                PrintErrorNumberMsg("FILE_NOT_FOUND", FILE_NOT_FOUND, "The '" + outFilePath +
+                PrintErrorNumberMsg(SignToolErrMsg::FILE_NOT_EXIST, "The '" + outFilePath +
                                     "' file does not exist or the path is invalid"
                                     + "', parameter name '-" + key + "'");
                 return false;
@@ -185,7 +185,7 @@ bool CmdUtil::UpdateParamForCheckOutFile(Options* options, const std::initialize
             std::string charStr(realFilePath);
             std::string fileName = filePath.filename();
             if (fileName.empty()) {
-                PrintErrorNumberMsg("FILE_NOT_FOUND", FILE_NOT_FOUND, "The file name cannot be empty '"
+                PrintErrorNumberMsg(SignToolErrMsg::FILE_NOT_EXIST, "The file name cannot be empty '"
                                     + outFilePath + "', parameter name '-" + key + "'");
                 return false;
             }
@@ -202,12 +202,12 @@ bool CmdUtil::UpdateParamForCheckInFile(Options* options, const std::initializer
             std::string inFilePath = options->GetString(key);
             char realFilePath[PATH_MAX + 1] = {0x00};
             if (inFilePath.size() > PATH_MAX) {
-                PrintErrorNumberMsg("FILE_NOT_FOUND", FILE_NOT_FOUND, "'" + inFilePath + "' File path longer than '"
+                PrintErrorNumberMsg(SignToolErrMsg::FILE_NOT_EXIST, "'" + inFilePath + "' File path longer than '"
                                     + std::to_string(PATH_MAX) + "' characters");
                 return false;
             }
             if (realpath(inFilePath.c_str(), realFilePath) == nullptr) {
-                PrintErrorNumberMsg("FILE_NOT_FOUND", FILE_NOT_FOUND, "The '" + inFilePath +
+                PrintErrorNumberMsg(SignToolErrMsg::FILE_NOT_EXIST, "The '" + inFilePath +
                                     "' file does not exist or the path is invalid"
                                     + "', parameter name '-" + key + "'");
                 return false;
@@ -231,7 +231,7 @@ static bool UpdateParamForCheckSignAlg(const ParamsSharedPtr& param)
     if (options->count(Options::SIGN_ALG)) {
         std::string signAlg = options->GetString(Options::SIGN_ALG);
         if (signAlg != SIGN_ALG_SHA256 && signAlg != SIGN_ALG_SHA384) {
-            PrintErrorNumberMsg("NOT_SUPPORT_ERROR", NOT_SUPPORT_ERROR, "'" + signAlg + "' parameter is incorrect");
+            PrintErrorNumberMsg(SignToolErrMsg::NO_SUCH_SIGNATURE, "'" + signAlg + "' parameter is incorrect");
             return false;
         }
     }
@@ -247,7 +247,7 @@ static bool UpdateParamForInform(const ParamsSharedPtr& param)
         if (options->count(Options::INFORM)) {
             std::string inForm = options->GetString(Options::INFORM);
             if (!StringUtils::ContainsCase(ParamsRunTool::InformList, inForm)) {
-                PrintErrorNumberMsg("NOT_SUPPORT_ERROR", NOT_SUPPORT_ERROR, "parameter '"
+                PrintErrorNumberMsg(SignToolErrMsg::NOT_SUPPORT_FILE, "parameter '"
                                     + inForm + "' format error, Inform only support zip/elf/bin");
                 return false;
             }
@@ -267,7 +267,7 @@ static bool UpdateParamForOutform(const ParamsSharedPtr& param)
         if (options->count(Options::OUT_FORM)) {
             std::string outForm = options->GetString(Options::OUT_FORM);
             if (outForm != OUT_FORM_CERT && outForm != OUT_FORM_CERT_CHAIN) {
-                PrintErrorNumberMsg("COMMAND_ERROR", COMMAND_ERROR, "parameter '" + outForm
+                PrintErrorNumberMsg(SignToolErrMsg::UNSUPPORTED_METHOD, "parameter '" + outForm
                                     + "' format error, Outform only supprot cert/cerChain");
                 return false;
             }
@@ -295,7 +295,7 @@ static bool UpdateParamForCheckRemoteSignProfile(const ParamsSharedPtr& param)
         }
         for (const std::string& key : signProfileRemoteParams) {
             if (options->count(key) == 0) {
-                PrintErrorNumberMsg("COMMAND_ERROR", COMMAND_ERROR, "sign profile RemoteSign absence param '"
+                PrintErrorNumberMsg(SignToolErrMsg::PARAM_REQUIRED, "sign profile RemoteSign absence param '"
                                     + key + "'");
                 return false;
             }
@@ -336,13 +336,13 @@ int CmdUtil::GetCommandParameterKey(const char strChar, std::string& strChars, s
     if (strChar == '-') {
         bool isTrust = std::find(trustList.begin(), trustList.end(), strChars) != trustList.end();
         if (!isTrust) {
-            PrintErrorNumberMsg("COMMAND_PARAM_ERROR", COMMAND_PARAM_ERROR, "There is no '"
+            PrintErrorNumberMsg(SignToolErrMsg::PARAM_NOT_TRUSTED, "There is no '"
                                 + strChars + "' command for the trust list");
             return RET_FAILED;
         }
         keyStandBy = strChars.substr(1);
     } else {
-        PrintErrorNumberMsg("COMMAND_PARAM_ERROR", COMMAND_PARAM_ERROR, "'" + strChars
+        PrintErrorNumberMsg(SignToolErrMsg::PARAM_NOT_IN_PAIRS, "'" + strChars
                             + "' Parameters error, Param key - value must in pairs");
         return RET_FAILED;
     }
@@ -379,7 +379,7 @@ bool CmdUtil::Convert2Params(char** args, const size_t size, const ParamsSharedP
         }
     }
     if (!readKey) {
-        PrintErrorNumberMsg("INVALIDPARAM_ERROR", INVALIDPARAM_ERROR,
+        PrintErrorNumberMsg(SignToolErrMsg::PARAM_NOT_IN_PAIRS,
                             "The last value of parameter cannot be omitted");
         return false;
     }
@@ -419,15 +419,15 @@ bool CmdUtil::ValidAndPutParam(const ParamsSharedPtr& params, const std::string&
     std::string  str = "Pwd";
     bool result = true;
     if (key.empty()) {
-        PrintErrorNumberMsg("COMMAND_PARAM_ERROR", COMMAND_PARAM_ERROR,
+        PrintErrorNumberMsg(SignToolErrMsg::PARAM_CHECK_FAILED,
                             "The command-line parameter key cannot be empty");
         result = false;
     } else if (strlen(value) == 0) {
-        PrintErrorNumberMsg("COMMAND_PARAM_ERROR", COMMAND_PARAM_ERROR,
+        PrintErrorNumberMsg(SignToolErrMsg::PARAM_CHECK_FAILED,
                             "The command-line parameter value cannot be empty");
         result = false;
     } else if (params->GetOptions()->count(key)) {
-        PrintErrorNumberMsg("COMMAND_ERROR", COMMAND_ERROR,
+        PrintErrorNumberMsg(SignToolErrMsg::PARAM_DUPLICATE,
                             "Duplicate command parameter are not allowed '" + key + "'");
         result = false;
     } else if (key.length() >= str.length() && key.substr(key.length() - INVALIDCHAR) == str) {
@@ -441,7 +441,7 @@ bool CmdUtil::ValidAndPutParam(const ParamsSharedPtr& params, const std::string&
 bool CmdUtil::JudgeAlgType(const std::string& keyAlg)
 {
     if (keyAlg != "ECC") {
-        PrintErrorNumberMsg("COMMAND_ERROR", COMMAND_ERROR, "not supported '" + keyAlg + "' Key algorithms");
+        PrintErrorNumberMsg(SignToolErrMsg::UNSUPPORTED_METHOD, "not supported '" + keyAlg + "' Key algorithms");
         return false;
     }
     return true;
@@ -450,7 +450,7 @@ bool CmdUtil::JudgeAlgType(const std::string& keyAlg)
 bool CmdUtil::JudgeSize(const int size)
 {
     if (size != NIST_P_256 && size != NIST_P_384) {
-        PrintErrorNumberMsg("COMMAND_ERROR", COMMAND_ERROR, "Keysize params is incorrect, Support only 256 or 384");
+        PrintErrorNumberMsg(SignToolErrMsg::NO_SUCH_SIGNATURE, "Keysize params is incorrect, Support only 256 or 384");
         return false;
     }
     return true;
@@ -459,7 +459,7 @@ bool CmdUtil::JudgeSize(const int size)
 bool CmdUtil::JudgeSignAlgType(const std::string& signAlg)
 {
     if (signAlg != SIGN_ALG_SHA256 && signAlg != SIGN_ALG_SHA384) {
-        PrintErrorNumberMsg("COMMAND_ERROR", COMMAND_ERROR, "not supported '" + signAlg + "' signature algorithm");
+        PrintErrorNumberMsg(SignToolErrMsg::NO_SUCH_SIGNATURE, "not supported '" + signAlg + "' signature algorithm");
         return  false;
     }
     return true;
@@ -488,7 +488,7 @@ bool CmdUtil::VerifyTypes(const std::string& inputType)
     sets.insert("decipherOnly");
     for (const auto& val : vecs) {
         if (sets.count(val) == 0) {
-            PrintErrorNumberMsg("COMMAND_ERROR", COMMAND_ERROR,
+            PrintErrorNumberMsg(SignToolErrMsg::UNSUPPORTED_METHOD,
                                 "Not support command param '" + val + "'");
             return false;
         }
@@ -512,7 +512,7 @@ bool CmdUtil::VerifyType(const std::string& inputType)
     sets.insert("timestamp");
     sets.insert("ocspSignature");
     if (sets.count(inputType) == 0) {
-        PrintErrorNumberMsg("COMMAND_PARAM_ERROR", COMMAND_PARAM_ERROR,
+        PrintErrorNumberMsg(SignToolErrMsg::UNSUPPORTED_METHOD,
                             "Not support command param '" + inputType + "'");
         return false;
     }
@@ -528,7 +528,7 @@ bool CmdUtil::VerifyType(const std::string& inputType, const std::string& suppor
          supportTypes[pos + inputType.length()] == ',')) {
         return true;
     }
-    PrintErrorNumberMsg("COMMAND_PARAM_ERROR", COMMAND_PARAM_ERROR, "Not support command param '" + inputType + "'");
+    PrintErrorNumberMsg(SignToolErrMsg::UNSUPPORTED_METHOD, "Not support command param '" + inputType + "'");
 
     return false;
 }

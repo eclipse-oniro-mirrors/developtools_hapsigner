@@ -59,7 +59,7 @@ void KeyStoreHelper::ResePwdLenvariable()
 void KeyStoreHelper::PrintAliasExistErrorMsg(const std::string& alias, const std::string& keyStorePath)
 {
     if (!isRegen) {
-        PrintErrorNumberMsg("KEY_ALIAS_ERROR", KEY_ALIAS_ERROR, "keyAlias: '"
+        PrintErrorNumberMsg(SignToolErrMsg::KEY_ALIAS_NOT_FOUND, "keyAlias: '"
                             + alias + "' is not exist in" + keyStorePath);
     }
 }
@@ -284,14 +284,14 @@ int KeyStoreHelper::GetPublicKey(PKCS7* safe, const std::string& alias, char* pa
 
     bags = PKCS12_unpack_p7encdata(safe, pass, passlen);
     if (bags == nullptr) {
-        PrintErrorNumberMsg("KEY_PASSWORD_ERROR", KEY_PASSWORD_ERROR, "'" + alias + "' keypair password error");
+        PrintErrorNumberMsg(SignToolErrMsg::KEY_PASSWORD_ERROR, "'" + alias + "' keypair password error");
         KeyPairFree(ocerts, bags, name);
         SetPassWordStatus(false);
         return RET_FAILED;
     }
 
     if (ParsePkcs12Safebags(bags, pass, passlen, ocerts) == RET_FAILED) {
-        PrintErrorNumberMsg("KEY_PASSWORD_ERROR", KEY_PASSWORD_ERROR, "'" + alias + "' keypair password error");
+        PrintErrorNumberMsg(SignToolErrMsg::KEY_PASSWORD_ERROR, "'" + alias + "' keypair password error");
         KeyPairFree(ocerts, bags, name);
         SetPassWordStatus(false);
         return RET_FAILED;
@@ -339,7 +339,7 @@ int KeyStoreHelper::GetPrivateKey(PKCS7* safe, const std::string& alias, char* p
             continue;
         }
         if ((p8 = PKCS12_decrypt_skey(bag, pass, passlen)) == NULL) {
-            PrintErrorNumberMsg("KEY_PASSWORD_ERROR", KEY_PASSWORD_ERROR, "'" + alias
+            PrintErrorNumberMsg(SignToolErrMsg::KEY_PASSWORD_ERROR, "'" + alias
                                 + "' keypair password error");
             KeyPairFree(bags, p8, name);
             SetPassWordStatus(false);
@@ -505,7 +505,7 @@ int KeyStoreHelper::ReadKeyStore(std::string& keyStorePath, char* keyStorePwd, c
 int KeyStoreHelper::Pkcs12PasswordParse(PKCS12* p12, const char* keyStorePwd, const std::string& keyStoreFile)
 {
     if (p12 == NULL) {
-        PrintErrorNumberMsg("KEYSTORE_STRUCTURE_ERROR", KEYSTORE_STRUCTURE_ERROR, "'" + keyStoreFile
+        PrintErrorNumberMsg(SignToolErrMsg::KEYSTORE_ERROR, "'" + keyStoreFile
                             + "' keystore is not a PKCS12 structure");
         return RET_FAILED;
     }
@@ -524,7 +524,7 @@ int KeyStoreHelper::Pkcs12PasswordParse(PKCS12* p12, const char* keyStorePwd, co
 
     return RET_OK;
 err:
-    PrintErrorNumberMsg("KEYSTORE_PASSWORD_ERROR", KEYSTORE_PASSWORD_ERROR, "keyStore password error");
+    PrintErrorNumberMsg(SignToolErrMsg::INIT_KEYSTORE_FAILED, "keyStore password error");
     return KEYSTORE_PASSWORD_ERROR;
 }
 

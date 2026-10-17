@@ -32,18 +32,18 @@ int BCSignedDataGenerator::GenerateSignedData(const std::string& content,
     std::string sigAlg;
     int result = RET_OK;
     if (content.empty()) {
-        PrintErrorNumberMsg("INVALIDPARAM_ERROR", INVALIDPARAM_ERROR,
+        PrintErrorNumberMsg(SignToolErrMsg::CODE_SIGN_INTERNAL_ERROR,
                             "digest content is empty, generate signed data failed");
         return INVALIDPARAM_ERROR;
     }
     if (signerConfig == NULL) {
-        PrintErrorNumberMsg("INVALIDPARAM_ERROR", INVALIDPARAM_ERROR,
+        PrintErrorNumberMsg(SignToolErrMsg::CODE_SIGN_INTERNAL_ERROR,
                             "signerConfig is NULL");
         return INVALIDPARAM_ERROR;
     }
     std::shared_ptr<Signer> signer = signerConfig->GetSigner();
     if (signer == NULL) {
-        PrintErrorNumberMsg("INVALIDPARAM_ERROR", INVALIDPARAM_ERROR,
+        PrintErrorNumberMsg(SignToolErrMsg::CODE_SIGN_INTERNAL_ERROR,
                             "signer is NULL");
         return INVALIDPARAM_ERROR;
     }
@@ -73,7 +73,7 @@ int BCSignedDataGenerator::PackageSignedData(const std::string& content, const s
     std::vector<PKCS7Attr> attrs;
     if (m_ownerID.empty() == false) {
         if (AddOwnerID(attrs, m_ownerID) < 0) {
-            PrintErrorNumberMsg("INVALIDPARAM_ERROR", INVALIDPARAM_ERROR,
+            PrintErrorNumberMsg(SignToolErrMsg::CODE_SIGN_INTERNAL_ERROR,
                                 "create ownerIDOid failed");
             return INVALIDPARAM_ERROR;
         }
@@ -102,7 +102,7 @@ int BCSignedDataGenerator::GetSigAlg(SignerConfig* signerConfig, std::string& si
 {
     std::vector<SignatureAlgorithmHelper> sigs = signerConfig->GetSignatureAlgorithms();
     if (sigs.size() != 1) {
-        PrintErrorNumberMsg("INVALIDPARAM_ERROR", INVALIDPARAM_ERROR, "sigAlg count not equal to 1");
+        PrintErrorNumberMsg(SignToolErrMsg::CODE_SIGN_INTERNAL_ERROR, "sigAlg count not equal to 1");
         return INVALIDPARAM_ERROR;
     }
     SignatureAlgorithmHelper signatureAlg = sigs[0];
@@ -111,7 +111,7 @@ int BCSignedDataGenerator::GetSigAlg(SignerConfig* signerConfig, std::string& si
     } else if (signatureAlg.m_id == SignatureAlgorithmId::ECDSA_WITH_SHA384) {
         sigAlg = SIGN_ALG_SHA384;
     } else {
-        PrintErrorNumberMsg("INVALIDPARAM_ERROR", INVALIDPARAM_ERROR,
+        PrintErrorNumberMsg(SignToolErrMsg::ALGORITHM_NOT_SUPPORT_ERROR,
                             sigAlg + "is invalid sigAlg, please use SHA256withECDSA/SHA384withECDSA, sign failed");
         return NOT_SUPPORT_ERROR;
     }

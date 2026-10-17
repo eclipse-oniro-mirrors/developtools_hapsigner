@@ -22,6 +22,7 @@ signature_tools_common_src = [
   "${signature_tools_common}/src/random_access_file.cpp",
   "${signature_tools_common}/src/digest_parameter.cpp",
   "${signature_tools_common}/src/digest_common.cpp",
+  "${signature_tools_common}/src/error_message.cpp",
   "${signature_tools_common}/src/localization_adapter.cpp",
   "${signature_tools_common}/src/options.cpp",
   "${signature_tools_common}/src/password_guard.cpp",

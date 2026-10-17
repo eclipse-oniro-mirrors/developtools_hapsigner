@@ -80,7 +80,7 @@ std::string LocalSigner::GetSignature(const std::string& data, const std::string
     } else if (signAlg == SIGN_ALG_SHA384) {
         hash = EVP_sha384();
     } else {
-        PrintErrorNumberMsg("INVALIDPARAM_ERROR", INVALIDPARAM_ERROR,
+        PrintErrorNumberMsg(SignToolErrMsg::NO_SUCH_SIGNATURE,
                             signAlg + " is invalid sigAlg, please use SHA256withECDSA/SHA384withECDSA, sign failed");
         return ret;
     }
@@ -93,7 +93,7 @@ std::string LocalSigner::GetSignature(const std::string& data, const std::string
                   !(sigResult = reinterpret_cast<unsigned char*>(OPENSSL_malloc(sigLen)))  ||
                   (EVP_DigestSignFinal(hashCtx, sigResult, &sigLen) <= 0);
     if (result) {
-        PrintErrorNumberMsg("SIGN_ERROR", SIGN_ERROR, "compute signature value failed");
+        PrintErrorNumberMsg(SignToolErrMsg::SIGNATURE_FAILED, "compute signature value failed");
         goto err;
     }
     ret.assign(reinterpret_cast<const char*>(sigResult), sigLen);

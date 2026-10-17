@@ -41,19 +41,19 @@ bool RandomAccessFile::Init(const std::string& filePath)
 {
     fd = open(filePath.c_str(), O_RDWR);
     if (fd == -1) {
-        PrintErrorNumberMsg("IO_ERROR", IO_ERROR, "open file: " + filePath + " failed");
+        PrintErrorNumberMsg(SignToolErrMsg::FILE_READ_FAILED, "open file: " + filePath + " failed");
         return false;
     }
 
     if (memoryPageSize <= 0) {
-        PrintErrorNumberMsg("IO_ERROR", IO_ERROR,
+        PrintErrorNumberMsg(SignToolErrMsg::FILE_IO_FAILED,
                             "getting pagesize failed. memoryPageSize: " + std::to_string(memoryPageSize));
         return false;
     }
 
     struct stat file_stat;
     if (fstat(fd, &file_stat) == -1) {
-        PrintErrorNumberMsg("IO_ERROR", IO_ERROR,
+        PrintErrorNumberMsg(SignToolErrMsg::FILE_READ_FAILED,
                             filePath + "get status failed");
         return false;
     }

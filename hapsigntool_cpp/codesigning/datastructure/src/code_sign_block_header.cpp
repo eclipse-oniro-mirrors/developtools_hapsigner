@@ -78,7 +78,7 @@ void CodeSignBlockHeader::ToByteArray(std::vector<int8_t>& ret)
 CodeSignBlockHeader* CodeSignBlockHeader::FromByteArray(const std::vector<int8_t>& bytes)
 {
     if (bytes.size() != Size()) {
-        PrintErrorNumberMsg("VERIFY_ERROR", VERIFY_ERROR, "The size of code signature block is incorrect.");
+        PrintErrorNumberMsg(SignToolErrMsg::VERIFY_FAILED, "The size of code signature block is incorrect.");
         return nullptr;
     }
     ByteBuffer bf(bytes.size());
@@ -86,14 +86,14 @@ CodeSignBlockHeader* CodeSignBlockHeader::FromByteArray(const std::vector<int8_t
     bf.Flip();
     int64_t inMagic;
     if (!bf.GetInt64(inMagic) || inMagic != MAGIC_NUM) {
-        PrintErrorNumberMsg("VERIFY_ERROR", VERIFY_ERROR,
+        PrintErrorNumberMsg(SignToolErrMsg::VERIFY_FAILED,
                             "The magic number in the code signature block header is incorrect.");
         return nullptr;
     }
     int inVersion;
     bf.GetInt32(inVersion);
     if (inVersion != CODE_SIGNING_VERSION) {
-        PrintErrorNumberMsg("VERIFY_ERROR", VERIFY_ERROR,
+        PrintErrorNumberMsg(SignToolErrMsg::VERIFY_FAILED,
                             "The code signing version in the code signature block header is incorrect.");
         return nullptr;
     }
@@ -102,21 +102,21 @@ CodeSignBlockHeader* CodeSignBlockHeader::FromByteArray(const std::vector<int8_t
     int inSegmentNum;
     bf.GetInt32(inSegmentNum);
     if (inSegmentNum != SEGMENT_NUM) {
-        PrintErrorNumberMsg("VERIFY_ERROR", VERIFY_ERROR,
+        PrintErrorNumberMsg(SignToolErrMsg::VERIFY_FAILED,
                             "The segment number in the code signature block header is incorrect.");
         return nullptr;
     }
     int inFlags;
     bf.GetInt32(inFlags);
     if (inFlags < 0 || inFlags >(FLAG_MERKLE_TREE_INLINED + FLAG_NATIVE_LIB_INCLUDED)) {
-        PrintErrorNumberMsg("VERIFY_ERROR", VERIFY_ERROR, "The flag in the code signature block header is incorrect.");
+        PrintErrorNumberMsg(SignToolErrMsg::VERIFY_FAILED, "The flag in the code signature block header is incorrect.");
         return nullptr;
     }
     std::vector<int8_t> inReserved(RESERVED_BYTE_ARRAY_LENGTH);
     bf.GetByte(inReserved.data(), RESERVED_BYTE_ARRAY_LENGTH);
     CodeSignBlockHeader::Builder* tempVar = new(std::nothrow) CodeSignBlockHeader::Builder();
     if (tempVar == nullptr) {
-        PrintErrorNumberMsg("VERIFY_ERROR", VERIFY_ERROR, "create  CodeSignBlockHeader::Builder failed");
+        PrintErrorNumberMsg(SignToolErrMsg::CODE_SIGN_INTERNAL_ERROR, "create  CodeSignBlockHeader::Builder failed");
         return nullptr;
     }
     CodeSignBlockHeader* codeSignBlockHeader = tempVar->SetMagic(inMagic)->SetVersion(inVersion)->

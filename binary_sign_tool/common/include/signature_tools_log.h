@@ -23,6 +23,7 @@
 #include <sstream>
 
 #include "signature_tools_errno.h"
+#include "error_message.h"
 
 namespace OHOS {
 namespace SignatureTools {
@@ -84,6 +85,17 @@ inline void PrintErrorNumberMsg(const std::string& command, const int code, cons
 {
     std::cerr << GetSystemTime() << " ERROR - " << command << ", code: "
         << code << ". Details: " << details << std::endl;
+}
+
+/*
+ * Function: Print the error message to the terminal using SignToolErrMsg object.
+ * Parametric Description: signToolErrMsg, details
+ * signToolErrMsg: SignToolErrMsg object containing error code and description.
+ * details: Error description information.
+ **/
+inline void PrintErrorNumberMsg(const SignToolErrMsg& signToolErrMsg, const std::string& details)
+{
+    std::cerr << GetSystemTime() << " ERROR -\n" << signToolErrMsg.ToString(details) << std::endl;
 }
 
 /*

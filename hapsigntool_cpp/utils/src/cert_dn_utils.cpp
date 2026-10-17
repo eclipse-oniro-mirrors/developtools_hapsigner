@@ -52,7 +52,7 @@ X509_NAME* BuildDN(const std::string &nameString, X509_REQ* req)
         "Please check: \"" << nameString << "\"";
     int ret = g_checkDn(nameString, pairs);
     if (ret == FORMAT_ERROR) {
-        PrintErrorNumberMsg("FORMAT_ERROR", FORMAT_ERROR,
+        PrintErrorNumberMsg(SignToolErrMsg::CERT_DN_FORMAT_FAILED,
                             oss.str().c_str());
         return nullptr;
     }
@@ -64,7 +64,7 @@ X509_NAME* BuildDN(const std::string &nameString, X509_REQ* req)
     }
     for (auto idx = pairs.cbegin(); idx != pairs.cend(); idx++) {
         if (OBJ_txt2nid(idx->first.c_str()) == NID_undef) {
-            PrintErrorNumberMsg("COMMAND_PARAM_ERROR", COMMAND_PARAM_ERROR,
+            PrintErrorNumberMsg(SignToolErrMsg::PARAM_CHECK_FAILED,
                                 "Error params near:" + nameString + " Reason: Unknown object id - " + idx->first +
                                 " - passed to distinguished name");
             return nullptr;

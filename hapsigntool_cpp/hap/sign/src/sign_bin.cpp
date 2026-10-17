@@ -70,7 +70,7 @@ bool SignBin::WriteBlockDataToFile(const std::string& inputFile, const std::stri
     int64_t profileDataLen = FileUtils::GetFileLen(profileFile);
     bool isValid = CheckBinAndProfileLengthIsValid(binFileLen, profileDataLen);
     if (!isValid) {
-        PrintErrorNumberMsg("SIGN_ERROR", SIGN_ERROR,
+        PrintErrorNumberMsg(SignToolErrMsg::SIGNATURE_FAILED,
                             "file length is invalid, binFileLen: " + std::to_string(binFileLen) +
                             "lld, profileDataLen: " + std::to_string(profileDataLen) + "lld");
         return false;
@@ -78,7 +78,7 @@ bool SignBin::WriteBlockDataToFile(const std::string& inputFile, const std::stri
     int64_t offset = binFileLen + BlockHead::GetBlockLen() + BlockHead::GetBlockLen();
     bool isOver = IsLongOverflowInteger(offset);
     if (isOver) {
-        PrintErrorNumberMsg("SIGN_ERROR", SIGN_ERROR,
+        PrintErrorNumberMsg(SignToolErrMsg::SIGNATURE_FAILED,
             "The profile block head offset is overflow interger range in sign bin, offset: "
             + std::to_string(offset));
         return false;
@@ -89,7 +89,7 @@ bool SignBin::WriteBlockDataToFile(const std::string& inputFile, const std::stri
     offset += profileDataLen;
     isOver = IsLongOverflowInteger(offset);
     if (isOver) {
-        PrintErrorNumberMsg("SIGN_ERROR", SIGN_ERROR,
+        PrintErrorNumberMsg(SignToolErrMsg::SIGNATURE_FAILED,
             "The profile block head offset is overflow interger range in sign bin, offset: "
             + std::to_string(offset));
         return false;
@@ -108,7 +108,7 @@ std::vector<int8_t> SignBin::GenerateFileDigest(const std::string& outputFile,
     } else if (signAlg == ParamConstants::HAP_SIG_ALGORITHM_SHA384_ECDSA) {
         signatureAlgorithmClass = SignatureAlgorithmHelper::ECDSA_WITH_SHA384_INSTANCE;
     } else {
-        PrintErrorNumberMsg("SIGN_ERROR", SIGN_ERROR, "get Signature Algorithm failed.");
+        PrintErrorNumberMsg(SignToolErrMsg::SIGNATURE_FAILED, "get Signature Algorithm failed.");
         return std::vector<int8_t>();
     }
     std::string alg = signatureAlgorithmClass.m_contentDigestAlgorithm.GetDigestAlgorithm();
@@ -151,7 +151,7 @@ bool SignBin::WriteSignHeadDataToOutputFile(const std::string& inputFile, const 
     int64_t size = FileUtils::GetFileLen(outputFile) - FileUtils::GetFileLen(inputFile) + SignHead::SIGN_HEAD_LEN;
     bool isOver = IsLongOverflowInteger(size);
     if (isOver) {
-        PrintErrorNumberMsg("SIGN_ERROR", SIGN_ERROR,
+        PrintErrorNumberMsg(SignToolErrMsg::SIGNATURE_FAILED,
             "File size is Overflow integer range, size: " + std::to_string(size));
         return false;
     }
@@ -198,7 +198,7 @@ bool SignBin::WriteSignedBin(const std::string& inputFile, const std::string& pr
     // 4. write profile src file to the output file.
     bool appendProfileSrcOk = FileUtils::AppendWriteFileToFile(profileFile, outputFile);
     if (!writeInputOk || !appendProfileHeadOk || !appendBlockHeadOk || !appendProfileSrcOk) {
-        PrintErrorNumberMsg("SIGN_ERROR", SIGN_ERROR, "Failed to write signed bin");
+        PrintErrorNumberMsg(SignToolErrMsg::FILE_WRITE_FAILED, "Failed to write signed bin");
         return false;
     }
     return true;

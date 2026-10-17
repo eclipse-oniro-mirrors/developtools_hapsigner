@@ -26,13 +26,13 @@ bool SignHap::Sign(DataSource* contents[], int32_t len, SignerConfig& config,
                    std::vector<OptionalBlock>& optionalBlocks, ByteBuffer& result)
 {
     if (len != CONTENT_NUBER) {
-        PrintErrorNumberMsg("SIGN_ERROR", SIGN_ERROR,
+        PrintErrorNumberMsg(SignToolErrMsg::SIGNATURE_FAILED,
                             "zip contents len must is 3, now is " + std::to_string(len));
         return false;
     }
     std::vector<SignatureAlgorithmHelper> algoClass = config.GetSignatureAlgorithms();
     if (algoClass.empty()) {
-        PrintErrorNumberMsg("SIGN_ERROR", SIGN_ERROR, "Signature Algorithms is empty");
+        PrintErrorNumberMsg(SignToolErrMsg::SIGNATURE_FAILED, "Signature Algorithms is empty");
         return false;
     }
     SignatureAlgorithm algo = static_cast<SignatureAlgorithm>(algoClass[0].m_id);
@@ -66,7 +66,7 @@ bool SignHap::Sign(DataSource* contents[], int32_t len, SignerConfig& config,
     bool checkGenerateHapSigningBlockFlag = GenerateHapSigningBlock(ret, optionalBlocks,
                                                                     config.GetCompatibleVersion(), result);
     if (!checkGenerateHapSigningBlockFlag) {
-        PrintErrorNumberMsg("SIGN_ERROR", SIGN_ERROR, "Generate Hap Signing Block failed");
+        PrintErrorNumberMsg(SignToolErrMsg::SIGNATURE_FAILED, "Generate Hap Signing Block failed");
         return false;
     }
     SIGNATURE_TOOLS_LOGI("[SignHap] GenerateHapSigningBlock %d", result.GetCapacity());
@@ -79,13 +79,13 @@ bool SignHap::ComputeDigests(const DigestParameter& digestParam, DataSource* con
     ByteBuffer chunkDigest;
     bool ret = HapSignerBlockUtils::ComputeDigestsForEachChunk(digestParam, contents, len, chunkDigest);
     if (!ret) {
-        PrintErrorNumberMsg("SIGN_ERROR", SIGN_ERROR, "Compute Content Digests failed");
+        PrintErrorNumberMsg(SignToolErrMsg::SIGNATURE_FAILED, "Compute Content Digests failed");
         return false;
     }
     bool checkComputeDigestsWithOptionalBlockFlag =
         HapSignerBlockUtils::ComputeDigestsWithOptionalBlock(digestParam, optionalBlocks, chunkDigest, result);
     if (!checkComputeDigestsWithOptionalBlockFlag) {
-        PrintErrorNumberMsg("SIGN_ERROR", SIGN_ERROR, "Compute Final Digests failed");
+        PrintErrorNumberMsg(SignToolErrMsg::SIGNATURE_FAILED, "Compute Final Digests failed");
         return false;
     }
     return true;
@@ -203,14 +203,14 @@ bool SignHap::SignWithEnterpriseResign(DataSource* contents[], int32_t len, Sign
                                        std::vector<OptionalBlock>& optionalBlocks, ByteBuffer& result)
 {
     if (len != CONTENT_NUBER) {
-        PrintErrorNumberMsg("SIGN_ERROR", SIGN_ERROR,
+        PrintErrorNumberMsg(SignToolErrMsg::SIGNATURE_FAILED,
                             "zip contents len must is 3, now is " + std::to_string(len));
         return false;
     }
 
     std::vector<SignatureAlgorithmHelper> algoClass = config.GetSignatureAlgorithms();
     if (algoClass.empty()) {
-        PrintErrorNumberMsg("SIGN_ERROR", SIGN_ERROR, "Signature Algorithms is empty");
+        PrintErrorNumberMsg(SignToolErrMsg::SIGNATURE_FAILED, "Signature Algorithms is empty");
         return false;
     }
 
@@ -245,7 +245,7 @@ bool SignHap::SignWithEnterpriseResign(DataSource* contents[], int32_t len, Sign
     bool checkGenerateHapSigningBlockFlag = GenerateHapSigningBlockWithEnterpriseResign(ret, optionalBlocks,
         config.GetCompatibleVersion(), result);
     if (!checkGenerateHapSigningBlockFlag) {
-        PrintErrorNumberMsg("SIGN_ERROR", SIGN_ERROR, "Generate Hap Signing Block failed");
+        PrintErrorNumberMsg(SignToolErrMsg::SIGNATURE_FAILED, "Generate Hap Signing Block failed");
         return false;
     }
     SIGNATURE_TOOLS_LOGI("[SignHap] GenerateHapReSigningBlock %d", result.GetCapacity());

@@ -100,7 +100,7 @@ bool ParamsRunTool::CallGenerators(const ParamsSharedPtr& params, SignToolServic
     std::string method = params->GetMethod();
     auto it = GENERATOR_RUN_METHOD.find(method);
     if (it == GENERATOR_RUN_METHOD.end()) {
-        PrintErrorNumberMsg("COMMAND_ERROR", COMMAND_ERROR, "Unsupported method: " + method);
+        PrintErrorNumberMsg(SignToolErrMsg::UNSUPPORTED_METHOD, "Unsupported method: " + method);
         return false;
     } else {
         isSuccess = it->second(params->GetOptions(), api);
@@ -116,7 +116,7 @@ bool ParamsRunTool::CheckPwdInputMode(Options* options)
     std::string inputMode = options->GetString(Options::PWD_INPUT_MODE);
     if ((inputMode != PWD_ENTER_BY_INTERACTIVE_MODE) &&
         (inputMode != PWD_ENTER_BY_COMMAND_PARAMETER)) {
-        PrintErrorNumberMsg("COMMAND_PARAM_ERROR", COMMAND_PARAM_ERROR,
+        PrintErrorNumberMsg(SignToolErrMsg::PARAM_CHECK_FAILED,
                             "pwdInputMode Parameter must 0 or 1, you put is " + inputMode);
         return false;
     }
@@ -147,7 +147,7 @@ bool ParamsRunTool::EnterPasswordOfParameter(Options* options, const std::string
         return true;
     }
     if (!parameterPwd.readPasswordWithTimeout("Enter " + parameter + " (timeout 30 seconds): ")) {
-        PrintErrorNumberMsg("COMMAND_ERROR", COMMAND_ERROR,
+        PrintErrorNumberMsg(SignToolErrMsg::UNSUPPORTED_METHOD,
                             "failed to get " + parameter + ", please check terminal permissions.");
         return false;
     }
@@ -204,7 +204,7 @@ bool ParamsRunTool::RunSignApp(Options* params, SignToolServiceImpl& api)
     std::string mode = params->GetString(Options::MODE);
     if (!StringUtils::CaseCompare(mode, LOCAL_SIGN) &&
         !StringUtils::CaseCompare(mode, REMOTE_SIGN)) {
-        PrintErrorNumberMsg("COMMAND_ERROR", COMMAND_ERROR, "not support command param '" + mode + "'");
+        PrintErrorNumberMsg(SignToolErrMsg::UNSUPPORTED_METHOD, "not support command param '" + mode + "'");
         return false;
     }
     if (!CheckProfile(*params)) {
@@ -212,7 +212,7 @@ bool ParamsRunTool::RunSignApp(Options* params, SignToolServiceImpl& api)
     }
     std::string inForm = params->GetString(Options::INFORM, ZIP);
     if (!StringUtils::IsEmpty(inForm) && !StringUtils::ContainsCase(InformList, inForm)) {
-        PrintErrorNumberMsg("NOT_SUPPORT_ERROR", NOT_SUPPORT_ERROR, "parameter '" + inForm
+        PrintErrorNumberMsg(SignToolErrMsg::NOT_SUPPORT_FILE, "parameter '" + inForm
                             + "' format error, Inform only support zip/elf/bin");
         return false;
     }
@@ -257,13 +257,13 @@ bool ParamsRunTool::RunReSignApp(Options* params, SignToolServiceImpl& api)
     std::string mode = params->GetString(Options::MODE);
     if (!StringUtils::CaseCompare(mode, LOCAL_SIGN) &&
         !StringUtils::CaseCompare(mode, REMOTE_SIGN)) {
-        PrintErrorNumberMsg("COMMAND_ERROR", COMMAND_ERROR, "not support command param '" + mode + "'");
+        PrintErrorNumberMsg(SignToolErrMsg::UNSUPPORTED_METHOD, "not support command param '" + mode + "'");
         return false;
     }
 
     std::string inForm = params->GetString(Options::INFORM, ZIP);
     if (!StringUtils::IsEmpty(inForm) && !StringUtils::ContainsCase(InformList, inForm)) {
-        PrintErrorNumberMsg("NOT_SUPPORT_ERROR", NOT_SUPPORT_ERROR, "parameter '" + inForm
+        PrintErrorNumberMsg(SignToolErrMsg::NOT_SUPPORT_FILE, "parameter '" + inForm
                             + "' format error, Inform only support zip/elf/bin");
         return false;
     }
@@ -560,7 +560,7 @@ bool ParamsRunTool::RunSignProfile(Options* params, SignToolServiceImpl& api)
     std::string mode = params->GetString(Options::MODE);
     if (!StringUtils::CaseCompare(mode, LOCAL_SIGN) &&
         !StringUtils::CaseCompare(mode, REMOTE_SIGN)) {
-        PrintErrorNumberMsg("COMMAND_ERROR", COMMAND_ERROR, "not support command param '" + mode + "'");
+        PrintErrorNumberMsg(SignToolErrMsg::UNSUPPORTED_METHOD, "not support command param '" + mode + "'");
         return false;
     }
     std::string signAlg = params->GetString(Options::SIGN_ALG);
@@ -641,7 +641,7 @@ bool ParamsRunTool::RunVerifyApp(Options* params, SignToolServiceImpl& api)
 
     std::string inForm = params->GetString(Options::INFORM, ZIP);
     if (!StringUtils::ContainsCase(InformList, inForm)) {
-        PrintErrorNumberMsg("NOT_SUPPORT_ERROR", NOT_SUPPORT_ERROR, "parameter '" + inForm
+        PrintErrorNumberMsg(SignToolErrMsg::NOT_SUPPORT_FILE, "parameter '" + inForm
                             + "' format error, Inform only support zip/elf/bin");
         return false;
     }

@@ -59,7 +59,7 @@ bool LocalSignProvider::CheckPublicKeyPath()
     std::ifstream publicKeyFile(publicCertsFile);
     flag = !publicKeyFile.is_open();
     if (flag) {
-        PrintErrorNumberMsg("IO_ERROR", IO_ERROR, publicCertsFile + " open failed ");
+        PrintErrorNumberMsg(SignToolErrMsg::FILE_READ_FAILED, publicCertsFile + " open failed ");
         return false;
     }
     publicKeyFile.close();
