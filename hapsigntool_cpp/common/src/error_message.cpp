@@ -309,7 +309,8 @@ const SignToolErrMsg SignToolErrMsg::STAPLE_FAILED = SignToolErrMsg(
     {
         "Ensure the input file is a signed .app file and the original signature is valid",
         "The input file size must not exceed 200GB",
-        "For zip32 files, stapling would exceed 4GB limit if the signed block grows too large, please re-sign with zip64"
+        "For zip32 files, stapling would exceed 4GB limit if the signed block "
+        "grows too large, please re-sign with zip64"
     });
 
 const SignToolErrMsg SignToolErrMsg::STAPLE_VERIFY_FAILED = SignToolErrMsg(

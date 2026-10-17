@@ -450,7 +450,8 @@ bool CmdUtil::JudgeAlgType(const std::string& keyAlg)
 bool CmdUtil::JudgeSize(const int size)
 {
     if (size != NIST_P_256 && size != NIST_P_384) {
-        PrintErrorNumberMsg(SignToolErrMsg::ALGORITHM_NOT_SUPPORT, "Keysize params is incorrect, Support only 256 or 384");
+        PrintErrorNumberMsg(SignToolErrMsg::ALGORITHM_NOT_SUPPORT,
+                            "Keysize params is incorrect, Support only 256 or 384");
         return false;
     }
     return true;
