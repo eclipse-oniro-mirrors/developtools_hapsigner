@@ -238,7 +238,7 @@ void from_json(const cJSON* obj, ProfileInfo& out)
 AppProvisionVerifyResult ReturnIfStringIsEmpty(const std::string& str, const std::string& errMsg)
 {
     if (str.empty()) {
-        PrintErrorNumberMsg("PROVISION_INVALID_ERROR", PROVISION_INVALID_ERROR, errMsg);
+        PrintErrorNumberMsg(SignToolErrMsg::VERIFY_PROFILE_FAILED, errMsg);
         return PROVISION_INVALID;
     }
     return PROVISION_OK;
@@ -257,7 +257,7 @@ static AppProvisionVerifyResult CheckProfileValidType(const ProfileInfo& info)
             return PROVISION_INVALID;
         }
     } else {
-        PrintErrorNumberMsg("PROVISION_INVALID_ERROR", PROVISION_INVALID_ERROR,
+        PrintErrorNumberMsg(SignToolErrMsg::VERIFY_PROFILE_FAILED,
                             "The type field in the profile file is incorrect");
         return PROVISION_INVALID;
     }
@@ -292,12 +292,12 @@ AppProvisionVerifyResult ParseProfile(const std::string& appProvision, ProfileIn
     cJSON* obj = cJSON_ParseWithOpts(appProvision.c_str(), nullptr, 1);
     if (obj == nullptr) {
         std::string errStr = "JSON is invalid or empty, parse provision failed, json: " + appProvision;
-        PrintErrorNumberMsg("PROVISION_INVALID_ERROR", PROVISION_INVALID_ERROR, errStr.c_str());
+        PrintErrorNumberMsg(SignToolErrMsg::VERIFY_PROFILE_FAILED, errStr.c_str());
         return PROVISION_INVALID;
     }
     if (!(cJSON_IsObject(obj) || cJSON_IsArray(obj))) {
         std::string errStr = "invalid json object type, must be object or array, json: " + appProvision;
-        PrintErrorNumberMsg("PROVISION_INVALID_ERROR", PROVISION_INVALID_ERROR, errStr.c_str());
+        PrintErrorNumberMsg(SignToolErrMsg::VERIFY_PROFILE_FAILED, errStr.c_str());
         cJSON_Delete(obj);
         return PROVISION_INVALID;
     }

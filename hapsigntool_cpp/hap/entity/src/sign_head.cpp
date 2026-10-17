@@ -44,27 +44,27 @@ std::vector<int8_t> SignHead::GetSignHead(const int subBlockSize)
     int start = 0;
     start = ByteArrayUtils::InsertCharToByteArray(signHead, start, MAGIC);
     if (start < 0) {
-        PrintErrorNumberMsg("SIGN_ERROR", SIGN_ERROR, "InsertCharToByteArray failed.");
+        PrintErrorNumberMsg(SignToolErrMsg::SIGNATURE_FAILED, "InsertCharToByteArray failed.");
         return std::vector<int8_t>();
     }
     start = ByteArrayUtils::InsertCharToByteArray(signHead, start, VERSION);
     if (start < 0) {
-        PrintErrorNumberMsg("SIGN_ERROR", SIGN_ERROR, "InsertCharToByteArray failed.");
+        PrintErrorNumberMsg(SignToolErrMsg::SIGNATURE_FAILED, "InsertCharToByteArray failed.");
         return std::vector<int8_t>();
     }
     start = ByteArrayUtils::InsertIntToByteArray(signHead, start, size);
     if (start < 0) {
-        PrintErrorNumberMsg("SIGN_ERROR", SIGN_ERROR, "InsertIntToByteArray failed.");
+        PrintErrorNumberMsg(SignToolErrMsg::SIGNATURE_FAILED, "InsertIntToByteArray failed.");
         return std::vector<int8_t>();
     }
     start = ByteArrayUtils::InsertIntToByteArray(signHead, start, NUM_OF_BLOCK);
     if (start < 0) {
-        PrintErrorNumberMsg("SIGN_ERROR", SIGN_ERROR, "InsertIntToByteArray failed.");
+        PrintErrorNumberMsg(SignToolErrMsg::SIGNATURE_FAILED, "InsertIntToByteArray failed.");
         return std::vector<int8_t>();
     }
     start = ByteArrayUtils::InsertCharToByteArray(signHead, start, std::string(m_reserve.begin(), m_reserve.end()));
     if (start < 0) {
-        PrintErrorNumberMsg("SIGN_ERROR", SIGN_ERROR, "InsertCharToByteArray failed.");
+        PrintErrorNumberMsg(SignToolErrMsg::SIGNATURE_FAILED, "InsertCharToByteArray failed.");
         return std::vector<int8_t>();
     }
     return signHead;

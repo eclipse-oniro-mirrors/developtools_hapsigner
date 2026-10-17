@@ -109,7 +109,7 @@ bool CertTools::String2Bool(Options* options, const std::string& option)
     } else if (val == "0" || val == "false" || val == "FALSE") {
         (*options)[option] = false;
     } else {
-        PrintErrorNumberMsg("COMMAND_PARAM_ERROR", COMMAND_PARAM_ERROR,
+        PrintErrorNumberMsg(SignToolErrMsg::PARAM_CHECK_FAILED,
                             val + "is not valid value for " + "-" + option);
         return false;
     }
@@ -532,7 +532,7 @@ X509_REQ* CertTools::GenerateCsr(EVP_PKEY* evpPkey, std::string signAlgorithm, s
                 break;
             }
         } else {
-            PrintErrorNumberMsg("COMMAND_PARAM_ERROR", COMMAND_PARAM_ERROR,
+            PrintErrorNumberMsg(SignToolErrMsg::PARAM_CHECK_FAILED,
                                 "Sign algorithm format error! Please check again.");
             break;
         }

@@ -40,7 +40,7 @@ bool VerifyElf::Verify(Options* options)
 {
     // check param
     if (options == nullptr) {
-        PrintErrorNumberMsg("VERIFY_ERROR", VERIFY_ERROR, "Param options is null.");
+        PrintErrorNumberMsg(SignToolErrMsg::PARAM_VALUE_EMPTY, "Param options is null.");
         return false;
     }
     if (!CheckParams(options)) {
@@ -145,13 +145,13 @@ bool VerifyElf::GetSignBlockInfo(const std::string& file, SignBlockInfo& signBlo
     std::uintmax_t fileSize = std::filesystem::file_size(file);
     std::ifstream fileStream(file, std::ios::binary);
     if (!fileStream.is_open()) {
-        PrintErrorNumberMsg("IO_ERROR", IO_ERROR, "open file: " + file + "failed");
+        PrintErrorNumberMsg(SignToolErrMsg::FILE_READ_FAILED, "open file: " + file + "failed");
         return false;
     }
     std::vector<char>* fileBytes = new std::vector<char>(fileSize, 0);
     fileStream.read(fileBytes->data(), fileBytes->size());
     if (fileStream.fail() && !fileStream.eof()) {
-        PrintErrorNumberMsg("IO_ERROR", IO_ERROR, "Error occurred while reading data");
+        PrintErrorNumberMsg(SignToolErrMsg::FILE_READ_FAILED, "Error occurred while reading data");
         fileStream.close();
         delete fileBytes;
         return false;
@@ -323,14 +323,14 @@ bool VerifyElf::CheckMagicAndVersion(std::vector<int8_t>& bytes, int64_t& offset
     std::vector<int8_t> magicVec(magicStr.begin(), magicStr.end());
     for (int i = 0; i < magicStr.size(); i++) {
         if (magicVec[i] != magicByte[i]) {
-            PrintErrorNumberMsg("VERIFY_ERROR", VERIFY_ERROR, "magic verify failed!");
+            PrintErrorNumberMsg(SignToolErrMsg::VERIFY_FAILED, "magic verify failed!");
             return false;
         }
     }
     std::vector<int8_t> versionVec(SignHead::VERSION.begin(), SignHead::VERSION.end());
     for (int i = 0; i < SignHead::VERSION.size(); i++) {
         if (versionVec[i] != versionByte[i]) {
-            PrintErrorNumberMsg("VERIFY_ERROR", VERIFY_ERROR, "sign version verify failed!");
+            PrintErrorNumberMsg(SignToolErrMsg::VERIFY_FAILED, "sign version verify failed!");
             return false;
         }
     }
@@ -400,12 +400,12 @@ bool VerifyElf::CheckParams(Options* options)
 {
     bool certEmpty = options->GetString(Options::OUT_CERT_CHAIN).empty();
     if (certEmpty) {
-        PrintErrorNumberMsg("VERIFY_ERROR", VERIFY_ERROR, "Missing parameter: " + Options::OUT_CERT_CHAIN + "s.");
+        PrintErrorNumberMsg(SignToolErrMsg::PARAM_REQUIRED, "Missing parameter: " + Options::OUT_CERT_CHAIN + "s.");
         return false;
     }
     bool profileEmpty = options->GetString(Options::OUT_PROFILE).empty();
     if (profileEmpty) {
-        PrintErrorNumberMsg("VERIFY_ERROR", VERIFY_ERROR, "Missing parameter: " + Options::OUT_PROFILE + "s.");
+        PrintErrorNumberMsg(SignToolErrMsg::PARAM_REQUIRED, "Missing parameter: " + Options::OUT_PROFILE + "s.");
         return false;
     }
     bool proofEmpty = options->GetString(Options::PROOF_FILE).empty();
@@ -419,7 +419,7 @@ bool VerifyElf::CheckParams(Options* options)
 bool VerifyElf::CheckSignFile(const std::string& signedFile)
 {
     if (signedFile.empty()) {
-        PrintErrorNumberMsg("VERIFY_ERROR", VERIFY_ERROR, "Not found verify file path " + signedFile);
+        PrintErrorNumberMsg(SignToolErrMsg::FILE_NOT_EXIST, "Not found verify file path " + signedFile);
         return false;
     }
     bool validFlag = FileUtils::IsValidFile(signedFile);

@@ -103,7 +103,7 @@ bool CodeSigning::SignHapEntry(const std::string &input, int64_t dataSize, int64
     std::ifstream inputStream;
     inputStream.open(input, std::ios::binary);
     if (!inputStream.is_open()) {
-        PrintErrorNumberMsg("IO_ERROR", IO_ERROR, "open file: " + input + "failed");
+        PrintErrorNumberMsg(SignToolErrMsg::FILE_READ_FAILED, "open file: " + input + "failed");
         inputStream.close();
         return false;
     }
@@ -128,11 +128,11 @@ bool CodeSigning::SignAllNativeLibs(const std::string &input, const std::string 
     std::vector<std::pair<std::string, SignInfo>> nativeLibInfoList;
     std::string ownerId = ownerID;
     if (!SignNativeLibs(input, ownerId, nativeLibInfoList)) {
-        PrintErrorNumberMsg("SIGN_ERROR", SIGN_ERROR, "Failed to sign the contents in the compressed file.");
+        PrintErrorNumberMsg(SignToolErrMsg::SIGNATURE_FAILED, "Failed to sign the contents in the compressed file.");
         return false;
     }
     if (!SignNativeHnps(input, profileContent, ownerID, nativeLibInfoList)) {
-        PrintErrorNumberMsg("SIGN_ERROR", SIGN_ERROR, "Failed to sign hnp libs in the compressed file.");
+        PrintErrorNumberMsg(SignToolErrMsg::SIGNATURE_FAILED, "Failed to sign hnp libs in the compressed file.");
         return false;
     }
     m_codeSignBlock.GetSoInfoSegment().SetSoInfoList(nativeLibInfoList);
@@ -178,7 +178,7 @@ int64_t CodeSigning::ComputeDataSize(ZipSigner& zip)
         break;
     }
     if ((dataSize % CodeSignBlock::PAGE_SIZE_4K) != 0) {
-        PrintErrorNumberMsg("SIGN_ERROR", SIGN_ERROR,
+        PrintErrorNumberMsg(SignToolErrMsg::FILE_4K_ALIGNMENT_ERROR,
                             "Invalid dataSize, the dataSize must be an integer multiple of 4096");
         return -1;
     }
@@ -245,7 +245,8 @@ bool CodeSigning::SignFile(std::istream& inputStream, int64_t fileSize, bool sto
                                                                             fsvTreeOffset,
                                                                             fsVerityGenerator->GetRootHash());
         if (merkleTreeExtension == nullptr) {
-            PrintErrorNumberMsg("SIGN_ERROR", SIGN_ERROR, "system failed to allocate memory for MerkleTreeExtension");
+            PrintErrorNumberMsg(SignToolErrMsg::CODE_SIGN_INTERNAL_ERROR,
+                                "system failed to allocate memory for MerkleTreeExtension");
             return false;
         }
         signInfo.AddExtension(merkleTreeExtension);
@@ -266,7 +267,7 @@ bool CodeSigning::GetElfCodeSignBlock(const std::string &input, int64_t offset,
     int64_t fsvTreeOffset = offset + FsVerityDescriptorWithSign::INTEGER_BYTES * 2 + paddingSize;
     std::ifstream inputstream(input, std::ios::binary | std::ios::ate);
     if (!inputstream.is_open()) {
-        PrintErrorNumberMsg("IO_ERROR", IO_ERROR, "open file: " + input + "failed");
+        PrintErrorNumberMsg(SignToolErrMsg::FILE_READ_FAILED, "open file: " + input + "failed");
         return false;
     }
     std::streamsize fileSize = inputstream.tellg();
@@ -479,12 +480,12 @@ bool CodeSigning::SignHnpLibs(const std::string &hnpEntryName, const std::string
 {
     unzFile hnpZip = unzOpen(tempHnpPath.c_str());
     if (hnpZip == nullptr) {
-        PrintErrorNumberMsg("IO_ERROR", IO_ERROR, "open temp hnp file: " + tempHnpPath + " failed");
+        PrintErrorNumberMsg(SignToolErrMsg::FILE_READ_FAILED, "open temp hnp file: " + tempHnpPath + " failed");
         return false;
     }
     unz_global_info hnpGlobalInfo;
     if (unzGetGlobalInfo(hnpZip, &hnpGlobalInfo) != UNZ_OK) {
-        PrintErrorNumberMsg("SIGN_ERROR", SIGN_ERROR, "get hnp global info failed");
+        PrintErrorNumberMsg(SignToolErrMsg::CODE_SIGN_INTERNAL_ERROR, "get hnp global info failed");
         unzClose(hnpZip);
         return false;
     }
@@ -516,24 +517,24 @@ bool CodeSigning::SignOneHnpFromHap(unzFile zFile, const std::string& entryName,
     SIGNATURE_TOOLS_LOGI("sign hnp name x = %s", tempHnpPath.c_str());
     int fd = mkstemp(tempHnpPath.data());
     if (fd < 0) {
-        PrintErrorNumberMsg("IO_ERROR", IO_ERROR, "create temp hnp file failed");
+        PrintErrorNumberMsg(SignToolErrMsg::FILE_READ_FAILED, "create temp hnp file failed");
         return false;
     }
     close(fd);
     if (unzOpenCurrentFile(zFile) != UNZ_OK) {
-        PrintErrorNumberMsg("IO_ERROR", IO_ERROR, "open hnp entry failed: " + entryName);
+        PrintErrorNumberMsg(SignToolErrMsg::FILE_READ_FAILED, "open hnp entry failed: " + entryName);
         FileUtils::DelDir(tempHnpPath);
         return false;
     }
     bool writeFlag = WriteTempHnpFile(zFile, tempHnpPath);
     unzCloseCurrentFile(zFile);
     if (!writeFlag) {
-        PrintErrorNumberMsg("SIGN_ERROR", SIGN_ERROR, "extract hnp file error: " + entryName);
+        PrintErrorNumberMsg(SignToolErrMsg::EXTRACT_HNP_FILE_ERROR, "extract hnp file error: " + entryName);
         FileUtils::DelDir(tempHnpPath);
         return false;
     }
     if (FileUtils::GetFileLen(tempHnpPath) <= 0) {
-        PrintErrorNumberMsg("SIGN_ERROR", SIGN_ERROR, "extract hnp file error: " + entryName);
+        PrintErrorNumberMsg(SignToolErrMsg::EXTRACT_HNP_FILE_ERROR, "extract hnp file error: " + entryName);
         FileUtils::DelDir(tempHnpPath);
         return false;
     }
@@ -562,7 +563,7 @@ bool CodeSigning::SignOneHapHnpEntry(unzFile zFile, uLong entryCount, uLong inde
     }
     auto ite = hnpTypeMap.find(HapUtils::ParseHnpPath(entryName));
     if (ite == hnpTypeMap.end()) {
-        PrintErrorNumberMsg("SIGN_ERROR", SIGN_ERROR,
+        PrintErrorNumberMsg(SignToolErrMsg::SIGNATURE_FAILED,
             "hnp should be described in module.json: " + entryName);
         return false;
     }
@@ -587,12 +588,12 @@ bool CodeSigning::SignNativeHnps(const std::string &input, const std::string &pr
     }
     unzFile zFile = unzOpen(input.c_str());
     if (zFile == nullptr) {
-        PrintErrorNumberMsg("IO_ERROR", IO_ERROR, "open hap file: " + input + " failed");
+        PrintErrorNumberMsg(SignToolErrMsg::FILE_READ_FAILED, "open hap file: " + input + " failed");
         return false;
     }
     unz_global_info zGlobalInfo;
     if (unzGetGlobalInfo(zFile, &zGlobalInfo) != UNZ_OK) {
-        PrintErrorNumberMsg("SIGN_ERROR", SIGN_ERROR, "get hap global info failed");
+        PrintErrorNumberMsg(SignToolErrMsg::CODE_SIGN_INTERNAL_ERROR, "get hap global info failed");
         unzClose(zFile);
         return false;
     }
@@ -611,14 +612,14 @@ bool CodeSigning::GetNativeEntriesFromHap(const std::string& packageName, UnzipH
 {
     unzFile zFile = unzOpen(packageName.c_str());
     if (zFile == NULL) {
-        PrintErrorNumberMsg("IO_ERROR", IO_ERROR, "zlib open file: " + packageName + " failed.");
+        PrintErrorNumberMsg(SignToolErrMsg::READ_ZIP_FAILED, "zlib open file: " + packageName + " failed.");
         return false;
     }
     // get zipFile all paramets
     unz_global_info zGlobalInfo;
     int getRet = unzGetGlobalInfo(zFile, &zGlobalInfo);
     if (getRet != UNZ_OK) {
-        PrintErrorNumberMsg("SIGN_ERROR", SIGN_ERROR, "zlib get global info failed.");
+        PrintErrorNumberMsg(SignToolErrMsg::CODE_SIGN_INTERNAL_ERROR, "zlib get global info failed.");
         unzClose(zFile);
         return false;
     }
@@ -638,7 +639,7 @@ bool CodeSigning::GetSingleFileStreamFromZip(unzFile &zFile, char fileName[],
                                              int &readFileSize, std::stringbuf &sb)
 {
     if (UNZ_OK != unzOpenCurrentFile(zFile)) {
-        PrintErrorNumberMsg("SIGN_ERROR", SIGN_ERROR,
+        PrintErrorNumberMsg(SignToolErrMsg::CODE_SIGN_INTERNAL_ERROR,
                             "unzOpenCurrentFile zipFile error");
         return false;
     }
@@ -661,7 +662,7 @@ bool CodeSigning::GetSingleFileStreamFromZip(unzFile &zFile, char fileName[],
         readFileSize += nReadFileSize;
     } while (fileLength > 0 && nReadFileSize > 0);
     if (fileLength) {
-        PrintErrorNumberMsg("SIGN_ERROR", SIGN_ERROR, "zlib read stream from "
+        PrintErrorNumberMsg(SignToolErrMsg::READ_ZIP_FAILED, "zlib read stream from "
                             + std::string(fileName) + " failed.");
         unzCloseCurrentFile(zFile);
         return false;
@@ -675,11 +676,11 @@ bool CodeSigning::RunParseZipInfo(const std::string& packageName, UnzipHandlePar
 {
     unzFile zFile = unzOpen(packageName.c_str());
     if (zFile == NULL) {
-        PrintErrorNumberMsg("IO_ERROR", IO_ERROR, "zlib open file: " + packageName + " failed.");
+        PrintErrorNumberMsg(SignToolErrMsg::READ_ZIP_FAILED, "zlib open file: " + packageName + " failed.");
         return false;
     }
     if (unzGoToFilePos(zFile, &pos) != UNZ_OK) {
-        PrintErrorNumberMsg("SIGN_ERROR", SIGN_ERROR, "zlib go to file failed.");
+        PrintErrorNumberMsg(SignToolErrMsg::CODE_SIGN_INTERNAL_ERROR, "zlib go to file failed.");
         unzClose(zFile);
         return false;
     }
@@ -755,7 +756,7 @@ bool CodeSigning::HandleZipGlobalInfo(const std::string& packageName, unzFile& z
         if (i != zGlobalInfo.number_entry - 1) {
             int ret = unzGoToNextFile(zFile);
             if (ret != UNZ_OK) {
-                PrintErrorNumberMsg("SIGN_ERROR", SIGN_ERROR, "zlib go to next file failed.");
+                PrintErrorNumberMsg(SignToolErrMsg::CODE_SIGN_INTERNAL_ERROR, "zlib go to next file failed.");
                 return false;
             }
         }
@@ -780,7 +781,7 @@ bool CodeSigning::DoNativeLibVerify(std::string fileName, std::stringbuf& sb,
     std::vector<std::string>& fileNames = csb.GetSoInfoSegment().GetFileNameList();
     bool isContainFileName = std::find(fileNames.begin(), fileNames.end(), fileName) != fileNames.end();
     if (!isContainFileName) {
-        PrintErrorNumberMsg("VERIFY_ERROR", VERIFY_ERROR,
+        PrintErrorNumberMsg(SignToolErrMsg::VERIFY_FAILED,
                             "verify signed file position failed, file: " + fileName);
         return false;
     }
@@ -794,7 +795,7 @@ bool CodeSigning::DoNativeLibVerify(std::string fileName, std::stringbuf& sb,
         }
         PrintMsg("verify lib: " + entryName);
         if (readFileSize != signInfo.GetDataSize()) {
-            PrintErrorNumberMsg("VERIFY_ERROR", VERIFY_ERROR, "Invalid dataSize of native lib");
+            PrintErrorNumberMsg(SignToolErrMsg::VERIFY_FAILED, "Invalid dataSize of native lib");
             return false;
         }
         bool verifyFlag = VerifyCodeSignature::VerifySingleFile(input, readFileSize, entrySig, 0,
@@ -840,13 +841,13 @@ bool CodeSigning::CheckUnzParam(unzFile& zFile, unz_file_info& zFileInfo,
 {
     if (UNZ_OK != unzGetCurrentFileInfo(zFile, &zFileInfo, fileName,
         FILE_NAME_SIZE, NULL, 0, NULL, 0)) {
-        PrintErrorNumberMsg("SIGN_ERROR", SIGN_ERROR,
+        PrintErrorNumberMsg(SignToolErrMsg::SIGNATURE_FAILED,
                             "unzip get file: " + std::string(fileName) + "info failed!");
         return false;
     }
     SIGNATURE_TOOLS_LOGI("Open zipFile filename is : %s", fileName);
     if ((*nameLen = strlen(fileName)) == 0U) {
-        PrintErrorNumberMsg("SIGN_ERROR", SIGN_ERROR, "Open zipFile fileName is null");
+        PrintErrorNumberMsg(SignToolErrMsg::READ_ZIP_FAILED, "Open zipFile fileName is null");
         return false;
     }
     return true;
@@ -891,7 +892,7 @@ bool CodeSigning::GenerateSignature(const std::vector<int8_t>& signedData, const
         STACK_OF(X509)* certs = NULL;
         certs = m_signConfig->GetSigner()->GetCertificates();
         if (certs == nullptr) {
-            PrintErrorNumberMsg("SIGN_ERROR", SIGN_ERROR,
+            PrintErrorNumberMsg(SignToolErrMsg::SIGNATURE_FAILED,
                                 "No certificates configured for sign.");
             return false;
         }
@@ -908,7 +909,7 @@ bool CodeSigning::GenerateSignature(const std::vector<int8_t>& signedData, const
     std::string signed_data(signedData.begin(), signedData.end());
     std::string ret_str;
     if (signedData.empty()) {
-        PrintErrorNumberMsg("SIGN_ERROR", SIGN_ERROR, "Generate verity digest is null");
+        PrintErrorNumberMsg(SignToolErrMsg::CODE_SIGN_INTERNAL_ERROR, "Generate verity digest is null");
         return false;
     }
     bool generateSignedDataFlag = bcSignedDataGenerator->GenerateSignedData(signed_data, m_signConfig, ret_str);

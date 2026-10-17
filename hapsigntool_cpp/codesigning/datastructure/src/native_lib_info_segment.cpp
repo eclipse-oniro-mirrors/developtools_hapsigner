@@ -142,7 +142,7 @@ NativeLibInfoSegment NativeLibInfoSegment::FromByteArray(std::vector<int8_t> &by
     std::vector<OHOS::SignatureTools::SignInfo> inSignInfoList;
     for (SignedFilePos &pos : inSignedFilePosList) {
         if (pos.GetSignInfoOffset() % ALIGNMENT_FOR_SIGNINFO != 0) {
-            PrintErrorNumberMsg("VERIFY_ERROR", VERIFY_ERROR,
+            PrintErrorNumberMsg(SignToolErrMsg::VERIFY_FAILED,
                                 "The offset of signature information must be an integer multiple of 4");
             return NativeLibInfoSegment();
         }
@@ -160,19 +160,19 @@ bool NativeLibInfoSegment::CheckBuffer(std::unique_ptr<ByteBuffer>& bf, int32_t&
 {
     bf->GetInt32(inMagic);
     if (inMagic != MAGIC_NUM) {
-        PrintErrorNumberMsg("VERIFY_ERROR", VERIFY_ERROR,
+        PrintErrorNumberMsg(SignToolErrMsg::VERIFY_FAILED,
                             "The magic number of NativeLibInfoSegment is incorrect.");
         return false;
     }
     bf->GetInt32(inSegmentSize);
     if (inSegmentSize < 0) {
-        PrintErrorNumberMsg("VERIFY_ERROR", VERIFY_ERROR,
+        PrintErrorNumberMsg(SignToolErrMsg::VERIFY_FAILED,
                             "The segment size of NativeLibInfoSegment is incorrect.");
         return false;
     }
     bf->GetInt32(inSectionNum);
     if (inSectionNum < 0) {
-        PrintErrorNumberMsg("VERIFY_ERROR", VERIFY_ERROR,
+        PrintErrorNumberMsg(SignToolErrMsg::VERIFY_FAILED,
                             "The section number of NativeLibInfoSegment is incorrect.");
         return false;
     }

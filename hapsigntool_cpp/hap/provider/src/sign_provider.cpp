@@ -119,7 +119,7 @@ fileIOTuple SignProvider::PrepareIOStreams(const std::string& inputPath,
     ret = false;
     inputFile = std::make_shared<std::ifstream>(inputPath, std::ios::binary);
     if (!inputFile->good()) {
-        PrintErrorNumberMsg("IO_ERROR", IO_ERROR,
+        PrintErrorNumberMsg(SignToolErrMsg::FILE_READ_FAILED,
                             inputPath + " open failed");
         return {nullptr, nullptr, ""};
     }
@@ -130,7 +130,7 @@ fileIOTuple SignProvider::PrepareIOStreams(const std::string& inputPath,
         tmpOutputFilePath = strDirectory + '/' + std::string("signedHap") + "." + "hap";
         outputFile = std::make_shared<std::ofstream>(tmpOutputFilePath, std::ios::binary | std::ios::trunc);
         if (!outputFile->good()) {
-            PrintErrorNumberMsg("IO_ERROR", IO_ERROR,
+            PrintErrorNumberMsg(SignToolErrMsg::FILE_WRITE_FAILED,
                                 tmpOutputFilePath + " open failed");
             return {nullptr, nullptr, ""};
         }
@@ -138,7 +138,7 @@ fileIOTuple SignProvider::PrepareIOStreams(const std::string& inputPath,
     } else {
         outputFile = std::make_shared<std::ofstream>(outputPath, std::ios::binary | std::ios::trunc);
         if (!outputFile->good()) {
-            PrintErrorNumberMsg("IO_ERROR", IO_ERROR,
+            PrintErrorNumberMsg(SignToolErrMsg::FILE_WRITE_FAILED,
                                 outputPath + " open failed");
             return {nullptr, nullptr, ""};
         }
@@ -189,14 +189,14 @@ bool SignProvider::ParseZip64IfPresent(RandomAccessFile& outputHap, DataSourceCo
     dataSrcContents.isZip64 = true;
     if (!HapSignerBlockUtils::GetZip64CentralDirectoryOffset(outputHap,
         dataSrcContents.eocdPair.second, dataSrcContents.cDOffset)) {
-        PrintErrorNumberMsg("ZIP_ERROR", ZIP_ERROR, "get zip64 central directory offset failed");
+        PrintErrorNumberMsg(SignToolErrMsg::ALIGNMENT_ZIP_FAILED, "get zip64 central directory offset failed");
         return false;
     }
     // Parse the full Zip64 EOCD for later use (required for OutputSignedFile)
     Zip64EndOfCentralDirectoryLocator locator;
     if (!HapSignerBlockUtils::FindZip64EocdLocator(outputHap,
         dataSrcContents.eocdPair.second, locator)) {
-        PrintErrorNumberMsg("ZIP_ERROR", ZIP_ERROR, "find zip64 eocd locator failed");
+        PrintErrorNumberMsg(SignToolErrMsg::ALIGNMENT_ZIP_FAILED, "find zip64 eocd locator failed");
         return false;
     }
     uint64_t zip64EocdOffset = locator.GetZip64EocdOffset();
@@ -204,19 +204,19 @@ bool SignProvider::ParseZip64IfPresent(RandomAccessFile& outputHap, DataSourceCo
     if (zip64EocdOffset < static_cast<uint64_t>(dataSrcContents.cDOffset) ||
         zip64EocdOffset >= eocdEndOffset ||
         Zip64EndOfCentralDirectory::ZIP64_EOCD_LENGTH > eocdEndOffset - zip64EocdOffset) {
-        PrintErrorNumberMsg("ZIP_ERROR", ZIP_ERROR, "zip64 eocd offset out of bounds");
+        PrintErrorNumberMsg(SignToolErrMsg::ALIGNMENT_ZIP_FAILED, "zip64 eocd offset out of bounds");
         return false;
     }
     ByteBuffer zip64EocdBuffer(Zip64EndOfCentralDirectory::ZIP64_EOCD_LENGTH);
     int64_t ret = outputHap.ReadFileFullyFromOffset(zip64EocdBuffer, zip64EocdOffset);
     if (ret <= 0) {
-        PrintErrorNumberMsg("ZIP_ERROR", ZIP_ERROR, "read zip64 eocd failed");
+        PrintErrorNumberMsg(SignToolErrMsg::ALIGNMENT_ZIP_FAILED, "read zip64 eocd failed");
         return false;
     }
     std::string zip64EocdStr(zip64EocdBuffer.GetBufferPtr(), zip64EocdBuffer.GetLimit());
     auto zip64Eocd = Zip64EndOfCentralDirectory::GetByBytes(zip64EocdStr);
     if (!zip64Eocd) {
-        PrintErrorNumberMsg("ZIP_ERROR", ZIP_ERROR, "parse zip64 eocd failed");
+        PrintErrorNumberMsg(SignToolErrMsg::ALIGNMENT_ZIP_FAILED, "parse zip64 eocd failed");
         return false;
     }
     dataSrcContents.zip64Eocd = zip64Eocd.value();
@@ -255,7 +255,7 @@ bool SignProvider::ComputeCentralDirectorySize(DataSourceContents& dataSrcConten
             Zip64EndOfCentralDirectoryLocator::ZIP64_EOCD_LOCATOR_LENGTH;
     } else {
         if (!HapSignerBlockUtils::GetCentralDirectorySize(dataSrcContents.eocdPair.first, cDSize)) {
-            PrintErrorNumberMsg("ZIP_ERROR", ZIP_ERROR, "get central directory size failed");
+            PrintErrorNumberMsg(SignToolErrMsg::ALIGNMENT_ZIP_FAILED, "get central directory size failed");
             return false;
         }
     }
@@ -266,12 +266,12 @@ bool SignProvider::InitDataSourceContents(RandomAccessFile& outputHap, DataSourc
 {
     std::shared_ptr<ZipDataInput> outputHapIn = std::make_shared<RandomAccessFileInput>(outputHap);
     if (!HapSignerBlockUtils::FindEocdInHap(outputHap, dataSrcContents.eocdPair)) {
-        PrintErrorNumberMsg("ZIP_ERROR", ZIP_ERROR, "eocd is not found in hap");
+        PrintErrorNumberMsg(SignToolErrMsg::ALIGNMENT_ZIP_FAILED, "eocd is not found in hap");
         return false;
     }
     if (!HapSignerBlockUtils::GetCentralDirectoryOffset(dataSrcContents.eocdPair.first,
         dataSrcContents.eocdPair.second, dataSrcContents.cDOffset)) {
-        PrintErrorNumberMsg("ZIP_ERROR", ZIP_ERROR, "get central directory offset failed");
+        PrintErrorNumberMsg(SignToolErrMsg::ALIGNMENT_ZIP_FAILED, "get central directory offset failed");
         return false;
     }
     if (!ParseZip64IfPresent(outputHap, dataSrcContents)) {
@@ -1147,7 +1147,7 @@ int SignProvider::LoadOptionalBlock(const std::string& file, int type)
     if (!HapUtils::ReadFileToByteBuffer(file, optionalBlockBuffer))
         return IO_ERROR;
     if (optionalBlockBuffer.GetCapacity() == 0) {
-        PrintErrorNumberMsg("IO_ERROR", IO_ERROR, file + " is empty!");
+        PrintErrorNumberMsg(SignToolErrMsg::FILE_READ_FAILED, file + " is empty!");
         return IO_ERROR;
     }
     optionalBlocks.push_back({type, optionalBlockBuffer});
@@ -1162,11 +1162,11 @@ std::optional<X509_CRL*> SignProvider::GetCrl()
 bool SignProvider::CheckFile(const std::string& filePath)
 {
     if (filePath.empty()) {
-        PrintErrorNumberMsg("FILE_NOT_FOUND", FILE_NOT_FOUND, "file name is null.");
+        PrintErrorNumberMsg(SignToolErrMsg::FILE_NOT_EXIST, "file name is null.");
         return false;
     }
     if (!std::filesystem::exists(filePath) || !std::filesystem::is_regular_file(filePath)) {
-        PrintErrorNumberMsg("IO_ERROR", IO_ERROR, filePath + " not exist or can not read!");
+        PrintErrorNumberMsg(SignToolErrMsg::FILE_READ_FAILED, filePath + " not exist or can not read!");
         return false;
     }
     return true;
@@ -1277,12 +1277,12 @@ int SignProvider::GetCertListFromFile(const std::string& certsFile, STACK_OF(X50
     X509* cert = nullptr;
     *ret = sk_X509_new(nullptr);
     if (*ret == nullptr) {
-        PrintErrorNumberMsg("RET_FAILED", RET_FAILED, "get CertList FromFile [sk_X509_new] failed");
+        PrintErrorNumberMsg(SignToolErrMsg::CERTIFICATE_ERROR, "get CertList FromFile [sk_X509_new] failed");
         return RET_FAILED;
     }
     BIO* certBio = BIO_new_file(certsFile.c_str(), "rb");
     if (!certBio) {
-        PrintErrorNumberMsg("IO_ERROR", IO_ERROR,
+        PrintErrorNumberMsg(SignToolErrMsg::FILE_READ_FAILED,
                             std::string("get CertList from file ") + certsFile + " failed");
         sk_X509_free(*ret);
         return IO_ERROR;
@@ -1294,7 +1294,7 @@ int SignProvider::GetCertListFromFile(const std::string& certsFile, STACK_OF(X50
         sk_X509_push(*ret, cert);
     }
     if (PKCS7Data::SortX509Stack(*ret) != RET_OK) {
-        PrintErrorNumberMsg("CERTIFICATE_ERROR", CERTIFICATE_ERROR,
+        PrintErrorNumberMsg(SignToolErrMsg::CERTIFICATE_ERROR,
             "Input certificate file do not include a valid certificate chains");
         return CERTIFICATE_ERROR;
     }
@@ -1307,7 +1307,7 @@ bool SignProvider::DoAfterSign(bool isPathOverlap, const std::string& tmpOutputF
     if (isPathOverlap) {
         remove(inputFilePath.c_str());
         if (rename(tmpOutputFile.c_str(), inputFilePath.c_str()) != 0) {
-            PrintErrorNumberMsg("IO_ERROR", IO_ERROR,
+            PrintErrorNumberMsg(SignToolErrMsg::FILE_IO_FAILED,
                                 "File name " + tmpOutputFile + " rename to " + inputFilePath + " failed!");
             return false;
         }
@@ -1318,22 +1318,22 @@ bool SignProvider::DoAfterSign(bool isPathOverlap, const std::string& tmpOutputF
 bool SignProvider::CopyFileAndAlignment(std::ifstream& input, std::ofstream& tmpOutput, int alignment, ZipSigner& zip)
 {
     if (!zip.Init(input)) {
-        PrintErrorNumberMsg("ZIP_ERROR", ZIP_ERROR, "zip init failed");
+        PrintErrorNumberMsg(SignToolErrMsg::ALIGNMENT_ZIP_FAILED, "zip init failed");
         return false;
     }
     if (!zip.Alignment(alignment)) {
-        PrintErrorNumberMsg("ZIP_ERROR", ZIP_ERROR, "zip alignment failed");
+        PrintErrorNumberMsg(SignToolErrMsg::ALIGNMENT_ZIP_FAILED, "zip alignment failed");
         return false;
     }
     if (!GenerateAndAddBitMap(input, zip, alignment)) {
         return false;
     }
     if (!zip.RemoveSignBlock()) {
-        PrintErrorNumberMsg("ZIP_ERROR", ZIP_ERROR, "zip remove sign block failed");
+        PrintErrorNumberMsg(SignToolErrMsg::ALIGNMENT_ZIP_FAILED, "zip remove sign block failed");
         return false;
     }
     if (!zip.ToFile(input, tmpOutput)) {
-        PrintErrorNumberMsg("IO_ERROR", IO_ERROR, "zip write to file failed");
+        PrintErrorNumberMsg(SignToolErrMsg::WRITE_ZIP_FAILED, "zip write to file failed");
         return false;
     }
     return true;
@@ -1352,11 +1352,11 @@ bool SignProvider::GenerateAndAddBitMap(std::ifstream& input, ZipSigner& zip, in
         return true;
     }
     if (!zip.AddBitMap(bitMap)) {
-        PrintErrorNumberMsg("SIGN_ERROR", SIGN_ERROR, "add bitmap entry failed");
+        PrintErrorNumberMsg(SignToolErrMsg::SIGNATURE_FAILED, "add bitmap entry failed");
         return false;
     }
     if (!zip.Alignment(alignment)) {
-        PrintErrorNumberMsg("ZIP_ERROR", ZIP_ERROR, "zip re-alignment after bitmap failed");
+        PrintErrorNumberMsg(SignToolErrMsg::ALIGNMENT_ZIP_FAILED, "zip re-alignment after bitmap failed");
         return false;
     }
     return true;
@@ -1430,7 +1430,7 @@ bool SignProvider::CheckSignCode()
     }
     std::string codeSign = signParams[ParamConstants::PARAM_SIGN_CODE];
     if ((codeSign != ParamConstants::ENABLE_SIGN_CODE) && (codeSign != ParamConstants::DISABLE_SIGN_CODE)) {
-        PrintErrorNumberMsg("COMMAND_PARAM_ERROR", COMMAND_PARAM_ERROR,
+        PrintErrorNumberMsg(SignToolErrMsg::PARAM_CHECK_FAILED,
                             "signCode Parameter must 0 or 1, you put is " + codeSign);
         return false;
     }
@@ -1445,7 +1445,7 @@ bool SignProvider::CheckPermMode()
     }
     std::string permMode = signParams[ParamConstants::PARAM_PERM_MODE];
     if ((permMode != ParamConstants::ENABLE_PERM_MODE) && (permMode != ParamConstants::DISABLE_PERM_MODE)) {
-        PrintErrorNumberMsg("COMMAND_PARAM_ERROR", COMMAND_PARAM_ERROR,
+        PrintErrorNumberMsg(SignToolErrMsg::PARAM_CHECK_FAILED,
                             "permSign Parameter must 0 or 1, you put is " + permMode);
         return false;
     }
@@ -1498,7 +1498,7 @@ bool SignProvider::CheckSignatureAlg()
             return true;
         }
     }
-    PrintErrorNumberMsg("COMMAND_PARAM_ERROR", COMMAND_PARAM_ERROR,
+    PrintErrorNumberMsg(SignToolErrMsg::PARAM_CHECK_FAILED,
                         "signAlg Parameter is only support [SHA256withECDSA / SHA384withECDSA]");
     return false;
 }
@@ -1520,7 +1520,7 @@ bool SignProvider::CheckCompatibleVersion()
     const std::string& compatibleApiVersionVal = it->second;
     int compatibleApiVersion;
     if (!StringUtils::CheckStringToInt(compatibleApiVersionVal, compatibleApiVersion)) {
-        PrintErrorNumberMsg("COMMAND_PARAM_ERROR", COMMAND_PARAM_ERROR,
+        PrintErrorNumberMsg(SignToolErrMsg::PARAM_CHECK_FAILED,
                             "compatibleVersion Parameter is must integer");
         return false;
     }
@@ -1585,7 +1585,7 @@ X509* SignProvider::GetCertificate(const std::string& certificate)const
 {
     BIO* in = BIO_new_mem_buf(certificate.data(), certificate.size());
     if (!in) {
-        PrintErrorNumberMsg("CERTIFICATE_ERROR", CERTIFICATE_ERROR,
+        PrintErrorNumberMsg(SignToolErrMsg::CERTIFICATE_ERROR,
                             "bio new error ,get ceritificate from base64 certificate failed");
         return NULL;
     }
@@ -1593,7 +1593,7 @@ X509* SignProvider::GetCertificate(const std::string& certificate)const
     cert = PEM_read_bio_X509(in, NULL, NULL, NULL);
     if (!cert) {
         BIO_free(in);
-        PrintErrorNumberMsg("CERTIFICATE_ERROR", CERTIFICATE_ERROR,
+        PrintErrorNumberMsg(SignToolErrMsg::CERTIFICATE_ERROR,
                             "read no cert from base64 certificate failed");
         return NULL;
     }
@@ -1642,7 +1642,7 @@ int SignProvider::CheckProfileValid(STACK_OF(X509)* inputCerts)
     std::map<std::string, std::string>::const_iterator ite =
         signParams.find(ParamConstants::PARAM_BASIC_PROFILE_SIGNED);
     if (ite == signParams.end()) {
-        PrintErrorNumberMsg("INVALIDPARAM_ERROR", INVALIDPARAM_ERROR,
+        PrintErrorNumberMsg(SignToolErrMsg::PARAM_REQUIRED,
                             "find PARAM_BASIC_PROFILE_SIGNED failed");
         return INVALIDPARAM_ERROR;
     }
@@ -1686,7 +1686,7 @@ int SignProvider::CheckProfileInfo(const ProfileInfo& info, STACK_OF(X509)* inpu
     } else if (info.type == ProvisionType::DEBUG) {
         certInProfile = GetCertificate(info.bundleInfo.developmentCertificate);
     } else {
-        PrintErrorNumberMsg("NOT_SUPPORT_ERROR", NOT_SUPPORT_ERROR, "Unsupported profile type!");
+        PrintErrorNumberMsg(SignToolErrMsg::UNSUPPORTED_METHOD, "Unsupported profile type!");
         return NOT_SUPPORT_ERROR;
     }
     if (sk_X509_num(inputCerts) > 0 && !CheckInputCertMatchWithProfile(sk_X509_value(inputCerts, 0),
@@ -1699,7 +1699,7 @@ int SignProvider::CheckProfileInfo(const ProfileInfo& info, STACK_OF(X509)* inpu
     X509_free(certInProfile);
     SIGNATURE_TOOLS_LOGI("certificate in profile: %s", cn.c_str());
     if (cn.empty()) {
-        PrintErrorNumberMsg("CERTIFICATE_ERROR", CERTIFICATE_ERROR, "Common name of certificate is empty!");
+        PrintErrorNumberMsg(SignToolErrMsg::CERTIFICATE_ERROR, "Common name of certificate is empty!");
         return CERTIFICATE_ERROR;
     }
     return 0;

@@ -33,12 +33,12 @@ int BCPkcs7Generator::GenerateSignedData(const std::string& content,
     int result = RET_OK;
     std::string sigAlg;
     if (content.empty()) {
-        PrintErrorNumberMsg("INVALIDPARAM_ERROR", INVALIDPARAM_ERROR,
+        PrintErrorNumberMsg(SignToolErrMsg::SIGNATURE_FAILED,
                             "digest content is empty, generate signed data failed");
         return INVALIDPARAM_ERROR;
     }
     if (signerConfig == NULL) {
-        PrintErrorNumberMsg("INVALIDPARAM_ERROR", INVALIDPARAM_ERROR, "signerConfig is NULL");
+        PrintErrorNumberMsg(SignToolErrMsg::PARAM_REQUIRED, "signerConfig is NULL");
         return INVALIDPARAM_ERROR;
     }
     std::shared_ptr<Signer> signer(signerConfig->GetSigner());

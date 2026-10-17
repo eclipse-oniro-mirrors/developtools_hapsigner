@@ -69,19 +69,19 @@ bool SignElf::AlignFileBy4kBytes(const std::string& inputFile, std::string& tmpF
     if (!checkSpaceFlag) {
         char currentPath[FILE_PATH_LENGTH] = { 0 };
         getcwd(currentPath, FILE_PATH_LENGTH);
-        PrintErrorNumberMsg("IO_ERROR", IO_ERROR, "[SignElf] The available space of the current directory: "
+        PrintErrorNumberMsg(SignToolErrMsg::FILE_IO_FAILED, "[SignElf] The available space of the current directory: "
                             + std::string(currentPath) + " is insufficient. Please check");
         return false;
     }
     bool checkOutputFlag = output.is_open();
     if (!checkOutputFlag) {
-        PrintErrorNumberMsg("IO_ERROR", IO_ERROR, "[SignElf] open file: " + tmpFile + "failed");
+        PrintErrorNumberMsg(SignToolErrMsg::FILE_READ_FAILED, "[SignElf] open file: " + tmpFile + "failed");
         return false;
     }
     std::ifstream input(inputFile);
     bool checkInputFlag = input.is_open();
     if (!checkInputFlag) {
-        PrintErrorNumberMsg("IO_ERROR", IO_ERROR, "[SignElf] open file: " + inputFile + "failed");
+        PrintErrorNumberMsg(SignToolErrMsg::FILE_READ_FAILED, "[SignElf] open file: " + inputFile + "failed");
         return false;
     }
     char buffer[FILE_BUFFER_BLOCK];
@@ -90,7 +90,7 @@ bool SignElf::AlignFileBy4kBytes(const std::string& inputFile, std::string& tmpF
     while ((bytesRead = input.read(buffer, sizeof(buffer)).gcount()) > 0) {
         output.write(buffer, bytesRead);
         if (!output) {
-            PrintErrorNumberMsg("IO_ERROR", IO_ERROR, "[SignElf] write data to " + tmpFile + "failed");
+            PrintErrorNumberMsg(SignToolErrMsg::FILE_WRITE_FAILED, "[SignElf] write data to " + tmpFile + "failed");
             return false;
         }
         outputLength += bytesRead;
@@ -114,7 +114,7 @@ bool SignElf::WriteBlockDataToFile(SignerConfig& signerConfig,
     int64_t binFileLen = FileUtils::GetFileLen(inputFile);
     bool checkFlag = binFileLen < 0 || IsLongOverflowInteger(binFileLen);
     if (checkFlag) {
-        PrintErrorNumberMsg("SIGN_ERROR", SIGN_ERROR, "[SignElf] The length exceeds the maximum limit.");
+        PrintErrorNumberMsg(SignToolErrMsg::SIGNATURE_FAILED, "[SignElf] The length exceeds the maximum limit.");
         return false;
     }
     bool checkIsEmptyFlag = StringUtils::IsEmpty(proFile);
@@ -151,13 +151,13 @@ bool SignElf::WriteSignedElf(const std::string &inputFile, std::list<SignBlockDa
     std::ofstream fileOutputStream(outputFile, std::ios::binary);
     bool checkFlag = !fileInputStream.is_open();
     if (checkFlag) {
-        PrintErrorNumberMsg("IO_ERROR", IO_ERROR, "[SignElf] open file: " + inputFile + "failed");
+        PrintErrorNumberMsg(SignToolErrMsg::FILE_READ_FAILED, "[SignElf] open file: " + inputFile + "failed");
         return false;
     }
     checkFlag = !fileOutputStream.is_open();
     if (checkFlag) {
         fileInputStream.close();
-        PrintErrorNumberMsg("IO_ERROR", IO_ERROR, "[SignElf] open file: " + outputFile + "failed");
+        PrintErrorNumberMsg(SignToolErrMsg::FILE_WRITE_FAILED, "[SignElf] open file: " + outputFile + "failed");
         return false;
     }
     char buffer[FILE_BUFFER_BLOCK];
@@ -196,7 +196,7 @@ bool SignElf::WriteSignBlockData(std::list<SignBlockData>& signBlockList, std::o
             std::ifstream InputSignFileStream(signBlockData.GetSignFile(), std::ios::binary);
             bool checkFileFlag = !InputSignFileStream.is_open();
             if (checkFileFlag) {
-                PrintErrorNumberMsg("IO_ERROR", IO_ERROR,
+                PrintErrorNumberMsg(SignToolErrMsg::FILE_READ_FAILED,
                                     "[SignElf] open file: " + signBlockData.GetSignFile() + "failed");
                 return false;
             }
@@ -205,7 +205,7 @@ bool SignElf::WriteSignBlockData(std::list<SignBlockData>& signBlockList, std::o
             isSuccess = (result == 0 ? true : false);
         }
         if (!isSuccess) {
-            PrintErrorNumberMsg("IO_ERROR", IO_ERROR, "write data to file error");
+            PrintErrorNumberMsg(SignToolErrMsg::FILE_WRITE_FAILED, "write data to file error");
             return false;
         }
     }
@@ -222,7 +222,7 @@ bool SignElf::GenerateSignBlockHead(std::list<SignBlockData>& signDataList)
         offset += it->GetLen();
         bool checkIsLongOverflowIntegerFlag = IsLongOverflowInteger(offset);
         if (checkIsLongOverflowIntegerFlag) {
-            PrintErrorNumberMsg("SIGN_ERROR", SIGN_ERROR, "[SignElf] The length exceeds the maximum limit.");
+            PrintErrorNumberMsg(SignToolErrMsg::SIGNATURE_FAILED, "[SignElf] The length exceeds the maximum limit.");
             return false;
         }
     }
@@ -233,7 +233,7 @@ SignBlockData SignElf::GenerateProfileSignByte(std::string profileFile, std::str
 {
     int64_t profileDataLen = FileUtils::GetFileLen(profileFile);
     if (profileDataLen < 0 || IsLongOverflowShort(profileDataLen)) {
-        PrintErrorNumberMsg("SIGN_ERROR", SIGN_ERROR,
+        PrintErrorNumberMsg(SignToolErrMsg::SIGNATURE_FAILED,
                             "[SignElf] The length exceeds the maximum limit.");
     }
     char isSigned = SignatureBlockTypes::GetProfileBlockTypes(profileSigned);
@@ -245,7 +245,7 @@ bool SignElf::GenerateCodeSignByte(SignerConfig& signerConfig, const std::map<st
                                    SignBlockData** codeSign)
 {
     if (signParams.at(ParamConstants::PARAM_SIGN_CODE) == CODESIGN_OFF) {
-        PrintErrorNumberMsg("SIGN_ERROR", SIGN_ERROR, "[SignElf] check pamams signCode = 0 error.");
+        PrintErrorNumberMsg(SignToolErrMsg::PARAM_CHECK_FAILED, "[SignElf] check pamams signCode = 0 error.");
         return false;
     }
     CodeSigning codeSigning(&signerConfig);
@@ -271,7 +271,7 @@ bool SignElf::WriteSignHeadDataToOutputFile(const std::string& inputFile, const 
 {
     int64_t size = FileUtils::GetFileLen(outputFile) - FileUtils::GetFileLen(inputFile);
     if (IsLongOverflowInteger(size)) {
-        PrintErrorNumberMsg("SIGN_ERROR", SIGN_ERROR,
+        PrintErrorNumberMsg(SignToolErrMsg::SIGNATURE_FAILED,
                             "[SignElf] The length exceeds the maximum limit.");
         return false;
     }

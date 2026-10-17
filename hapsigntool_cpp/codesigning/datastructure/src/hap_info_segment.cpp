@@ -65,12 +65,12 @@ HapInfoSegment HapInfoSegment::FromByteArray(std::vector<int8_t>& bytes)
     int32_t inMagic = 0;
     bf->GetInt32(inMagic);
     if (inMagic != HapInfoSegment::MAGIC_NUM) {
-        PrintErrorNumberMsg("VERIFY_ERROR", VERIFY_ERROR,
+        PrintErrorNumberMsg(SignToolErrMsg::VERIFY_FAILED,
                             "The magic number of HapInfoSegment is incorrect.");
         return HapInfoSegment();
     }
     if (bytes.size() <= HapInfoSegment::MAGIC_NUM_BYTES) {
-        PrintErrorNumberMsg("VERIFY_ERROR", VERIFY_ERROR,
+        PrintErrorNumberMsg(SignToolErrMsg::VERIFY_FAILED,
                             "The bytes size of HapInfoSegment is incorrect.");
         return HapInfoSegment();
     }
@@ -78,12 +78,12 @@ HapInfoSegment HapInfoSegment::FromByteArray(std::vector<int8_t>& bytes)
     bf->GetByte(hapSignInfoByteArray.data(), hapSignInfoByteArray.size());
     SignInfo inHapSignInfo = SignInfo::FromByteArray(hapSignInfoByteArray);
     if (inHapSignInfo.GetDataSize() % HapInfoSegment::CHUNK_SIZE != 0) {
-        PrintErrorNumberMsg("VERIFY_ERROR", VERIFY_ERROR,
+        PrintErrorNumberMsg(SignToolErrMsg::FILE_4K_ALIGNMENT_ERROR,
                             "Invalid dataSize, the dataSize must be an integer multiple of 4096.");
         return HapInfoSegment();
     }
     if (inHapSignInfo.GetExtensionNum() > SignInfo::MAX_EXTENSION_NUM) {
-        PrintErrorNumberMsg("VERIFY_ERROR", VERIFY_ERROR,
+        PrintErrorNumberMsg(SignToolErrMsg::VERIFY_FAILED,
                             "The extension number of HapInfoSegment is incorrect.");
         return HapInfoSegment();
     }

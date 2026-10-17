@@ -48,13 +48,18 @@ std::shared_ptr<Signer> SignerFactory::LoadRemoteSigner(LocalizationAdapter& ada
     std::string username = adapter.GetOptions()->GetString(ParamConstants::PARAM_REMOTE_USERNAME);
     char* userPwd = adapter.GetOptions()->GetChars(ParamConstants::PARAM_REMOTE_USERPWD);
 
+    if (userPwd == nullptr || *userPwd == '\0') {
+        PrintErrorNumberMsg(SignToolErrMsg::PARAM_VALUE_EMPTY, "userPwd is empty, get signer failed.");
+        return nullptr;
+    }
+
     // open so
     if (DynamicLibHandle::g_handle == nullptr) {
         DynamicLibHandle::g_handle = dlopen(signerPlugin.c_str(), RTLD_NOW | RTLD_LOCAL);
     }
 
     if (DynamicLibHandle::g_handle == nullptr) {
-        PrintErrorNumberMsg("LoadRemoteSigner", RET_FAILED, dlerror());
+        PrintErrorNumberMsg(SignToolErrMsg::LOAD_REMOTE_PLUGIN_FAILED, dlerror());
         return nullptr;
     }
 

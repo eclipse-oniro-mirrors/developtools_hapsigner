@@ -48,13 +48,13 @@ bool CmsUtils::CheckOwnerID(const std::string& signature, const std::string& pro
     const unsigned char* data = reinterpret_cast<const unsigned char*>(signature.c_str());
     PKCS7* p7 = d2i_PKCS7(NULL, &data, static_cast<long>(signature.size()));
     if (p7 == nullptr) {
-        PrintErrorNumberMsg("PARSE_ERROR", PARSE_ERROR, "invalid data, parse pkcs7 failed");
+        PrintErrorNumberMsg(SignToolErrMsg::VERIFY_FAILED, "invalid data, parse pkcs7 failed");
         return false;
     }
     STACK_OF(PKCS7_SIGNER_INFO)* signerInfosk = PKCS7_get_signer_info(p7);
     if (signerInfosk == nullptr) {
         PKCS7_free(p7);
-        PrintErrorNumberMsg("INVALIDPARAM_ERROR", INVALIDPARAM_ERROR, "can't get signerinfo from pkcs7");
+        PrintErrorNumberMsg(SignToolErrMsg::CODE_SIGN_INTERNAL_ERROR, "can't get signerinfo from pkcs7");
         return false;
     }
     for (int i = 0; i < sk_PKCS7_SIGNER_INFO_num(signerInfosk); i++) {
@@ -66,13 +66,13 @@ bool CmsUtils::CheckOwnerID(const std::string& signature, const std::string& pro
             if (ownerID.empty()) {
                 continue;
             } else {
-                PrintErrorNumberMsg("VERIFY_ERROR", VERIFY_ERROR, "app-identifier is not in the signature");
+                PrintErrorNumberMsg(SignToolErrMsg::VERIFY_FAILED, "app-identifier is not in the signature");
                 PKCS7_free(p7);
                 return false;
             }
         }
         if (ownerID.empty()) {
-            PrintErrorNumberMsg("VERIFY_ERROR", VERIFY_ERROR, "app-identifier in profile is null,in signature exist");
+            PrintErrorNumberMsg(SignToolErrMsg::VERIFY_FAILED, "app-identifier in profile is null,in signature exist");
             PKCS7_free(p7);
             return false;
         }
@@ -82,7 +82,7 @@ bool CmsUtils::CheckOwnerID(const std::string& signature, const std::string& pro
             result_ownerID.assign(reinterpret_cast<const char*>(ASN1_STRING_get0_data(result)),
                 ASN1_STRING_length(result));
             if (ownerID != result_ownerID) {
-                PrintErrorNumberMsg("VERIFY_ERROR", VERIFY_ERROR, "app-identifier in signature is invalid");
+                PrintErrorNumberMsg(SignToolErrMsg::VERIFY_FAILED, "app-identifier in signature is invalid");
                 PKCS7_free(p7);
                 return false;
             }

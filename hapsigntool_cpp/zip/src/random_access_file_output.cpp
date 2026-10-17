@@ -48,7 +48,7 @@ bool RandomAccessFileOutput::Write(ByteBuffer& buffer)
     {
         std::scoped_lock lock(tmpMutex);
         if (file->WriteToFile(buffer, position, length) < 0) {
-            PrintErrorNumberMsg("IO_ERROR", IO_ERROR, "write from ByteBuffer to RandomAccessFile failed");
+            PrintErrorNumberMsg(SignToolErrMsg::FILE_WRITE_FAILED, "write from ByteBuffer to RandomAccessFile failed");
             return false;
         }
         position += length;

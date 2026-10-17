@@ -78,7 +78,7 @@ bool FileUtils::ValidFileType(const std::string& filePath, const std::initialize
         return lowerVal == lowerSuffix;
     });
     if (!matched) {
-        PrintErrorNumberMsg("NOT_SUPPORT_ERROR", NOT_SUPPORT_ERROR, "Not support file: " + filePath);
+        PrintErrorNumberMsg(SignToolErrMsg::NOT_SUPPORT_FILE, "Not support file: " + filePath);
         return false;
     }
     return true;
@@ -89,12 +89,12 @@ int FileUtils::Write(const std::string& content, const std::string& output)
     std::ofstream outFile(output, std::ios::binary);
     bool flag = (outFile.rdstate() != 0);
     if (flag) {
-        PrintErrorNumberMsg("IO_ERROR", IO_ERROR, "open output file: " + output + " failed");
+        PrintErrorNumberMsg(SignToolErrMsg::FILE_IO_FAILED, "open output file: " + output + " failed");
         return IO_ERROR;
     }
     outFile.write(&content[0], content.size());
     if (outFile.rdstate() != 0) {
-        PrintErrorNumberMsg("IO_ERROR", IO_ERROR, "Failed to write data to output stream.");
+        PrintErrorNumberMsg(SignToolErrMsg::FILE_WRITE_FAILED, "Failed to write data to output stream.");
         return IO_ERROR;
     }
     return RET_OK;
@@ -104,7 +104,7 @@ int FileUtils::Read(std::ifstream& input, std::string& ret)
 {
     ret.clear();
     if (input.rdstate() != 0) {
-        PrintErrorNumberMsg("IO_ERROR", IO_ERROR, "invalid input stream");
+        PrintErrorNumberMsg(SignToolErrMsg::FILE_READ_FAILED, "invalid input stream");
         return IO_ERROR;
     }
     ret.clear();
@@ -125,7 +125,7 @@ int FileUtils::ReadFile(const std::string& path, std::string& ret)
     std::ifstream file(path, std::ios::binary);
     bool flag = (file.rdstate() != 0);
     if (flag) {
-        PrintErrorNumberMsg("IO_ERROR", IO_ERROR, "open input file: " + path + " failed");
+        PrintErrorNumberMsg(SignToolErrMsg::FILE_READ_FAILED, "open input file: " + path + " failed");
         return IO_ERROR;
     }
     if (Read(file, ret) < 0) {
@@ -416,12 +416,12 @@ bool FileUtils::IsValidFile(std::string file)
     std::filesystem::path filePath = file;
     bool flag = std::filesystem::exists(filePath);
     if (!flag) {
-        PrintErrorNumberMsg("FILE_NOT_FOUND", FILE_NOT_FOUND, "'" + file + "' file is not exists");
+        PrintErrorNumberMsg(SignToolErrMsg::FILE_NOT_EXIST, "'" + file + "' file is not exists");
         return false;
     }
     flag = std::filesystem::is_directory(filePath);
     if (flag) {
-        PrintErrorNumberMsg("FILE_NOT_FOUND", FILE_NOT_FOUND, "'" + file + "' file is a directory not file");
+        PrintErrorNumberMsg(SignToolErrMsg::FILE_NOT_EXIST, "'" + file + "' file is a directory not file");
         return false;
     }
     return true;

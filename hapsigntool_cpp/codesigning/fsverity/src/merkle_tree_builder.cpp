@@ -71,7 +71,7 @@ std::vector<std::vector<int8_t>> MerkleTreeBuilder::GetDataHashes(std::istream& 
         while (num > 0 || flag == 0) {
             inputStream.read((buffer.data()), len);
             if (inputStream.fail() && !inputStream.eof()) {
-                PrintErrorNumberMsg("IO_ERROR", IO_ERROR, "Error occurred while reading data");
+                PrintErrorNumberMsg(SignToolErrMsg::FILE_READ_FAILED, "Error occurred while reading data");
                 CheckCalculateHashResult = false;
                 return std::vector<std::vector<int8_t>>();
             }
@@ -85,7 +85,7 @@ std::vector<std::vector<int8_t>> MerkleTreeBuilder::GetDataHashes(std::istream& 
             flag = 1;
         }
         if (offset != readSize) {
-            PrintErrorNumberMsg("READ_FILE_ERROR", IO_ERROR, "Error reading buffer from input");
+            PrintErrorNumberMsg(SignToolErrMsg::FILE_READ_FAILED, "Error reading buffer from input");
             CheckCalculateHashResult = false;
             return std::vector<std::vector<int8_t>>();
         }

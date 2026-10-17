@@ -21,6 +21,7 @@ signature_tools_common_src = [
   "${hapsigntool_cpp_common}/src/byte_buffer.cpp",
   "${hapsigntool_cpp_common}/src/digest_parameter.cpp",
   "${hapsigntool_cpp_common}/src/digest_common.cpp",
+  "${hapsigntool_cpp_common}/src/error_message.cpp",
   "${hapsigntool_cpp_common}/src/localization_adapter.cpp",
   "${signature_tools_common}/src/options.cpp",
 ]

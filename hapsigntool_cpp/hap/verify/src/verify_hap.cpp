@@ -150,7 +150,7 @@ bool VerifyHap::writeOptionalBytesToFile(const OptionalBlock& optionalBlock, con
     std::string optionBlockString(optionalBlock.optionalBlockValue.GetBufferPtr(),
                           optionalBlock.optionalBlockValue.GetCapacity());
     if (FileUtils::Write(optionBlockString, path) < 0) {
-        PrintErrorNumberMsg("IO_ERROR", IO_ERROR, "write optional bytes to file:" + path + " falied!");
+        PrintErrorNumberMsg(SignToolErrMsg::FILE_WRITE_FAILED, "write optional bytes to file:" + path + " falied!");
         return false;
     }
     return true;
@@ -184,7 +184,7 @@ bool VerifyHap::PrintCertChainToCmd(std::vector<X509*>& certChain)
 {
     BIO* outFd = BIO_new_fp(stdout, BIO_NOCLOSE);
     if (!outFd) {
-        PrintErrorNumberMsg("IO_ERROR", IO_ERROR, "The stdout stream may have errors");
+        PrintErrorNumberMsg(SignToolErrMsg::FILE_IO_FAILED, "The stdout stream may have errors");
         return false;
     }
     uint64_t format = XN_FLAG_SEP_COMMA_PLUS; // Print according to RFC2253
@@ -225,7 +225,7 @@ int32_t VerifyHap::Verify(const std::string& filePath, Options* options)
     }
     int32_t resultCode = Verify(hapFile, options, filePath);
     if (resultCode != RET_OK) {
-        PrintErrorNumberMsg("VERIFY_ERROR", VERIFY_ERROR, standardFilePath + " verify failed");
+        PrintErrorNumberMsg(SignToolErrMsg::VERIFY_FAILED, standardFilePath + " verify failed");
     }
     return resultCode;
 }
@@ -245,7 +245,7 @@ int32_t VerifyHap::VerifyBeforeResign(const std::string& filePath, Options* opti
     }
     int32_t resultCode = VerifyBeforeResign(hapFile, options, filePath);
     if (resultCode != RET_OK) {
-        PrintErrorNumberMsg("VERIFY_ERROR", VERIFY_ERROR, standardFilePath + " verify failed");
+        PrintErrorNumberMsg(SignToolErrMsg::VERIFY_FAILED, standardFilePath + " verify failed");
     }
     return resultCode;
 }
@@ -254,7 +254,7 @@ bool VerifyHap::CheckFilePath(const std::string& filePath, std::string& standard
 {
     char path[PATH_MAX] = { 0x00 };
     if (filePath.size() > PATH_MAX || realpath(filePath.c_str(), path) == nullptr) {
-        PrintErrorNumberMsg("IO_ERROR", IO_ERROR,
+        PrintErrorNumberMsg(SignToolErrMsg::FILE_READ_FAILED,
                             filePath + " does not exist or is over " + std::to_string(PATH_MAX) + " chars");
         return false;
     }
@@ -267,7 +267,7 @@ bool VerifyHap::CheckFilePath(const std::string& filePath, std::string& standard
                 !std::regex_match(standardFilePathTmp, std::regex(APP_APP_PATTERN)) &&
                 !std::regex_match(standardFilePathTmp, std::regex(HQF_APP_PATTERN)));
     if (ret) {
-        PrintErrorNumberMsg("COMMAND_PARAM_ERROR", COMMAND_PARAM_ERROR,
+        PrintErrorNumberMsg(SignToolErrMsg::NOT_SUPPORT_FILE,
                             "only support format is [hap, hqf, hsp, app]");
         return false;
     }
@@ -407,28 +407,28 @@ bool VerifyHap::CheckInputCertMatchWithProfile(X509* inputCert, X509* certInProf
 {
     bool ret = true;
     if (inputCert == nullptr || certInProfile == nullptr) {
-        PrintErrorNumberMsg("CERTIFICATE_ERROR", CERTIFICATE_ERROR,
+        PrintErrorNumberMsg(SignToolErrMsg::CERTIFICATE_ERROR,
                             "The certificate is empty");
         return false;
     }
     X509_NAME* subject1 = X509_get_subject_name(inputCert);
     X509_NAME* subject2 = X509_get_subject_name(certInProfile);
     if (X509_NAME_cmp(subject1, subject2) != 0) {
-        PrintErrorNumberMsg("CERTIFICATE_ERROR", CERTIFICATE_ERROR,
+        PrintErrorNumberMsg(SignToolErrMsg::CERTIFICATE_ERROR,
                             "The subject does not match!");
         return false;
     }
     X509_NAME* issuer1 = X509_get_issuer_name(inputCert);
     X509_NAME* issuer2 = X509_get_issuer_name(certInProfile);
     if (X509_NAME_cmp(issuer1, issuer2) != 0) {
-        PrintErrorNumberMsg("CERTIFICATE_ERROR", CERTIFICATE_ERROR,
+        PrintErrorNumberMsg(SignToolErrMsg::CERTIFICATE_ERROR,
                             "The issuer name does not match!");
         return false;
     }
     ASN1_INTEGER* serial1 = X509_get_serialNumber(inputCert);
     ASN1_INTEGER* serial2 = X509_get_serialNumber(certInProfile);
     if (ASN1_INTEGER_cmp(serial1, serial2) != 0) {
-        PrintErrorNumberMsg("CERTIFICATE_ERROR", CERTIFICATE_ERROR,
+        PrintErrorNumberMsg(SignToolErrMsg::CERTIFICATE_ERROR,
                             "serial number does not match!");
         return false;
     }
@@ -437,12 +437,12 @@ bool VerifyHap::CheckInputCertMatchWithProfile(X509* inputCert, X509* certInProf
     if (pkey1 != nullptr && pkey2 != nullptr && EVP_PKEY_cmp(pkey1, pkey2) != 1) {
         EVP_PKEY_free(pkey1);
         EVP_PKEY_free(pkey2);
-        PrintErrorNumberMsg("CERTIFICATE_ERROR", CERTIFICATE_ERROR,
+        PrintErrorNumberMsg(SignToolErrMsg::CERTIFICATE_ERROR,
                             "The public key does not match!");
         return false;
     }
     if (pkey1 == nullptr || pkey2 == nullptr) {
-        PrintErrorNumberMsg("CERTIFICATE_ERROR", CERTIFICATE_ERROR,
+        PrintErrorNumberMsg(SignToolErrMsg::CERTIFICATE_ERROR,
                             "The public key is null!");
         ret = false;
     }
@@ -672,7 +672,7 @@ bool VerifyHap::CheckFileNameAndBlockArray(const std::string& hapFilePath,
 {
     std::vector<std::string> fileNameArray = StringUtils::SplitString(hapFilePath, '.');
     if (fileNameArray.size() < ParamConstants::FILE_NAME_MIN_LENGTH) {
-        PrintErrorNumberMsg("VERIFY_ERROR", VERIFY_ERROR, "ZIP64 format not supported.");
+        PrintErrorNumberMsg(SignToolErrMsg::UNSUPPORTED_METHOD, "ZIP64 format not supported.");
         return false;
     }
 
@@ -707,7 +707,7 @@ bool VerifyHap::CheckCodeSign(const std::string& hapFilePath,
     }
 
     if (blockType != HapUtils::HAP_CODE_SIGN_BLOCK_ID) {
-        PrintErrorNumberMsg("VERIFY_ERROR", VERIFY_ERROR, "code sign data not exist in hap " + hapFilePath);
+        PrintErrorNumberMsg(SignToolErrMsg::VERIFY_FAILED, "code sign data not exist in hap " + hapFilePath);
         return false;
     }
     auto ite = blockMap.find(HapUtils::HAP_PROFILE_BLOCK_ID);
@@ -1027,13 +1027,13 @@ int VerifyHap::GetProfileContent(const std::string profile, std::string& ret)
         return -1;
     }
     if (p7Data.Verify() < 0) {
-        PrintErrorNumberMsg("PKCS7_VERIFY_ERROR", VERIFY_ERROR,
+        PrintErrorNumberMsg(SignToolErrMsg::VERIFY_PROFILE_FAILED,
                             "Verify profile pkcs7 failed! Profile is invalid");
         ret = profile;
         return -1;
     }
     if (p7Data.GetContent(ret) < 0) {
-        PrintErrorNumberMsg("PKCS7_VERIFY_ERROR", VERIFY_ERROR,
+        PrintErrorNumberMsg(SignToolErrMsg::VERIFY_PROFILE_FAILED,
                             "Check profile failed, signed profile content is not byte array");
         ret = profile;
         return -1;

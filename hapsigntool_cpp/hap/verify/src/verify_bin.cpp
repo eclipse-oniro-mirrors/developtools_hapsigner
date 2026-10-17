@@ -24,7 +24,7 @@ bool VerifyBin::Verify(Options* options)
 {
     // check param
     if (options == nullptr) {
-        PrintErrorNumberMsg("VERIFY_ERROR", VERIFY_ERROR, "Param options is null.");
+        PrintErrorNumberMsg(SignToolErrMsg::PARAM_VALUE_EMPTY, "Param options is null.");
         return false;
     }
     if (!VerifyElf::CheckParams(options)) {
@@ -88,7 +88,7 @@ bool VerifyBin::VerifyBinDigest(SignBlockInfo& signBlockInfo)
     bool isEqual = rawDigest.empty() || generatedDig.empty() ||
         !std::equal(rawDigest.begin(), rawDigest.end(), generatedDig.begin());
     if (isEqual) {
-        PrintErrorNumberMsg("VERIFY_ERROR", VERIFY_ERROR, "compare bin file raw digest and generated digest failed!");
+        PrintErrorNumberMsg(SignToolErrMsg::VERIFY_FAILED, "compare bin file raw digest and generated digest failed!");
         return false;
     }
     return true;

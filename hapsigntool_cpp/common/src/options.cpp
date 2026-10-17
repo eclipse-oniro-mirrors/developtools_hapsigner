@@ -133,7 +133,7 @@ bool Options::Required(const std::initializer_list<std::string>& keys)
 {
     for (auto& key : keys) {
         if (!this->IsEmpty(key) && !(this->find(key) != this->end())) {
-            PrintErrorNumberMsg("COMMAND_ERROR", COMMAND_ERROR, "Params '-" + key + "' is required");
+            PrintErrorNumberMsg(SignToolErrMsg::PARAM_REQUIRED, "Params '-" + key + "' is required");
             return false;
         }
     }

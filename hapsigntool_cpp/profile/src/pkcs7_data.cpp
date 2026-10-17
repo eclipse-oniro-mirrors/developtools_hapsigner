@@ -30,7 +30,7 @@ static int PKCS7AddAttribute(PKCS7* p7, const std::vector<PKCS7Attr>& attrs)
 {
     STACK_OF(PKCS7_SIGNER_INFO)* signerInfos = PKCS7_get_signer_info(p7);
     if (signerInfos == NULL || sk_PKCS7_SIGNER_INFO_num(signerInfos) != 1) {
-        PrintErrorNumberMsg("INVALIDPARAM_ERROR", INVALIDPARAM_ERROR,
+        PrintErrorNumberMsg(SignToolErrMsg::CODE_SIGN_INTERNAL_ERROR,
                             "signer info count not equal 1,pkcs7 add customize attribute failed");
         return INVALIDPARAM_ERROR;
     }
@@ -39,7 +39,7 @@ static int PKCS7AddAttribute(PKCS7* p7, const std::vector<PKCS7Attr>& attrs)
         if (PKCS7_add_signed_attribute(signerInfo, attr.nid, attr.atrtype, attr.value) != 1) {
             if (attr.atrtype == V_ASN1_UTF8STRING)
                 ASN1_STRING_free(reinterpret_cast<ASN1_STRING*>(attr.value));
-            PrintErrorNumberMsg("INVALIDPARAM_ERROR", INVALIDPARAM_ERROR,
+            PrintErrorNumberMsg(SignToolErrMsg::CODE_SIGN_INTERNAL_ERROR,
                                 "pkcs7 add customize attribute failed");
             return RET_FAILED;
         }
@@ -55,7 +55,7 @@ static int I2dPkcs7Str(PKCS7* p7, std::string& ret)
     /* Deserialize to obtain the p7b byte stream */
     outSize = i2d_PKCS7(p7, &out);
     if (out == NULL || outSize <= 0) {
-        PrintErrorNumberMsg("INVALIDPARAM_ERROR", INVALIDPARAM_ERROR,
+        PrintErrorNumberMsg(SignToolErrMsg::CODE_SIGN_INTERNAL_ERROR,
                             "pkcs7 is invalid");
         return INVALIDPARAM_ERROR;
     }
@@ -95,7 +95,7 @@ static int VerifySignature(PKCS7* pkcs7, BIO* p7bio)
         PKCS7_SIGNER_INFO* signerInfo = sk_PKCS7_SIGNER_INFO_value(skSignerInfo, i);
         X509* sigCert = PKCS7_cert_from_signer_info(pkcs7, signerInfo);
         if (PKCS7_signatureVerify(p7bio, pkcs7, signerInfo, sigCert) != 1) {
-            PrintErrorNumberMsg("VERIFY_ERROR", VERIFY_ERROR, "signature value verify failed");
+            PrintErrorNumberMsg(SignToolErrMsg::VERIFY_FAILED, "signature value verify failed");
             return VERIFY_ERROR;
         }
     }
@@ -152,7 +152,7 @@ int PKCS7Data::Parse(const unsigned char** in, long len)
     /* Deserialize */
     m_p7 = d2i_PKCS7(NULL, in, len);
     if (m_p7 == NULL) {
-        PrintErrorNumberMsg("PARSE_ERROR", PARSE_ERROR, "invalid p7b data, parse failed");
+        PrintErrorNumberMsg(SignToolErrMsg::VERIFY_PROFILE_INVALID, "invalid p7b data, parse failed");
         return PARSE_ERROR;
     }
     return RET_OK;
@@ -161,12 +161,12 @@ int PKCS7Data::Parse(const unsigned char** in, long len)
 int PKCS7Data::Verify(const std::string& content) const
 {
     if (m_p7 == nullptr || !PKCS7_type_is_signed(m_p7) || m_p7->d.sign == nullptr) {
-        PrintErrorNumberMsg("VERIFY_ERROR", VERIFY_ERROR, "pkcs7 block is invalid.");
+        PrintErrorNumberMsg(SignToolErrMsg::VERIFY_FAILED, "pkcs7 block is invalid.");
         return VERIFY_ERROR;
     }
 
     if (VerifySign(content) < 0) {
-        PrintErrorNumberMsg("VERIFY_ERROR", VERIFY_ERROR, "signature verify failed");
+        PrintErrorNumberMsg(SignToolErrMsg::VERIFY_FAILED, "signature verify failed");
         return VERIFY_ERROR;
     }
 
@@ -182,7 +182,7 @@ int PKCS7Data::GetContent(std::string& originalRawData) const
 {
     BIO* oriBio = PKCS7_dataDecode(m_p7, NULL, NULL, NULL);
     if (oriBio == NULL) {
-        PrintErrorNumberMsg("INVALIDPARAM_ERROR", INVALIDPARAM_ERROR, "pkcs7 get content data failed!");
+        PrintErrorNumberMsg(SignToolErrMsg::CODE_SIGN_INTERNAL_ERROR, "pkcs7 get content data failed!");
         return INVALIDPARAM_ERROR;
     }
     char buf[BUFFER_SIZE]{0};
@@ -209,7 +209,7 @@ static int CreateAndPushAttribute(PKCS7_SIGNER_INFO* si, int nid, const std::str
     }
     if (sk_X509_ATTRIBUTE_push(si->unauth_attr, attr) != 1) {
         X509_ATTRIBUTE_free(attr);
-        PrintErrorNumberMsg("INVALIDPARAM_ERROR", INVALIDPARAM_ERROR, "push unauth_attr failed");
+        PrintErrorNumberMsg(SignToolErrMsg::CODE_SIGN_INTERNAL_ERROR, "push unauth_attr failed");
         return INVALIDPARAM_ERROR;
     }
     return RET_OK;
@@ -218,27 +218,27 @@ static int CreateAndPushAttribute(PKCS7_SIGNER_INFO* si, int nid, const std::str
 int PKCS7Data::AddUnauthenticatedAttribute(const std::string& oid, const std::string& data)
 {
     if (m_p7 == nullptr || !PKCS7_type_is_signed(m_p7) || m_p7->d.sign == nullptr) {
-        PrintErrorNumberMsg("INVALIDPARAM_ERROR", INVALIDPARAM_ERROR, "pkcs7 is invalid");
+        PrintErrorNumberMsg(SignToolErrMsg::CODE_SIGN_INTERNAL_ERROR, "pkcs7 is invalid");
         return INVALIDPARAM_ERROR;
     }
     int nid = OBJ_txt2nid(oid.c_str());
     if (nid == NID_undef) {
         nid = OBJ_create(oid.c_str(), "NotarizationTicket", "Notarization Ticket");
         if (nid == NID_undef) {
-            PrintErrorNumberMsg("INVALIDPARAM_ERROR", INVALIDPARAM_ERROR, "create OID failed");
+            PrintErrorNumberMsg(SignToolErrMsg::CODE_SIGN_INTERNAL_ERROR, "create OID failed");
             return INVALIDPARAM_ERROR;
         }
     }
     STACK_OF(PKCS7_SIGNER_INFO)* signerInfos = PKCS7_get_signer_info(m_p7);
     if (signerInfos == nullptr || sk_PKCS7_SIGNER_INFO_num(signerInfos) == 0) {
-        PrintErrorNumberMsg("INVALIDPARAM_ERROR", INVALIDPARAM_ERROR, "no signer info found");
+        PrintErrorNumberMsg(SignToolErrMsg::CODE_SIGN_INTERNAL_ERROR, "no signer info found");
         return INVALIDPARAM_ERROR;
     }
     PKCS7_SIGNER_INFO* si = sk_PKCS7_SIGNER_INFO_value(signerInfos, 0);
     if (si->unauth_attr == nullptr) {
         si->unauth_attr = sk_X509_ATTRIBUTE_new_null();
         if (si->unauth_attr == nullptr) {
-            PrintErrorNumberMsg("INVALIDPARAM_ERROR", INVALIDPARAM_ERROR, "create unauth_attr stack failed");
+            PrintErrorNumberMsg(SignToolErrMsg::CODE_SIGN_INTERNAL_ERROR, "create unauth_attr stack failed");
             return INVALIDPARAM_ERROR;
         }
     } else {
@@ -257,25 +257,25 @@ int PKCS7Data::AddUnauthenticatedAttribute(const std::string& oid, const std::st
 int PKCS7Data::GetUnauthenticatedAttribute(const std::string& oid, std::string& data) const
 {
     if (m_p7 == nullptr || !PKCS7_type_is_signed(m_p7) || m_p7->d.sign == nullptr) {
-        PrintErrorNumberMsg("INVALIDPARAM_ERROR", INVALIDPARAM_ERROR, "pkcs7 is invalid");
+        PrintErrorNumberMsg(SignToolErrMsg::CODE_SIGN_INTERNAL_ERROR, "pkcs7 is invalid");
         return INVALIDPARAM_ERROR;
     }
     int nid = OBJ_txt2nid(oid.c_str());
     if (nid == NID_undef) {
         nid = OBJ_create(oid.c_str(), "NotarizationTicket", "Notarization Ticket");
         if (nid == NID_undef) {
-            PrintErrorNumberMsg("INVALIDPARAM_ERROR", INVALIDPARAM_ERROR, "create OID failed");
+            PrintErrorNumberMsg(SignToolErrMsg::CODE_SIGN_INTERNAL_ERROR, "create OID failed");
             return INVALIDPARAM_ERROR;
         }
     }
     STACK_OF(PKCS7_SIGNER_INFO)* signerInfos = PKCS7_get_signer_info(m_p7);
     if (signerInfos == nullptr || sk_PKCS7_SIGNER_INFO_num(signerInfos) == 0) {
-        PrintErrorNumberMsg("INVALIDPARAM_ERROR", INVALIDPARAM_ERROR, "no signer info found");
+        PrintErrorNumberMsg(SignToolErrMsg::CODE_SIGN_INTERNAL_ERROR, "no signer info found");
         return INVALIDPARAM_ERROR;
     }
     PKCS7_SIGNER_INFO* si = sk_PKCS7_SIGNER_INFO_value(signerInfos, 0);
     if (si->unauth_attr == nullptr) {
-        PrintErrorNumberMsg("INVALIDPARAM_ERROR", INVALIDPARAM_ERROR, "no unauthenticatedAttributes found");
+        PrintErrorNumberMsg(SignToolErrMsg::CODE_SIGN_INTERNAL_ERROR, "no unauthenticatedAttributes found");
         return INVALIDPARAM_ERROR;
     }
     int attrCount = sk_X509_ATTRIBUTE_num(si->unauth_attr);
@@ -298,7 +298,7 @@ int PKCS7Data::GetUnauthenticatedAttribute(const std::string& oid, std::string& 
         data.assign(reinterpret_cast<const char*>(ASN1_STRING_get0_data(str)), ASN1_STRING_length(str));
         return RET_OK;
     }
-    PrintErrorNumberMsg("INVALIDPARAM_ERROR", INVALIDPARAM_ERROR, "attribute not found in unauth_attr");
+    PrintErrorNumberMsg(SignToolErrMsg::CODE_SIGN_INTERNAL_ERROR, "attribute not found in unauth_attr");
     return INVALIDPARAM_ERROR;
 }
 
@@ -345,13 +345,13 @@ int PKCS7Data::GetAuthenticatedAttributesSetDer(std::string& der) const
 int PKCS7Data::Encode(std::string& der) const
 {
     if (m_p7 == nullptr) {
-        PrintErrorNumberMsg("INVALIDPARAM_ERROR", INVALIDPARAM_ERROR, "pkcs7 is null");
+        PrintErrorNumberMsg(SignToolErrMsg::CODE_SIGN_INTERNAL_ERROR, "pkcs7 is null");
         return INVALIDPARAM_ERROR;
     }
     unsigned char* outDer = nullptr;
     int outLen = i2d_PKCS7(m_p7, &outDer);
     if (outDer == nullptr || outLen <= 0) {
-        PrintErrorNumberMsg("INVALIDPARAM_ERROR", INVALIDPARAM_ERROR, "encode pkcs7 failed");
+        PrintErrorNumberMsg(SignToolErrMsg::CODE_SIGN_INTERNAL_ERROR, "encode pkcs7 failed");
         return INVALIDPARAM_ERROR;
     }
     der.assign(reinterpret_cast<const char*>(outDer), outLen);
@@ -381,14 +381,14 @@ int PKCS7Data::InitPkcs7(const std::string& content, const std::shared_ptr<Signe
     X509* cert = NULL;
     int result = RET_OK;
     if (signer == NULL) {
-        PrintErrorNumberMsg("INVALIDPARAM_ERROR", INVALIDPARAM_ERROR, "signer is NULL , sign failed");
+        PrintErrorNumberMsg(SignToolErrMsg::CODE_SIGN_INTERNAL_ERROR, "signer is NULL , sign failed");
         return INVALIDPARAM_ERROR;
     }
     m_signer = signer;
     m_sigAlg = sigAlg;
     STACK_OF(X509)* certs = signer->GetCertificates();
     if (certs == nullptr) {
-        PrintErrorNumberMsg("CERTIFICATE_ERROR", CERTIFICATE_ERROR, "certs is NULL, sign failed.");
+        PrintErrorNumberMsg(SignToolErrMsg::CERTIFICATE_ERROR, "certs is NULL, sign failed.");
         return CERTIFICATE_ERROR;
     }
 
@@ -397,7 +397,7 @@ int PKCS7Data::InitPkcs7(const std::string& content, const std::shared_ptr<Signe
     } else if (sigAlg == SIGN_ALG_SHA256) {
         md = EVP_sha256();
     } else {
-        PrintErrorNumberMsg("INVALIDPARAM_ERROR", INVALIDPARAM_ERROR,
+        PrintErrorNumberMsg(SignToolErrMsg::CODE_SIGN_INTERNAL_ERROR,
                             sigAlg + "is invalid sigAlg, please use SHA256withECDSA/SHA384withECDSA, sign failed");
         result = INVALIDPARAM_ERROR;
         goto err;
@@ -406,7 +406,7 @@ int PKCS7Data::InitPkcs7(const std::string& content, const std::shared_ptr<Signe
     cert = sk_X509_delete(certs, 0);
     m_p7 = Pkcs7Sign(cert, certs, md, content, m_flags, attrs);
     if (m_p7 == NULL) {
-        PrintErrorNumberMsg("INVALIDPARAM_ERROR", SIGN_ERROR, "p7 is NULL, pkcs7 sign failed");
+        PrintErrorNumberMsg(SignToolErrMsg::CODE_SIGN_INTERNAL_ERROR, "p7 is NULL, pkcs7 sign failed");
         result = SIGN_ERROR;
         goto err;
     }
@@ -463,14 +463,14 @@ std::string PKCS7Data::GetASN1Time(const ASN1_TIME* tm)
 bool PKCS7Data::X509NameCompare(const X509* cert, const X509* issuerCert)
 {
     if (cert == nullptr || issuerCert == nullptr) {
-        PrintErrorNumberMsg("VERIFY_ERROR", VERIFY_ERROR,
+        PrintErrorNumberMsg(SignToolErrMsg::VERIFY_FAILED,
                             "input cert is NULL");
         return false;
     }
     X509_NAME* aName = X509_get_issuer_name(cert);
     X509_NAME* bName = X509_get_subject_name(issuerCert);
     if (X509_NAME_cmp(aName, bName) != 0) {
-        PrintErrorNumberMsg("VERIFY_ERROR", VERIFY_ERROR,
+        PrintErrorNumberMsg(SignToolErrMsg::VERIFY_FAILED,
                             "cert issuer name is not equal to its issuer\'s  name");
         return false;
     }
@@ -481,26 +481,26 @@ int PKCS7Data::CheckSignTimeInValidPeriod(const ASN1_TYPE* signTime,
                                           const ASN1_TIME* notBefore, const ASN1_TIME* notAfter)
 {
     if (notBefore == nullptr || notBefore->data == nullptr || notAfter == nullptr || notAfter->data == nullptr) {
-        PrintErrorNumberMsg("INVALIDPARAM_ERROR", INVALIDPARAM_ERROR,
+        PrintErrorNumberMsg(SignToolErrMsg::CODE_SIGN_INTERNAL_ERROR,
                             "invalid period, check signtime failed please use valid period to to check signtime");
         return INVALIDPARAM_ERROR;
     }
     if (signTime == nullptr || signTime->value.asn1_string == nullptr ||
         signTime->value.asn1_string->data == nullptr) {
-        PrintErrorNumberMsg("INVALIDPARAM_ERROR", INVALIDPARAM_ERROR, "signtime is NULL");
+        PrintErrorNumberMsg(SignToolErrMsg::CODE_SIGN_INTERNAL_ERROR, "signtime is NULL");
         return INVALIDPARAM_ERROR;
     }
     ASN1_TIME* tm = ASN1_TIME_new();
     ASN1_TIME_set_string(tm, (reinterpret_cast<const char*>(signTime->value.asn1_string->data)));
     if (ASN1_TIME_compare(notBefore, signTime->value.asn1_string) > 0) {
-        PrintErrorNumberMsg("VERIFY_ERROR", VERIFY_ERROR,
+        PrintErrorNumberMsg(SignToolErrMsg::VERIFY_FAILED,
             "The system time of the device running sign tool is inaccurate! The signTime is " + GetASN1Time(tm) +
             " and earlier than notBefore which is " + GetASN1Time(notBefore));
         ASN1_TIME_free(tm);
         return VERIFY_ERROR;
     }
     if (ASN1_TIME_compare(notAfter, signTime->value.asn1_string) < 0) {
-        PrintErrorNumberMsg("VERIFY_ERROR", VERIFY_ERROR,
+        PrintErrorNumberMsg(SignToolErrMsg::VERIFY_FAILED,
             "The certificate has expired! NotAfter: " + GetASN1Time(notAfter));
         ASN1_TIME_free(tm);
         return VERIFY_ERROR;
@@ -532,14 +532,14 @@ int PKCS7Data::SortX509Stack(STACK_OF(X509)* certs)
     int result = RET_FAILED;
 
     if (sk_X509_num(certs) < MIN_CERTS_NUM) {
-        PrintErrorNumberMsg("CERTIFICATE_ERROR", CERTIFICATE_ERROR, "cert of certchain count less than two!");
+        PrintErrorNumberMsg(SignToolErrMsg::CERT_CHAIN_FORMAT_FAILED, "cert of certchain count less than two!");
         goto err;
     }
     for (int i = 0; i < sk_X509_num(certs); i++) {
         x509Sets.insert(sk_X509_value(certs, i));
     }
     if (sk_X509_num(certs) != static_cast<int>(x509Sets.size())) {
-        PrintErrorNumberMsg("CERTIFICATE_ERROR", CERTIFICATE_ERROR, "sort x509 certchain failed!");
+        PrintErrorNumberMsg(SignToolErrMsg::CERT_CHAIN_FORMAT_FAILED, "sort x509 certchain failed!");
         goto err;
     }
     for (X509* cert : x509Sets) {
@@ -550,7 +550,7 @@ int PKCS7Data::SortX509Stack(STACK_OF(X509)* certs)
         }
     }
     if (tmp == NULL) {
-        PrintErrorNumberMsg("CERTIFICATE_ERROR", CERTIFICATE_ERROR,
+        PrintErrorNumberMsg(SignToolErrMsg::CERT_CHAIN_FORMAT_FAILED,
                             "can't find root cert from certchain ,sort x509 certchain failed!");
         goto err;
     }
@@ -559,7 +559,7 @@ int PKCS7Data::SortX509Stack(STACK_OF(X509)* certs)
         certChain.push_front(tmp);
     }
     if (x509Sets.size() != 0) {
-        PrintErrorNumberMsg("CERTIFICATE_ERROR", CERTIFICATE_ERROR,
+        PrintErrorNumberMsg(SignToolErrMsg::CERT_CHAIN_FORMAT_FAILED,
                             "certchain contain invalid cert, sort x509 certchain failed!");
         goto err;
     }
@@ -581,13 +581,13 @@ int PKCS7Data::VerifySign(const std::string& content)const
         inBio = BIO_new_mem_buf(reinterpret_cast<const void*>(content.c_str()),
                                 static_cast<int>(content.size()));
         if (inBio == NULL) {
-            PrintErrorNumberMsg("VERIFY_ERROR", VERIFY_ERROR,
+            PrintErrorNumberMsg(SignToolErrMsg::VERIFY_FAILED,
                                 "new mem buf error!,pkcs7 verify signature failed");
             return VERIFY_ERROR;
         }
     }
     if (PKCS7_verify(m_p7, NULL, NULL, inBio, NULL, m_flags) != 1) {
-        PrintErrorNumberMsg("VERIFY_ERROR", VERIFY_ERROR, "pkcs7 verify signature failed");
+        PrintErrorNumberMsg(SignToolErrMsg::VERIFY_FAILED, "pkcs7 verify signature failed");
         BIO_free(inBio);
         return VERIFY_ERROR;
     }
@@ -618,7 +618,7 @@ int PKCS7Data::CheckSignerInfoSignTimeInCertChainValidPeriod(PKCS7_SIGNER_INFO* 
                                                              const std::vector<X509*>& certs) const
 {
     if (signerInfo == NULL) {
-        PrintErrorNumberMsg("INVALIDPARAM_ERROR", INVALIDPARAM_ERROR, "input is NULL, check signtime invalid");
+        PrintErrorNumberMsg(SignToolErrMsg::CODE_SIGN_INTERNAL_ERROR, "input is NULL, check signtime invalid");
         return INVALIDPARAM_ERROR;
     }
     ASN1_TYPE* signTime = PKCS7_get_signed_attribute(signerInfo, NID_pkcs9_signingTime);
@@ -639,7 +639,7 @@ int PKCS7Data::VerifySignerInfoCertChain(PKCS7* pkcs7, PKCS7_SIGNER_INFO* signer
 {
     X509* sigCert = PKCS7_cert_from_signer_info(pkcs7, signerInfo);
     if (sigCert == nullptr) {
-        PrintErrorNumberMsg("VERIFY_ERROR", VERIFY_ERROR, "Get sign cert from signInfo failed");
+        PrintErrorNumberMsg(SignToolErrMsg::VERIFY_FAILED, "Get sign cert from signInfo failed");
         return VERIFY_ERROR;
     }
 
@@ -648,12 +648,12 @@ int PKCS7Data::VerifySignerInfoCertChain(PKCS7* pkcs7, PKCS7_SIGNER_INFO* signer
     std::vector<X509*> certChain;
     certChain.emplace_back(X509_dup(sigCert));
     if (!VerifyCertOpensslUtils::GetCertsChain(certChain, certVisitFlag)) {
-        PrintErrorNumberMsg("VERIFY_ERROR", VERIFY_ERROR, "Get cert chain for signInfo failed");
+        PrintErrorNumberMsg(SignToolErrMsg::VERIFY_FAILED, "Get cert chain for signInfo failed");
         ClearCertChain(certChain);
         return VERIFY_ERROR;
     }
     if (certChain.size() < MIN_CERTS_NUM) {
-        PrintErrorNumberMsg("VERIFY_ERROR", VERIFY_ERROR, "GetCertsChain less than two!");
+        PrintErrorNumberMsg(SignToolErrMsg::VERIFY_FAILED, "GetCertsChain less than two!");
         ClearCertChain(certChain);
         return VERIFY_ERROR;
     }

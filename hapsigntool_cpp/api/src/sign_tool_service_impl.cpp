@@ -152,7 +152,7 @@ int SignToolServiceImpl::HandleIssuerKeyAliasEmpty(Options* options)
 {
     std::string iksFile = options->GetString(Options::ISSUER_KEY_STORE_FILE);
     if (!FileUtils::IsEmpty(iksFile) && !options->Equals(Options::KEY_STORE_FILE, Options::ISSUER_KEY_STORE_FILE)) {
-        PrintErrorNumberMsg("COMMAND_PARAM_ERROR", COMMAND_PARAM_ERROR,
+        PrintErrorNumberMsg(SignToolErrMsg::GENERATE_CA_FAILED,
                             "Parameter '" + iksFile + "' and parameter '" +
                             options->GetString(Options::KEY_STORE_FILE) + "' are inconsistent");
         return RET_FAILED;
@@ -173,7 +173,7 @@ int SignToolServiceImpl::HandleIssuerKeyAliasEmpty(Options* options)
     }
     return RET_OK;
 err:
-    PrintErrorNumberMsg("COMMAND_PARAM_ERROR", COMMAND_PARAM_ERROR,
+    PrintErrorNumberMsg(SignToolErrMsg::GENERATE_CA_FAILED,
                         "Parameter 'keystorePwd' and parameter 'issuerKeystorePwd' are inconsistent");
     return RET_FAILED;
 }
@@ -195,7 +195,7 @@ bool SignToolServiceImpl::OutputModeOfCert(X509* cert, Options* options)
     std::string outFile = options->GetString(Options::OUT_FILE);
     if (!outFile.empty()) {
         if (!CertTools::SaveCertTofile(outFile, cert)) {
-            PrintErrorNumberMsg("WRITE_FILE_ERROR", IO_ERROR, "failed to save cert to file");
+            PrintErrorNumberMsg(SignToolErrMsg::FILE_WRITE_FAILED, "failed to save cert to file");
             return false;
         }
     } else {
@@ -260,7 +260,7 @@ bool SignToolServiceImpl::GenerateKeyStore(Options* options)
     int status = adaptePtr->IsAliasExist(keyAlias);
     if (status == RET_OK) {
         adaptePtr->ResetPwd();
-        PrintErrorNumberMsg("KEY_ALIAS_ERROR", KEY_ALIAS_ERROR, "'" + keyAlias
+        PrintErrorNumberMsg(SignToolErrMsg::KEY_ALIAS_EXIST, "'" + keyAlias
                             + "' key alias already exists and cannot be generated repeatedly");
         return false;
     }
@@ -295,15 +295,13 @@ bool SignToolServiceImpl::GenerateCsr(Options* options)
     std::string signAlg = options->GetString(Options::SIGN_ALG);
     std::string subject = options->GetString(Options::SUBJECT);
     if (signAlg.empty()) {
-        PrintErrorNumberMsg("INVALIDPARAM_ERROR",
-                            INVALIDPARAM_ERROR,
+        PrintErrorNumberMsg(SignToolErrMsg::PARAM_VALUE_EMPTY,
                             "Please check if signalg has been specified which is required.");
         EVP_PKEY_free(keyPair);
         return false;
     }
     if (subject.empty()) {
-        PrintErrorNumberMsg("INVALIDPARAM_ERROR",
-                            INVALIDPARAM_ERROR,
+        PrintErrorNumberMsg(SignToolErrMsg::PARAM_VALUE_EMPTY,
                             "Please check if subject has been specified which is required.");
         EVP_PKEY_free(keyPair);
         return false;
@@ -318,7 +316,7 @@ bool SignToolServiceImpl::GenerateCsr(Options* options)
     EVP_PKEY_free(keyPair);
     X509_REQ_free(csr);
     if (csrStr.size() == 0) {
-        PrintErrorNumberMsg("PARSE_ERROR", PARSE_ERROR,
+        PrintErrorNumberMsg(SignToolErrMsg::IO_CSR_ERROR,
                             "failed to transform csr to string!");
         return false;
     }
@@ -334,7 +332,7 @@ bool SignToolServiceImpl::OutputString(std::string content, std::string file)
     }
     std::ofstream outFile(file.c_str());
     if (!outFile.is_open()) {
-        PrintErrorNumberMsg("IO_ERROR", IO_ERROR,
+        PrintErrorNumberMsg(SignToolErrMsg::FILE_WRITE_FAILED,
                             "failed to open the outFile " + file + " !");
         return false;
     }
@@ -346,7 +344,7 @@ bool SignToolServiceImpl::OutputString(std::string content, std::string file)
 bool SignToolServiceImpl::X509CertVerify(X509* cert, EVP_PKEY* privateKey)
 {
     if (!X509_verify(cert, privateKey)) {
-        PrintErrorNumberMsg("VERIFY_ERROR", VERIFY_ERROR, "Verify certificate failed!");
+        PrintErrorNumberMsg(SignToolErrMsg::VERIFY_FAILED, "Verify certificate failed!");
         return false;
     }
     return true;
@@ -392,7 +390,7 @@ bool SignToolServiceImpl::GenerateAppCert(Options* options)
                                                     APP_SIGNING_CAPABILITY,
                                                     sizeof(APP_SIGNING_CAPABILITY)); // get app x509 cert
     if (!x509CertificatePtr) {
-        PrintErrorNumberMsg("CERTIFICATE_ERROR", CERTIFICATE_ERROR, "generate app cert failed");
+        PrintErrorNumberMsg(SignToolErrMsg::CERTIFICATE_ERROR, "generate app cert failed");
         goto err;
     }
     if (!X509CertVerify(x509CertificatePtr, issuerKeyPairPtr)) {
@@ -437,7 +435,7 @@ bool SignToolServiceImpl::GenerateProfileCert(Options* options)
                                                  PROFILE_SIGNING_CAPABILITY,
                                                  sizeof(PROFILE_SIGNING_CAPABILITY)); // get profile x509 cert
     if (!x509Certificate) {
-        PrintErrorNumberMsg("CERTIFICATE_ERROR", CERTIFICATE_ERROR, "generate profile cert failed");
+        PrintErrorNumberMsg(SignToolErrMsg::CERTIFICATE_ERROR, "generate profile cert failed");
         goto err;
     }
     if (!X509CertVerify(x509Certificate, issuerKeyPair)) {
@@ -634,11 +632,13 @@ int SignToolServiceImpl::GetProvisionContent(const std::string& input, std::stri
     }
     cJSON* root = cJSON_ParseWithOpts(bytes.c_str(), nullptr, 1);
     if (root == nullptr) {
-        PrintErrorNumberMsg("PARSE ERROR", PARSE_ERROR, "Failed to parse appProvision, JSON is invalid or empty!");
+        PrintErrorNumberMsg(SignToolErrMsg::VERIFY_PROFILE_FAILED,
+                            "Failed to parse appProvision, JSON is invalid or empty!");
         return PARSE_ERROR;
     }
     if (!(cJSON_IsObject(root) || cJSON_IsArray(root))) {
-        PrintErrorNumberMsg("PARSE ERROR", PARSE_ERROR, "appProvision must be a JSON object or array!");
+        PrintErrorNumberMsg(SignToolErrMsg::VERIFY_PROFILE_FAILED,
+                            "appProvision must be a JSON object or array!");
         cJSON_Delete(root);
         return PARSE_ERROR;
     }
@@ -673,7 +673,7 @@ bool SignToolServiceImpl::PrintX509CertFromMemory(X509* cert)
         PrintMsg(std::string(bptr->data, bptr->length));
     } else {
         VerifyHapOpensslUtils::GetOpensslErrorMessage();
-        PrintErrorNumberMsg("IO_ERROR", IO_ERROR, "print x509 cert falied");
+        PrintErrorNumberMsg(SignToolErrMsg::CERT_IO_FAILED, "print x509 cert falied");
         BIO_free(bio);
         return false;
     }
@@ -695,7 +695,7 @@ bool SignToolServiceImpl::PrintX509CertChainFromMemory(std::vector<X509*> certs)
             PrintMsg(std::string(bptr->data, bptr->length));
         } else {
             VerifyHapOpensslUtils::GetOpensslErrorMessage();
-            PrintErrorNumberMsg("IO_ERROR", IO_ERROR, "print x509 cert chain falied");
+            PrintErrorNumberMsg(SignToolErrMsg::CERT_IO_FAILED, "print x509 cert chain falied");
             BIO_free(bio);
             return false;
         }
@@ -733,7 +733,7 @@ bool SignToolServiceImpl::VerifyHapSigner(Options* option)
         PrintMsg("bin verify successed!");
         return true;
     } else {
-        PrintErrorNumberMsg("NOT_SUPPORT_ERROR", NOT_SUPPORT_ERROR, "Unsupported inForm!");
+        PrintErrorNumberMsg(SignToolErrMsg::UNSUPPORTED_METHOD, "Unsupported inForm!");
         return false;
     }
 }

@@ -129,7 +129,7 @@ bool HapUtils::ReadFileToByteBuffer(const std::string& file, ByteBuffer& buffer)
 {
     std::string ret;
     if (FileUtils::ReadFile(file, ret) < 0) {
-        PrintErrorNumberMsg("IO_ERROR", IO_ERROR, file + " not exist or can not read!");
+        PrintErrorNumberMsg(SignToolErrMsg::FILE_READ_FAILED, file + " not exist or can not read!");
         return false;
     }
     buffer.SetCapacity(static_cast<int32_t>(ret.size()));
@@ -194,7 +194,7 @@ bool HapUtils::ParseHnpPackages(const std::string& moduleContent,
 {
     cJSON* root = cJSON_Parse(moduleContent.c_str());
     if (root == nullptr) {
-        PrintErrorNumberMsg("PARSE_ERROR", PARSE_ERROR, "parse module.json failed.");
+        PrintErrorNumberMsg(SignToolErrMsg::MODULE_JSON_PARSE_ERROR, "parse module.json failed.");
         return false;
     }
     cJSON* moduleObj = cJSON_GetObjectItemCaseSensitive(root, "module");
@@ -231,7 +231,7 @@ bool HapUtils::GetHnpsFromJson(const std::string& hapFile,
 {
     unzFile zFile = unzOpen(hapFile.c_str());
     if (zFile == nullptr) {
-        PrintErrorNumberMsg("IO_ERROR", IO_ERROR, "open hap file: " + hapFile + " failed.");
+        PrintErrorNumberMsg(SignToolErrMsg::FILE_READ_FAILED, "open hap file: " + hapFile + " failed.");
         return false;
     }
     if (unzLocateFile(zFile, MODULE_JSON_FILE.c_str(), 0) != UNZ_OK) {
@@ -239,7 +239,7 @@ bool HapUtils::GetHnpsFromJson(const std::string& hapFile,
         return true;
     }
     if (unzOpenCurrentFile(zFile) != UNZ_OK) {
-        PrintErrorNumberMsg("IO_ERROR", IO_ERROR, "open module.json in hap failed.");
+        PrintErrorNumberMsg(SignToolErrMsg::FILE_READ_FAILED, "open module.json in hap failed.");
         unzClose(zFile);
         return false;
     }

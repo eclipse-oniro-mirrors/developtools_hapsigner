@@ -91,7 +91,7 @@ std::string PageInfoExtension::ToString() const
 PageInfoExtension* PageInfoExtension::FromByteArray(std::vector<int8_t>& data)
 {
     if (data.size() < PAGE_INFO_EXTENSION_DATA_SIZE_WITHOUT_SIGN) {
-        PrintErrorNumberMsg("VERIFY_ERROR", VERIFY_ERROR, "The page info extension data is too short.");
+        PrintErrorNumberMsg(SignToolErrMsg::VERIFY_FAILED, "The page info extension data is too short.");
         return nullptr;
     }
     std::unique_ptr<ByteBuffer> bf = std::make_unique<ByteBuffer>(ByteBuffer(data.size()));

@@ -68,7 +68,7 @@ void SegmentHeader::ToByteArray(std::vector<int8_t> &ret)
 std::unique_ptr<SegmentHeader> SegmentHeader::FromByteArray(std::vector<int8_t> bytes)
 {
     if (bytes.size() != SEGMENT_HEADER_LENGTH) {
-        PrintErrorNumberMsg("VERIFY_ERROR", VERIFY_ERROR, "The flag of SegmentHeader is incorrect.");
+        PrintErrorNumberMsg(SignToolErrMsg::VERIFY_FAILED, "The flag of SegmentHeader is incorrect.");
         return std::unique_ptr<SegmentHeader>();
     }
     std::unique_ptr<ByteBuffer> bf = std::make_unique<ByteBuffer>(ByteBuffer(SEGMENT_HEADER_LENGTH));
@@ -78,7 +78,7 @@ std::unique_ptr<SegmentHeader> SegmentHeader::FromByteArray(std::vector<int8_t> 
     bf->GetInt32(inType);
     if ((inType != CSB_FSVERITY_INFO_SEG) && (inType != CSB_HAP_META_SEG)
         && (inType != CSB_NATIVE_LIB_INFO_SEG)) {
-        PrintErrorNumberMsg("VERIFY_ERROR", VERIFY_ERROR, "The type of SegmentHeader is incorrect.");
+        PrintErrorNumberMsg(SignToolErrMsg::VERIFY_FAILED, "The type of SegmentHeader is incorrect.");
         return std::unique_ptr<SegmentHeader>();
     }
     int32_t inSegmentOffset = 0;
@@ -87,7 +87,7 @@ std::unique_ptr<SegmentHeader> SegmentHeader::FromByteArray(std::vector<int8_t> 
     int32_t inSegmentSize = 0;
     bf->GetInt32(inSegmentSize);
     if (inSegmentSize < 0) {
-        PrintErrorNumberMsg("VERIFY_ERROR", VERIFY_ERROR,
+        PrintErrorNumberMsg(SignToolErrMsg::VERIFY_FAILED,
                             "The segment size of SegmentHeader is incorrect.");
         return std::unique_ptr<SegmentHeader>();
     }

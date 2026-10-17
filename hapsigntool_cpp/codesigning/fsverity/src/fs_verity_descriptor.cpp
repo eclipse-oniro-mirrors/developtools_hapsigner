@@ -30,7 +30,7 @@ FsVerityDescriptor FsVerityDescriptor::FromByteArray(std::vector<int8_t>& bytes)
     int8_t inFsVersion;
     bf->GetInt8(inFsVersion);
     if (FsVerityDescriptor::VERSION != inFsVersion) {
-        PrintErrorNumberMsg("VERIFY_ERROR", VERIFY_ERROR,
+        PrintErrorNumberMsg(SignToolErrMsg::VERIFY_FAILED,
                             "The FS descriptor version of FsVerityDescriptor is incorrect");
         return builder->Build();
     }
@@ -58,7 +58,7 @@ FsVerityDescriptor FsVerityDescriptor::FromByteArray(std::vector<int8_t>& bytes)
     int64_t inTreeOffset;
     bf->GetInt64(inTreeOffset);
     if (inTreeOffset % PAGE_SIZE_4K != 0) {
-        PrintErrorNumberMsg("VERIFY_ERROR", VERIFY_ERROR,
+        PrintErrorNumberMsg(SignToolErrMsg::PAGE_INFO_ERROR,
                             "The offset of merkle tree of FsVerityDescriptor is incorrect");
         return builder->Build();
     }
@@ -77,7 +77,7 @@ void FsVerityDescriptor::ToByteArray(std::vector<int8_t> &ret)
     buffer->PutByte(hashAlgorithm);
     buffer->PutByte(log2BlockSize);
     if (saltSize > SALT_SIZE) {
-        PrintErrorNumberMsg("SIGN_ERROR", SIGN_ERROR, "Salt is too long");
+        PrintErrorNumberMsg(SignToolErrMsg::CODE_SIGN_INTERNAL_ERROR, "Salt is too long");
         ret = std::vector<int8_t>();
         return;
     }
@@ -106,7 +106,7 @@ void FsVerityDescriptor::GetByteForGenerateDigest(std::vector<int8_t> &ret)
     buffer->PutByte(hashAlgorithm);
     buffer->PutByte(log2BlockSize);
     if (saltSize > SALT_SIZE) {
-        PrintErrorNumberMsg("SIGN_ERROR", SIGN_ERROR, "Salt is too long");
+        PrintErrorNumberMsg(SignToolErrMsg::CODE_SIGN_INTERNAL_ERROR, "Salt is too long");
         ret = std::vector<int8_t>();
         return;
     }
@@ -134,7 +134,7 @@ void FsVerityDescriptor::GetByteForGenerateDigestCsv2(int64_t mapOffset, int64_t
     buffer->PutByte(hashAlgorithm);
     buffer->PutByte(log2BlockSize);
     if (saltSize > SALT_SIZE) {
-        PrintErrorNumberMsg("SIGN_ERROR", SIGN_ERROR, "Salt is too long");
+        PrintErrorNumberMsg(SignToolErrMsg::CODE_SIGN_INTERNAL_ERROR, "Salt is too long");
         ret = std::vector<int8_t>();
         return;
     }

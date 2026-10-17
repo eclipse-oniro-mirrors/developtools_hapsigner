@@ -77,14 +77,14 @@ MerkleTreeExtension* MerkleTreeExtension::FromByteArray(std::vector<int8_t>& byt
     int64_t inMerkleTreeSize = 0;
     bool flag = bf->GetInt64(inMerkleTreeSize);
     if (!flag || (inMerkleTreeSize % PAGE_SIZE_4K != 0)) {
-        PrintErrorNumberMsg("VERIFY_ERROR", VERIFY_ERROR,
+        PrintErrorNumberMsg(SignToolErrMsg::PAGE_INFO_ERROR,
                             "The merkletree size must be an integer multiple of 4096");
         return nullptr;
     }
     int64_t inMerkleTreeOffset = 0;
     flag = bf->GetInt64(inMerkleTreeOffset);
     if (!flag || (inMerkleTreeOffset % PAGE_SIZE_4K != 0)) {
-        PrintErrorNumberMsg("VERIFY_ERROR", VERIFY_ERROR,
+        PrintErrorNumberMsg(SignToolErrMsg::PAGE_INFO_ERROR,
                             "The merkletree offset must be an integer multiple of 4096");
         return nullptr;
     }
