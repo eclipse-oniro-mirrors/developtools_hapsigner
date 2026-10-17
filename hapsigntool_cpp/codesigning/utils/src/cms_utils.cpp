@@ -66,13 +66,13 @@ bool CmsUtils::CheckOwnerID(const std::string& signature, const std::string& pro
             if (ownerID.empty()) {
                 continue;
             } else {
-                PrintErrorNumberMsg(SignToolErrMsg::VERIFY_FAILED,"app-identifier is not in the signature");
+                PrintErrorNumberMsg(SignToolErrMsg::VERIFY_FAILED, "app-identifier is not in the signature");
                 PKCS7_free(p7);
                 return false;
             }
         }
         if (ownerID.empty()) {
-            PrintErrorNumberMsg(SignToolErrMsg::VERIFY_FAILED,"app-identifier in profile is null,in signature exist");
+            PrintErrorNumberMsg(SignToolErrMsg::VERIFY_FAILED, "app-identifier in profile is null,in signature exist");
             PKCS7_free(p7);
             return false;
         }
@@ -82,7 +82,7 @@ bool CmsUtils::CheckOwnerID(const std::string& signature, const std::string& pro
             result_ownerID.assign(reinterpret_cast<const char*>(ASN1_STRING_get0_data(result)),
                 ASN1_STRING_length(result));
             if (ownerID != result_ownerID) {
-                PrintErrorNumberMsg(SignToolErrMsg::VERIFY_FAILED,"app-identifier in signature is invalid");
+                PrintErrorNumberMsg(SignToolErrMsg::VERIFY_FAILED, "app-identifier in signature is invalid");
                 PKCS7_free(p7);
                 return false;
             }

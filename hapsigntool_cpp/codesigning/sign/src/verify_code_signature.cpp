@@ -189,7 +189,7 @@ bool VerifyCodeSignature::VerifyHnpLibData(unzFile hnpZip, const std::string& li
     unzCloseCurrentFile(hnpZip);
     PrintMsg("verify lib: " + libPath);
     if (totalRead != signInfo.GetDataSize()) {
-        PrintErrorNumberMsg(SignToolErrMsg::FILE_4K_ALIGNMENT_ERROR,"Invalid dataSize of native lib");
+        PrintErrorNumberMsg(SignToolErrMsg::FILE_4K_ALIGNMENT_ERROR, "Invalid dataSize of native lib");
         return false;
     }
     std::vector<int8_t> entrySig = signInfo.GetSignature();
@@ -401,7 +401,7 @@ bool VerifyCodeSignature::VerifySingleFile(std::istream& input, int64_t length,
     // For native libs, inMerkleTreeBytes is null, skip check here
     bool verifyFlag = (!inMerkleTreeBytes.empty()) && !AreVectorsEqual(inMerkleTreeBytes, generatedMerkleTreeBytes);
     if (verifyFlag) {
-        PrintErrorNumberMsg(SignToolErrMsg::VERIFY_FAILED,"verify merkle tree bytes failed");
+        PrintErrorNumberMsg(SignToolErrMsg::VERIFY_FAILED, "verify merkle tree bytes failed");
         return false;
     }
     if (!CmsUtils::VerifySignDataWithUnsignedDataDigest(fsVerityGenerator->GetFsVerityDigest(), signature)) {
@@ -468,7 +468,7 @@ bool VerifyCodeSignature::ParseSegmentHead(CodeSignBlock& csb, std::ifstream& si
 {
     for (auto& segmentHeader : csb.GetSegmentHeaderList()) {
         if (fileReadOffset > segmentHeader.GetSegmentOffset()) {
-            PrintErrorNumberMsg(SignToolErrMsg::VERIFY_FAILED,"Invaild offset of merkle tree and segment header");
+            PrintErrorNumberMsg(SignToolErrMsg::VERIFY_FAILED, "Invaild offset of merkle tree and segment header");
             return false;
         }
         // get merkle tree bytes
@@ -529,7 +529,7 @@ bool VerifyCodeSignature::ParseMerkleTree(CodeSignBlock& csb, int32_t readOffset
         bool merkleTreeFlag = computedTreeOffset != mte->GetMerkleTreeOffset() ||
             merkleTreeBytes.size() != mte->GetMerkleTreeSize();
         if (merkleTreeFlag) {
-            PrintErrorNumberMsg(SignToolErrMsg::VERIFY_FAILED,"Invalid merkle tree offset or tree size");
+            PrintErrorNumberMsg(SignToolErrMsg::VERIFY_FAILED, "Invalid merkle tree offset or tree size");
             return false;
         }
         csb.AddOneMerkleTree(CodeSigning::HAP_SIGNATURE_ENTRY_NAME, merkleTreeBytes);
