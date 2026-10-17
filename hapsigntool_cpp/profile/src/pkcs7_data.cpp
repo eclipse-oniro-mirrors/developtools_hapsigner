@@ -30,7 +30,7 @@ static int PKCS7AddAttribute(PKCS7* p7, const std::vector<PKCS7Attr>& attrs)
 {
     STACK_OF(PKCS7_SIGNER_INFO)* signerInfos = PKCS7_get_signer_info(p7);
     if (signerInfos == NULL || sk_PKCS7_SIGNER_INFO_num(signerInfos) != 1) {
-        PrintErrorNumberMsg(SignToolErrMsg::SIGNATURE_FAILED,
+        PrintErrorNumberMsg(SignToolErrMsg::CODE_SIGN_INTERNAL_ERROR,
                             "signer info count not equal 1,pkcs7 add customize attribute failed");
         return INVALIDPARAM_ERROR;
     }
@@ -39,7 +39,7 @@ static int PKCS7AddAttribute(PKCS7* p7, const std::vector<PKCS7Attr>& attrs)
         if (PKCS7_add_signed_attribute(signerInfo, attr.nid, attr.atrtype, attr.value) != 1) {
             if (attr.atrtype == V_ASN1_UTF8STRING)
                 ASN1_STRING_free(reinterpret_cast<ASN1_STRING*>(attr.value));
-            PrintErrorNumberMsg(SignToolErrMsg::SIGNATURE_FAILED,
+            PrintErrorNumberMsg(SignToolErrMsg::CODE_SIGN_INTERNAL_ERROR,
                                 "pkcs7 add customize attribute failed");
             return RET_FAILED;
         }
@@ -55,7 +55,7 @@ static int I2dPkcs7Str(PKCS7* p7, std::string& ret)
     /* Deserialize to obtain the p7b byte stream */
     outSize = i2d_PKCS7(p7, &out);
     if (out == NULL || outSize <= 0) {
-        PrintErrorNumberMsg(SignToolErrMsg::SIGNATURE_FAILED,
+        PrintErrorNumberMsg(SignToolErrMsg::CODE_SIGN_INTERNAL_ERROR,
                             "pkcs7 is invalid");
         return INVALIDPARAM_ERROR;
     }
@@ -182,7 +182,7 @@ int PKCS7Data::GetContent(std::string& originalRawData) const
 {
     BIO* oriBio = PKCS7_dataDecode(m_p7, NULL, NULL, NULL);
     if (oriBio == NULL) {
-        PrintErrorNumberMsg(SignToolErrMsg::SIGNATURE_FAILED, "pkcs7 get content data failed!");
+        PrintErrorNumberMsg(SignToolErrMsg::CODE_SIGN_INTERNAL_ERROR, "pkcs7 get content data failed!");
         return INVALIDPARAM_ERROR;
     }
     char buf[BUFFER_SIZE]{0};
@@ -209,7 +209,7 @@ static int CreateAndPushAttribute(PKCS7_SIGNER_INFO* si, int nid, const std::str
     }
     if (sk_X509_ATTRIBUTE_push(si->unauth_attr, attr) != 1) {
         X509_ATTRIBUTE_free(attr);
-        PrintErrorNumberMsg(SignToolErrMsg::SIGNATURE_FAILED, "push unauth_attr failed");
+        PrintErrorNumberMsg(SignToolErrMsg::CODE_SIGN_INTERNAL_ERROR, "push unauth_attr failed");
         return INVALIDPARAM_ERROR;
     }
     return RET_OK;
@@ -218,27 +218,27 @@ static int CreateAndPushAttribute(PKCS7_SIGNER_INFO* si, int nid, const std::str
 int PKCS7Data::AddUnauthenticatedAttribute(const std::string& oid, const std::string& data)
 {
     if (m_p7 == nullptr || !PKCS7_type_is_signed(m_p7) || m_p7->d.sign == nullptr) {
-        PrintErrorNumberMsg(SignToolErrMsg::SIGNATURE_FAILED, "pkcs7 is invalid");
+        PrintErrorNumberMsg(SignToolErrMsg::CODE_SIGN_INTERNAL_ERROR, "pkcs7 is invalid");
         return INVALIDPARAM_ERROR;
     }
     int nid = OBJ_txt2nid(oid.c_str());
     if (nid == NID_undef) {
         nid = OBJ_create(oid.c_str(), "NotarizationTicket", "Notarization Ticket");
         if (nid == NID_undef) {
-            PrintErrorNumberMsg(SignToolErrMsg::SIGNATURE_FAILED, "create OID failed");
+            PrintErrorNumberMsg(SignToolErrMsg::CODE_SIGN_INTERNAL_ERROR, "create OID failed");
             return INVALIDPARAM_ERROR;
         }
     }
     STACK_OF(PKCS7_SIGNER_INFO)* signerInfos = PKCS7_get_signer_info(m_p7);
     if (signerInfos == nullptr || sk_PKCS7_SIGNER_INFO_num(signerInfos) == 0) {
-        PrintErrorNumberMsg(SignToolErrMsg::SIGNATURE_FAILED, "no signer info found");
+        PrintErrorNumberMsg(SignToolErrMsg::CODE_SIGN_INTERNAL_ERROR, "no signer info found");
         return INVALIDPARAM_ERROR;
     }
     PKCS7_SIGNER_INFO* si = sk_PKCS7_SIGNER_INFO_value(signerInfos, 0);
     if (si->unauth_attr == nullptr) {
         si->unauth_attr = sk_X509_ATTRIBUTE_new_null();
         if (si->unauth_attr == nullptr) {
-            PrintErrorNumberMsg(SignToolErrMsg::SIGNATURE_FAILED, "create unauth_attr stack failed");
+            PrintErrorNumberMsg(SignToolErrMsg::CODE_SIGN_INTERNAL_ERROR, "create unauth_attr stack failed");
             return INVALIDPARAM_ERROR;
         }
     } else {
@@ -257,25 +257,25 @@ int PKCS7Data::AddUnauthenticatedAttribute(const std::string& oid, const std::st
 int PKCS7Data::GetUnauthenticatedAttribute(const std::string& oid, std::string& data) const
 {
     if (m_p7 == nullptr || !PKCS7_type_is_signed(m_p7) || m_p7->d.sign == nullptr) {
-        PrintErrorNumberMsg(SignToolErrMsg::SIGNATURE_FAILED, "pkcs7 is invalid");
+        PrintErrorNumberMsg(SignToolErrMsg::CODE_SIGN_INTERNAL_ERROR, "pkcs7 is invalid");
         return INVALIDPARAM_ERROR;
     }
     int nid = OBJ_txt2nid(oid.c_str());
     if (nid == NID_undef) {
         nid = OBJ_create(oid.c_str(), "NotarizationTicket", "Notarization Ticket");
         if (nid == NID_undef) {
-            PrintErrorNumberMsg(SignToolErrMsg::SIGNATURE_FAILED, "create OID failed");
+            PrintErrorNumberMsg(SignToolErrMsg::CODE_SIGN_INTERNAL_ERROR, "create OID failed");
             return INVALIDPARAM_ERROR;
         }
     }
     STACK_OF(PKCS7_SIGNER_INFO)* signerInfos = PKCS7_get_signer_info(m_p7);
     if (signerInfos == nullptr || sk_PKCS7_SIGNER_INFO_num(signerInfos) == 0) {
-        PrintErrorNumberMsg(SignToolErrMsg::SIGNATURE_FAILED, "no signer info found");
+        PrintErrorNumberMsg(SignToolErrMsg::CODE_SIGN_INTERNAL_ERROR, "no signer info found");
         return INVALIDPARAM_ERROR;
     }
     PKCS7_SIGNER_INFO* si = sk_PKCS7_SIGNER_INFO_value(signerInfos, 0);
     if (si->unauth_attr == nullptr) {
-        PrintErrorNumberMsg(SignToolErrMsg::SIGNATURE_FAILED, "no unauthenticatedAttributes found");
+        PrintErrorNumberMsg(SignToolErrMsg::CODE_SIGN_INTERNAL_ERROR, "no unauthenticatedAttributes found");
         return INVALIDPARAM_ERROR;
     }
     int attrCount = sk_X509_ATTRIBUTE_num(si->unauth_attr);
@@ -298,7 +298,7 @@ int PKCS7Data::GetUnauthenticatedAttribute(const std::string& oid, std::string& 
         data.assign(reinterpret_cast<const char*>(ASN1_STRING_get0_data(str)), ASN1_STRING_length(str));
         return RET_OK;
     }
-    PrintErrorNumberMsg(SignToolErrMsg::SIGNATURE_FAILED, "attribute not found in unauth_attr");
+    PrintErrorNumberMsg(SignToolErrMsg::CODE_SIGN_INTERNAL_ERROR, "attribute not found in unauth_attr");
     return INVALIDPARAM_ERROR;
 }
 
@@ -345,13 +345,13 @@ int PKCS7Data::GetAuthenticatedAttributesSetDer(std::string& der) const
 int PKCS7Data::Encode(std::string& der) const
 {
     if (m_p7 == nullptr) {
-        PrintErrorNumberMsg(SignToolErrMsg::SIGNATURE_FAILED, "pkcs7 is null");
+        PrintErrorNumberMsg(SignToolErrMsg::CODE_SIGN_INTERNAL_ERROR, "pkcs7 is null");
         return INVALIDPARAM_ERROR;
     }
     unsigned char* outDer = nullptr;
     int outLen = i2d_PKCS7(m_p7, &outDer);
     if (outDer == nullptr || outLen <= 0) {
-        PrintErrorNumberMsg(SignToolErrMsg::SIGNATURE_FAILED, "encode pkcs7 failed");
+        PrintErrorNumberMsg(SignToolErrMsg::CODE_SIGN_INTERNAL_ERROR, "encode pkcs7 failed");
         return INVALIDPARAM_ERROR;
     }
     der.assign(reinterpret_cast<const char*>(outDer), outLen);
@@ -381,7 +381,7 @@ int PKCS7Data::InitPkcs7(const std::string& content, const std::shared_ptr<Signe
     X509* cert = NULL;
     int result = RET_OK;
     if (signer == NULL) {
-        PrintErrorNumberMsg(SignToolErrMsg::SIGNATURE_FAILED, "signer is NULL , sign failed");
+        PrintErrorNumberMsg(SignToolErrMsg::CODE_SIGN_INTERNAL_ERROR, "signer is NULL , sign failed");
         return INVALIDPARAM_ERROR;
     }
     m_signer = signer;
@@ -397,7 +397,7 @@ int PKCS7Data::InitPkcs7(const std::string& content, const std::shared_ptr<Signe
     } else if (sigAlg == SIGN_ALG_SHA256) {
         md = EVP_sha256();
     } else {
-        PrintErrorNumberMsg(SignToolErrMsg::SIGNATURE_FAILED,
+        PrintErrorNumberMsg(SignToolErrMsg::CODE_SIGN_INTERNAL_ERROR,
                             sigAlg + "is invalid sigAlg, please use SHA256withECDSA/SHA384withECDSA, sign failed");
         result = INVALIDPARAM_ERROR;
         goto err;
@@ -406,7 +406,7 @@ int PKCS7Data::InitPkcs7(const std::string& content, const std::shared_ptr<Signe
     cert = sk_X509_delete(certs, 0);
     m_p7 = Pkcs7Sign(cert, certs, md, content, m_flags, attrs);
     if (m_p7 == NULL) {
-        PrintErrorNumberMsg(SignToolErrMsg::SIGNATURE_FAILED, "p7 is NULL, pkcs7 sign failed");
+        PrintErrorNumberMsg(SignToolErrMsg::CODE_SIGN_INTERNAL_ERROR, "p7 is NULL, pkcs7 sign failed");
         result = SIGN_ERROR;
         goto err;
     }
@@ -481,13 +481,13 @@ int PKCS7Data::CheckSignTimeInValidPeriod(const ASN1_TYPE* signTime,
                                           const ASN1_TIME* notBefore, const ASN1_TIME* notAfter)
 {
     if (notBefore == nullptr || notBefore->data == nullptr || notAfter == nullptr || notAfter->data == nullptr) {
-        PrintErrorNumberMsg(SignToolErrMsg::SIGNATURE_FAILED,
+        PrintErrorNumberMsg(SignToolErrMsg::CODE_SIGN_INTERNAL_ERROR,
                             "invalid period, check signtime failed please use valid period to to check signtime");
         return INVALIDPARAM_ERROR;
     }
     if (signTime == nullptr || signTime->value.asn1_string == nullptr ||
         signTime->value.asn1_string->data == nullptr) {
-        PrintErrorNumberMsg(SignToolErrMsg::SIGNATURE_FAILED, "signtime is NULL");
+        PrintErrorNumberMsg(SignToolErrMsg::CODE_SIGN_INTERNAL_ERROR, "signtime is NULL");
         return INVALIDPARAM_ERROR;
     }
     ASN1_TIME* tm = ASN1_TIME_new();
@@ -618,7 +618,7 @@ int PKCS7Data::CheckSignerInfoSignTimeInCertChainValidPeriod(PKCS7_SIGNER_INFO* 
                                                              const std::vector<X509*>& certs) const
 {
     if (signerInfo == NULL) {
-        PrintErrorNumberMsg(SignToolErrMsg::SIGNATURE_FAILED, "input is NULL, check signtime invalid");
+        PrintErrorNumberMsg(SignToolErrMsg::CODE_SIGN_INTERNAL_ERROR, "input is NULL, check signtime invalid");
         return INVALIDPARAM_ERROR;
     }
     ASN1_TYPE* signTime = PKCS7_get_signed_attribute(signerInfo, NID_pkcs9_signingTime);

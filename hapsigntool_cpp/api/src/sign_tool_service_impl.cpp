@@ -195,7 +195,7 @@ bool SignToolServiceImpl::OutputModeOfCert(X509* cert, Options* options)
     std::string outFile = options->GetString(Options::OUT_FILE);
     if (!outFile.empty()) {
         if (!CertTools::SaveCertTofile(outFile, cert)) {
-            PrintErrorNumberMsg(SignToolErrMsg::FILE_IO_FAILED, "failed to save cert to file");
+            PrintErrorNumberMsg(SignToolErrMsg::FILE_WRITE_FAILED, "failed to save cert to file");
             return false;
         }
     } else {
@@ -332,7 +332,7 @@ bool SignToolServiceImpl::OutputString(std::string content, std::string file)
     }
     std::ofstream outFile(file.c_str());
     if (!outFile.is_open()) {
-        PrintErrorNumberMsg(SignToolErrMsg::FILE_IO_FAILED,
+        PrintErrorNumberMsg(SignToolErrMsg::FILE_WRITE_FAILED,
                             "failed to open the outFile " + file + " !");
         return false;
     }
@@ -390,7 +390,7 @@ bool SignToolServiceImpl::GenerateAppCert(Options* options)
                                                     APP_SIGNING_CAPABILITY,
                                                     sizeof(APP_SIGNING_CAPABILITY)); // get app x509 cert
     if (!x509CertificatePtr) {
-        PrintErrorNumberMsg(SignToolErrMsg::VERIFY_FAILED, "generate app cert failed");
+        PrintErrorNumberMsg(SignToolErrMsg::CERTIFICATE_ERROR, "generate app cert failed");
         goto err;
     }
     if (!X509CertVerify(x509CertificatePtr, issuerKeyPairPtr)) {
@@ -435,7 +435,7 @@ bool SignToolServiceImpl::GenerateProfileCert(Options* options)
                                                  PROFILE_SIGNING_CAPABILITY,
                                                  sizeof(PROFILE_SIGNING_CAPABILITY)); // get profile x509 cert
     if (!x509Certificate) {
-        PrintErrorNumberMsg(SignToolErrMsg::VERIFY_FAILED, "generate profile cert failed");
+        PrintErrorNumberMsg(SignToolErrMsg::CERTIFICATE_ERROR, "generate profile cert failed");
         goto err;
     }
     if (!X509CertVerify(x509Certificate, issuerKeyPair)) {
@@ -632,11 +632,13 @@ int SignToolServiceImpl::GetProvisionContent(const std::string& input, std::stri
     }
     cJSON* root = cJSON_ParseWithOpts(bytes.c_str(), nullptr, 1);
     if (root == nullptr) {
-        PrintErrorNumberMsg(SignToolErrMsg::VERIFY_PROFILE_FAILED, "Failed to parse appProvision, JSON is invalid or empty!");
+        PrintErrorNumberMsg(SignToolErrMsg::VERIFY_PROFILE_FAILED,
+                            "Failed to parse appProvision, JSON is invalid or empty!");
         return PARSE_ERROR;
     }
     if (!(cJSON_IsObject(root) || cJSON_IsArray(root))) {
-        PrintErrorNumberMsg(SignToolErrMsg::VERIFY_PROFILE_FAILED, "appProvision must be a JSON object or array!");
+        PrintErrorNumberMsg(SignToolErrMsg::VERIFY_PROFILE_FAILED,
+                            "appProvision must be a JSON object or array!");
         cJSON_Delete(root);
         return PARSE_ERROR;
     }
@@ -671,7 +673,7 @@ bool SignToolServiceImpl::PrintX509CertFromMemory(X509* cert)
         PrintMsg(std::string(bptr->data, bptr->length));
     } else {
         VerifyHapOpensslUtils::GetOpensslErrorMessage();
-        PrintErrorNumberMsg(SignToolErrMsg::FILE_IO_FAILED, "print x509 cert falied");
+        PrintErrorNumberMsg(SignToolErrMsg::CERT_IO_FAILED, "print x509 cert falied");
         BIO_free(bio);
         return false;
     }
@@ -693,7 +695,7 @@ bool SignToolServiceImpl::PrintX509CertChainFromMemory(std::vector<X509*> certs)
             PrintMsg(std::string(bptr->data, bptr->length));
         } else {
             VerifyHapOpensslUtils::GetOpensslErrorMessage();
-            PrintErrorNumberMsg(SignToolErrMsg::FILE_IO_FAILED, "print x509 cert chain falied");
+            PrintErrorNumberMsg(SignToolErrMsg::CERT_IO_FAILED, "print x509 cert chain falied");
             BIO_free(bio);
             return false;
         }
@@ -731,7 +733,7 @@ bool SignToolServiceImpl::VerifyHapSigner(Options* option)
         PrintMsg("bin verify successed!");
         return true;
     } else {
-        PrintErrorNumberMsg(SignToolErrMsg::NOT_SUPPORT_FILE, "Unsupported inForm!");
+        PrintErrorNumberMsg(SignToolErrMsg::UNSUPPORTED_METHOD, "Unsupported inForm!");
         return false;
     }
 }

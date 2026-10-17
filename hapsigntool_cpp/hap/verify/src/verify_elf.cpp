@@ -40,7 +40,7 @@ bool VerifyElf::Verify(Options* options)
 {
     // check param
     if (options == nullptr) {
-        PrintErrorNumberMsg(SignToolErrMsg::VERIFY_FAILED, "Param options is null.");
+        PrintErrorNumberMsg(SignToolErrMsg::PARAM_VALUE_EMPTY, "Param options is null.");
         return false;
     }
     if (!CheckParams(options)) {
@@ -400,12 +400,12 @@ bool VerifyElf::CheckParams(Options* options)
 {
     bool certEmpty = options->GetString(Options::OUT_CERT_CHAIN).empty();
     if (certEmpty) {
-        PrintErrorNumberMsg(SignToolErrMsg::VERIFY_FAILED, "Missing parameter: " + Options::OUT_CERT_CHAIN + "s.");
+        PrintErrorNumberMsg(SignToolErrMsg::PARAM_REQUIRED, "Missing parameter: " + Options::OUT_CERT_CHAIN + "s.");
         return false;
     }
     bool profileEmpty = options->GetString(Options::OUT_PROFILE).empty();
     if (profileEmpty) {
-        PrintErrorNumberMsg(SignToolErrMsg::VERIFY_FAILED, "Missing parameter: " + Options::OUT_PROFILE + "s.");
+        PrintErrorNumberMsg(SignToolErrMsg::PARAM_REQUIRED, "Missing parameter: " + Options::OUT_PROFILE + "s.");
         return false;
     }
     bool proofEmpty = options->GetString(Options::PROOF_FILE).empty();
@@ -419,7 +419,7 @@ bool VerifyElf::CheckParams(Options* options)
 bool VerifyElf::CheckSignFile(const std::string& signedFile)
 {
     if (signedFile.empty()) {
-        PrintErrorNumberMsg(SignToolErrMsg::VERIFY_FAILED, "Not found verify file path " + signedFile);
+        PrintErrorNumberMsg(SignToolErrMsg::FILE_NOT_EXIST, "Not found verify file path " + signedFile);
         return false;
     }
     bool validFlag = FileUtils::IsValidFile(signedFile);

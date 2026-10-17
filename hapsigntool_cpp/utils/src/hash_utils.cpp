@@ -60,7 +60,7 @@ std::vector<int8_t> HashUtils::GetFileDigest(const std::string& inputFile, const
 
     std::ifstream input(inputFile, std::ios::binary);
     if (0 != input.rdstate()) {
-        PrintErrorNumberMsg(SignToolErrMsg::VERIFY_FAILED, "failed to get input stream object!");
+        PrintErrorNumberMsg(SignToolErrMsg::FILE_READ_FAILED, "failed to get input stream object!");
         return std::vector<int8_t>();
     }
 
@@ -72,7 +72,7 @@ std::vector<int8_t> HashUtils::GetFileDigest(const std::string& inputFile, const
         input.read(buffer, HASH_LEN);
 
         if (input.fail() && !input.eof()) {
-            PrintErrorNumberMsg(SignToolErrMsg::VERIFY_FAILED, "error occurred while reading data.");
+            PrintErrorNumberMsg(SignToolErrMsg::FILE_READ_FAILED, "error occurred while reading data.");
             return std::vector<int8_t>();
         }
 
@@ -88,7 +88,7 @@ std::vector<int8_t> HashUtils::GetFileDigest(const std::string& inputFile, const
     }
 
     if (hashMap.empty()) {
-        PrintErrorNumberMsg(SignToolErrMsg::VERIFY_FAILED, "hashMap is empty.");
+        PrintErrorNumberMsg(SignToolErrMsg::CODE_SIGN_INTERNAL_ERROR, "hashMap is empty.");
         return std::vector<int8_t>();
     }
 
@@ -108,7 +108,7 @@ std::vector<int8_t> HashUtils::GetDigestFromBytes(const std::vector<int8_t>& fil
                                                   const std::string& algName)
 {
     if (fileBytes.empty() || length <= 0) {
-        PrintErrorNumberMsg(SignToolErrMsg::VERIFY_FAILED, "file bytes is empty.");
+        PrintErrorNumberMsg(SignToolErrMsg::FILE_READ_FAILED, "file bytes is empty.");
         return std::vector<int8_t>();
     }
     std::map<int, std::vector<int8_t>> hashMap;
@@ -123,7 +123,7 @@ std::vector<int8_t> HashUtils::GetDigestFromBytes(const std::vector<int8_t>& fil
         readLength += readStr.size();
     }
     if (hashMap.empty()) {
-        PrintErrorNumberMsg(SignToolErrMsg::VERIFY_FAILED, "hashMap is empty.");
+        PrintErrorNumberMsg(SignToolErrMsg::CODE_SIGN_INTERNAL_ERROR, "hashMap is empty.");
         return std::vector<int8_t>();
     }
     DigestUtils digestUtils(HASH_SHA256);

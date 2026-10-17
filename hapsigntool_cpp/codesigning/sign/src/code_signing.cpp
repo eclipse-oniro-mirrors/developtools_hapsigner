@@ -245,7 +245,8 @@ bool CodeSigning::SignFile(std::istream& inputStream, int64_t fileSize, bool sto
                                                                             fsvTreeOffset,
                                                                             fsVerityGenerator->GetRootHash());
         if (merkleTreeExtension == nullptr) {
-            PrintErrorNumberMsg(SignToolErrMsg::CODE_SIGN_INTERNAL_ERROR, "system failed to allocate memory for MerkleTreeExtension");
+            PrintErrorNumberMsg(SignToolErrMsg::CODE_SIGN_INTERNAL_ERROR,
+                                "system failed to allocate memory for MerkleTreeExtension");
             return false;
         }
         signInfo.AddExtension(merkleTreeExtension);
@@ -846,7 +847,7 @@ bool CodeSigning::CheckUnzParam(unzFile& zFile, unz_file_info& zFileInfo,
     }
     SIGNATURE_TOOLS_LOGI("Open zipFile filename is : %s", fileName);
     if ((*nameLen = strlen(fileName)) == 0U) {
-        PrintErrorNumberMsg(SignToolErrMsg::SIGNATURE_FAILED, "Open zipFile fileName is null");
+        PrintErrorNumberMsg(SignToolErrMsg::READ_ZIP_FAILED, "Open zipFile fileName is null");
         return false;
     }
     return true;
@@ -908,7 +909,7 @@ bool CodeSigning::GenerateSignature(const std::vector<int8_t>& signedData, const
     std::string signed_data(signedData.begin(), signedData.end());
     std::string ret_str;
     if (signedData.empty()) {
-        PrintErrorNumberMsg(SignToolErrMsg::SIGNATURE_FAILED, "Generate verity digest is null");
+        PrintErrorNumberMsg(SignToolErrMsg::CODE_SIGN_INTERNAL_ERROR, "Generate verity digest is null");
         return false;
     }
     bool generateSignedDataFlag = bcSignedDataGenerator->GenerateSignedData(signed_data, m_signConfig, ret_str);

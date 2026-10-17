@@ -189,7 +189,7 @@ bool VerifyCodeSignature::VerifyHnpLibData(unzFile hnpZip, const std::string& li
     unzCloseCurrentFile(hnpZip);
     PrintMsg("verify lib: " + libPath);
     if (totalRead != signInfo.GetDataSize()) {
-        PrintErrorNumberMsg(SignToolErrMsg::VERIFY_FAILED,"Invalid dataSize of native lib");
+        PrintErrorNumberMsg(SignToolErrMsg::FILE_4K_ALIGNMENT_ERROR,"Invalid dataSize of native lib");
         return false;
     }
     std::vector<int8_t> entrySig = signInfo.GetSignature();

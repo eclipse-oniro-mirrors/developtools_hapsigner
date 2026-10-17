@@ -33,7 +33,7 @@ int BCPkcs7Generator::GenerateSignedData(const std::string& content,
     int result = RET_OK;
     std::string sigAlg;
     if (content.empty()) {
-        PrintErrorNumberMsg(SignToolErrMsg::VERIFY_PROFILE_INVALID,
+        PrintErrorNumberMsg(SignToolErrMsg::SIGNATURE_FAILED,
                             "digest content is empty, generate signed data failed");
         return INVALIDPARAM_ERROR;
     }

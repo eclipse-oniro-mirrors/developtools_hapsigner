@@ -245,7 +245,7 @@ bool SignElf::GenerateCodeSignByte(SignerConfig& signerConfig, const std::map<st
                                    SignBlockData** codeSign)
 {
     if (signParams.at(ParamConstants::PARAM_SIGN_CODE) == CODESIGN_OFF) {
-        PrintErrorNumberMsg(SignToolErrMsg::SIGNATURE_FAILED, "[SignElf] check pamams signCode = 0 error.");
+        PrintErrorNumberMsg(SignToolErrMsg::PARAM_CHECK_FAILED, "[SignElf] check pamams signCode = 0 error.");
         return false;
     }
     CodeSigning codeSigning(&signerConfig);

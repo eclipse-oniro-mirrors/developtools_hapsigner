@@ -82,7 +82,7 @@ static bool UpdateParamForVariantInt(const ParamsSharedPtr& param)
         } else if (keySize == "NIST-P-384") {
             (*options)[Options::KEY_SIZE] = NIST_P_384;
         } else {
-            PrintErrorNumberMsg(SignToolErrMsg::NO_SUCH_SIGNATURE, "not supported '" + keySize
+            PrintErrorNumberMsg(SignToolErrMsg::ALGORITHM_NOT_SUPPORT, "not supported '" + keySize
                                 + "' Key algorithms length");
             return false;
         }
@@ -231,7 +231,7 @@ static bool UpdateParamForCheckSignAlg(const ParamsSharedPtr& param)
     if (options->count(Options::SIGN_ALG)) {
         std::string signAlg = options->GetString(Options::SIGN_ALG);
         if (signAlg != SIGN_ALG_SHA256 && signAlg != SIGN_ALG_SHA384) {
-            PrintErrorNumberMsg(SignToolErrMsg::NO_SUCH_SIGNATURE, "'" + signAlg + "' parameter is incorrect");
+            PrintErrorNumberMsg(SignToolErrMsg::ALGORITHM_NOT_SUPPORT, "'" + signAlg + "' parameter is incorrect");
             return false;
         }
     }
@@ -450,7 +450,7 @@ bool CmdUtil::JudgeAlgType(const std::string& keyAlg)
 bool CmdUtil::JudgeSize(const int size)
 {
     if (size != NIST_P_256 && size != NIST_P_384) {
-        PrintErrorNumberMsg(SignToolErrMsg::NO_SUCH_SIGNATURE, "Keysize params is incorrect, Support only 256 or 384");
+        PrintErrorNumberMsg(SignToolErrMsg::ALGORITHM_NOT_SUPPORT, "Keysize params is incorrect, Support only 256 or 384");
         return false;
     }
     return true;

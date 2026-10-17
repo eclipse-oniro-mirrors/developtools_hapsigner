@@ -24,7 +24,7 @@ bool VerifyBin::Verify(Options* options)
 {
     // check param
     if (options == nullptr) {
-        PrintErrorNumberMsg(SignToolErrMsg::VERIFY_FAILED, "Param options is null.");
+        PrintErrorNumberMsg(SignToolErrMsg::PARAM_VALUE_EMPTY, "Param options is null.");
         return false;
     }
     if (!VerifyElf::CheckParams(options)) {

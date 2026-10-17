@@ -672,7 +672,7 @@ bool VerifyHap::CheckFileNameAndBlockArray(const std::string& hapFilePath,
 {
     std::vector<std::string> fileNameArray = StringUtils::SplitString(hapFilePath, '.');
     if (fileNameArray.size() < ParamConstants::FILE_NAME_MIN_LENGTH) {
-        PrintErrorNumberMsg(SignToolErrMsg::VERIFY_FAILED, "ZIP64 format not supported.");
+        PrintErrorNumberMsg(SignToolErrMsg::UNSUPPORTED_METHOD, "ZIP64 format not supported.");
         return false;
     }
 

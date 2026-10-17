@@ -306,12 +306,20 @@ const SignToolErrMsg SignToolErrMsg::UNSUPPORTED_DISTRIBUTION_TYPE = SignToolErr
 const SignToolErrMsg SignToolErrMsg::STAPLE_FAILED = SignToolErrMsg(
     "11019001",
     "Staple ticket failed",
-    {});
+    {
+        "Ensure the input file is a signed .app file and the original signature is valid",
+        "The input file size must not exceed 200GB",
+        "For zip32 files, stapling would exceed 4GB limit if the signed block grows too large, please re-sign with zip64"
+    });
 
 const SignToolErrMsg SignToolErrMsg::STAPLE_VERIFY_FAILED = SignToolErrMsg(
     "11019002",
     "Staple ticket verify failed",
-    {});
+    {
+        "Ensure the HAP has been stapled with a valid notarization ticket",
+        "Check if the HAP file has been modified after stapling, which would cause hash mismatch",
+        "Ensure the notarization ticket matches the HAP (packageHash, developerId, bundleName)"
+    });
 
 const SignToolErrMsg SignToolErrMsg::FILE_FORMAT_UNSUPPORTED_ERROR = SignToolErrMsg(
     "11106001",
