@@ -83,7 +83,7 @@ public:
     bool GetNativeEntriesFromHap(const std::string& packageName, UnzipHandleParam& param);
     bool GetSingleFileStreamFromZip(unzFile& zFile, char fileName[],
                                     unz_file_info& zFileInfo,
-                                    int& readFileSize, std::stringbuf& sb);
+                                    int64_t& readFileSize, std::stringbuf& sb);
     bool RunParseZipInfo(const std::string& packageName, UnzipHandleParam& param, unz_file_pos pos);
     bool GenerateSignature(const std::vector<int8_t>& signedData, const std::string&,
                            std::vector<int8_t>&);
@@ -124,9 +124,9 @@ private:
     bool HandleZipGlobalInfo(const std::string& packageName, unzFile& zFile,
                              unz_global_info& zGlobalInfo, UnzipHandleParam& param);
     bool DoNativeLibVerify(std::string fileName, std::stringbuf& sb,
-                           UnzipHandleParam& param, int readFileSize);
+                           UnzipHandleParam& param, int64_t readFileSize);
     bool DoNativeLibSignOrVerify(std::string fileName, std::stringbuf& sb,
-                                 UnzipHandleParam& param, int readFileSize);
+                                 UnzipHandleParam& param, int64_t readFileSize);
     static constexpr int MAX_PROCESSORS = 32;
     const int POOL_SIZE = std::min(MAX_PROCESSORS, static_cast<int>(std::thread::hardware_concurrency()));
     std::shared_ptr<Uscript::ThreadPool> mPools;
