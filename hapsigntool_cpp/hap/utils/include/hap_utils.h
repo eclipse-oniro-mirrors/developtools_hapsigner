@@ -27,6 +27,7 @@
 #include "signing_block.h"
 #include "zip_data_input.h"
 #include "signature_tools_log.h"
+#include "cJSON.h"
 
 namespace OHOS {
 namespace SignatureTools {
@@ -86,8 +87,9 @@ public:
     static constexpr int HNP_MIN_TOKENS = 3;
 
 public:
-    static std::string GetAppIdentifier(const std::string& profileContent);
-    static std::pair<std::string, std::string> ParseAppIdentifier(const std::string& profileContent);
+    static bool GetAppIdentifier(const std::string& profileContent, std::string& ownerID);
+    static bool ParseAppIdentifier(const std::string& profileContent,
+                                   std::pair<std::string, std::string>& resultPair);
     static std::vector<int8_t> GetHapSigningBlockMagic(int compatibleVersion);
     static std::vector<int8_t> GetHapSigningBlockMagicV3();
     static const std::vector<int8_t>& GetPermissionSignMagic();
@@ -98,10 +100,16 @@ public:
     static std::string ParseHnpPath(const std::string& path);
     static bool GetHnpsFromJson(const std::string& hapFile,
                                 std::unordered_map<std::string, std::string>& hnpNameMap);
+    static bool GetModuleContentFromHap(const std::string& hapPath, std::string& moduleContent);
+    static bool GetBundleTypeFromJson(const std::string& moduleContent, std::string& bundleType);
+    static bool ParsePluginId(const std::string& profileContent, std::string& pluginId);
 
 private:
     static bool ParseHnpPackages(const std::string& moduleContent,
                                 std::unordered_map<std::string, std::string>& hnpNameMap);
+    static bool ParseProfileJson(const std::string& profileContent, cJSON*& profileJson);
+    static bool ParseOwnerID(const cJSON* bundleInfoItem, std::string& ownerID);
+    static bool GetPluginIdItem(const cJSON* profileJson, cJSON*& pluginIdItem);
     static const int32_t MAX_APP_ID_LEN = 32;
     static const std::string HAP_DEBUG_OWNER_ID;
     static const std::string HAP_SHARED_OWNER_ID;

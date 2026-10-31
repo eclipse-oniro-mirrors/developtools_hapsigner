@@ -65,18 +65,24 @@ void BCSignedDataGenerator::SetOwnerId(const std::string& ownerID)
     m_ownerID = ownerID;
 }
 
+void BCSignedDataGenerator::SetPluginId(const std::string& pluginId)
+{
+    m_pluginId = pluginId;
+}
+
 int BCSignedDataGenerator::PackageSignedData(const std::string& content, const std::shared_ptr<Signer>& signer,
                                              const std::string& sigAlg, std::string& ret)
 {
     int result = RET_OK;
     PKCS7Data p7Data(PKCS7_DETACHED_FLAGS);
     std::vector<PKCS7Attr> attrs;
-    if (m_ownerID.empty() == false) {
-        if (AddOwnerID(attrs, m_ownerID) < 0) {
-            PrintErrorNumberMsg(SignToolErrMsg::CODE_SIGN_INTERNAL_ERROR,
-                                "create ownerIDOid failed");
-            return INVALIDPARAM_ERROR;
-        }
+    if (!m_ownerID.empty() && AddOwnerID(attrs, m_ownerID) < 0) {
+        PrintErrorNumberMsg(SignToolErrMsg::CODE_SIGN_INTERNAL_ERROR, "create ownerID Oid failed");
+        return INVALIDPARAM_ERROR;
+    }
+    if (!m_pluginId.empty() && AddPluginId(attrs, m_pluginId) < 0) {
+        PrintErrorNumberMsg(SignToolErrMsg::CODE_SIGN_INTERNAL_ERROR, "create pluginId Oid failed");
+        return INVALIDPARAM_ERROR;
     }
     // Generate PKCS#7
     result = p7Data.Sign(content, signer, sigAlg, ret, attrs);
@@ -144,6 +150,26 @@ int BCSignedDataGenerator::AddOwnerID(std::vector<PKCS7Attr>& attrs, const std::
     attr.nid = nid;
     attr.atrtype = V_ASN1_UTF8STRING;
     attr.value = ownerIDAsn1;
+    attrs.push_back(attr);
+    return RET_OK;
+}
+
+int BCSignedDataGenerator::AddPluginId(std::vector<PKCS7Attr>& attrs, const std::string& pluginId)
+{
+    PKCS7Attr attr;
+    int nid = CreateNIDFromOID(PLUGINID_OID, PLUGINID_OID_SHORT_NAME, PLUGINID_OID_LONG_NAME);
+    if (nid == NID_undef) {
+        return RET_FAILED;
+    }
+    ASN1_STRING* pluginIdAsn1 = ASN1_STRING_new();
+    if (pluginIdAsn1 == NULL) {
+        SIGNATURE_TOOLS_LOGE("asn1 string create error!\n");
+        return RET_FAILED;
+    }
+    ASN1_STRING_set(pluginIdAsn1, pluginId.c_str(), pluginId.length());
+    attr.nid = nid;
+    attr.atrtype = V_ASN1_UTF8STRING;
+    attr.value = pluginIdAsn1;
     attrs.push_back(attr);
     return RET_OK;
 }

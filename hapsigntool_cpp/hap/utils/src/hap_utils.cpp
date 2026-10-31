@@ -20,7 +20,6 @@
 #include <vector>
 
 #include "securec.h"
-#include "profile_verify.h"
 #include "hap_utils.h"
 #include "constant.h"
 #include "cJSON.h"
@@ -51,43 +50,234 @@ HapUtils::StaticConstructor::StaticConstructor()
 
 HapUtils::StaticConstructor HapUtils::staticConstructor;
 
-std::string HapUtils::GetAppIdentifier(const std::string& profileContent)
+bool HapUtils::GetAppIdentifier(const std::string& profileContent, std::string& ownerID)
 {
-    std::pair<std::string, std::string> resultPair = ParseAppIdentifier(profileContent);
-
-    std::string ownerID = resultPair.first;
-    std::string profileType = resultPair.second;
-
-    if (profileType == "debug") {
-        return HAP_DEBUG_OWNER_ID;
-    } else if (profileType == "release") {
-        return ownerID;
-    } else {
-        return "";
+    std::pair<std::string, std::string> resultPair;
+    if (!ParseAppIdentifier(profileContent, resultPair)) {
+        return false;
     }
+
+    const std::string& profileType = resultPair.second;
+    if (profileType == "debug") {
+        ownerID = HAP_DEBUG_OWNER_ID;
+    } else if (profileType == "release") {
+        ownerID = resultPair.first;
+    } else {
+        PrintErrorNumberMsg(SignToolErrMsg::PROFILE_TYPE_UNSUPPORTED_ERROR,
+                            "value of 'type' in profile content is: " + profileType);
+        return false;
+    }
+    return true;
 }
 
-std::pair<std::string, std::string> HapUtils::ParseAppIdentifier(const std::string& profileContent)
+bool HapUtils::ParseProfileJson(const std::string& profileContent, cJSON*& profileJson)
 {
+    profileJson = cJSON_ParseWithOpts(profileContent.c_str(), nullptr, 1);
+    if (profileJson == nullptr || !cJSON_IsObject(profileJson)) {
+        PrintErrorNumberMsg(SignToolErrMsg::PROFILE_JSON_PARSE_ERROR,
+                            "profile content is invalid or empty, parse profile failed.");
+        cJSON_Delete(profileJson);
+        profileJson = nullptr;
+        return false;
+    }
+    return true;
+}
+
+bool HapUtils::ParseOwnerID(const cJSON* bundleInfoItem, std::string& ownerID)
+{
+    cJSON* appIdentifierItem = cJSON_GetObjectItemCaseSensitive(bundleInfoItem, "app-identifier");
+    if (appIdentifierItem == nullptr) {
+        return true;
+    }
+    if (!cJSON_IsString(appIdentifierItem) || appIdentifierItem->valuestring == nullptr) {
+        PrintErrorNumberMsg(SignToolErrMsg::PROFILE_APPID_VALUE_TYPE_ERROR,
+                            "value type of 'app-identifier' should be string.");
+        return false;
+    }
+    ownerID = appIdentifierItem->valuestring;
+    if (ownerID.empty() || ownerID.size() > static_cast<size_t>(MAX_APP_ID_LEN)) {
+        PrintErrorNumberMsg(SignToolErrMsg::PROFILE_APPID_VALUE_LENGTH_ERROR,
+                            "length of 'app-identifier' should be (0, 32].");
+        return false;
+    }
+    return true;
+}
+
+bool HapUtils::ParseAppIdentifier(const std::string& profileContent,
+                                  std::pair<std::string, std::string>& resultPair)
+{
+    cJSON* profileJson = nullptr;
+    if (!ParseProfileJson(profileContent, profileJson)) {
+        return false;
+    }
     std::string ownerID;
     std::string profileType;
+    bool parseFlag = false;
+    do {
+        cJSON* typeItem = cJSON_GetObjectItemCaseSensitive(profileJson, "type");
+        if (typeItem == nullptr || !cJSON_IsString(typeItem) ||
+            typeItem->valuestring == nullptr || typeItem->valuestring[0] == '\0') {
+            PrintErrorNumberMsg(SignToolErrMsg::PROFILE_TYPE_NOT_EXISTED_ERROR,
+                                "tag 'type' not existed in profile content.");
+            break;
+        }
+        profileType = typeItem->valuestring;
 
-    ProfileInfo provisionInfo;
-    ParseProfile(profileContent, provisionInfo);
+        cJSON* bundleInfoItem = cJSON_GetObjectItemCaseSensitive(profileJson, "bundle-info");
+        if (bundleInfoItem == nullptr || !cJSON_IsObject(bundleInfoItem)) {
+            PrintErrorNumberMsg(SignToolErrMsg::PROFILE_BUNDLE_INFO_NOT_EXISTED_ERROR,
+                                "tag 'bundle-info' not existed in profile content.");
+            break;
+        }
 
-    if (DEBUG == provisionInfo.type) {
-        profileType = "debug";
-    } else {
-        profileType = "release";
+        if (!ParseOwnerID(bundleInfoItem, ownerID)) {
+            break;
+        }
+        parseFlag = true;
+    } while (0);
+
+    cJSON_Delete(profileJson);
+    if (!parseFlag) {
+        return false;
+    }
+    resultPair = std::make_pair(ownerID, profileType);
+    return true;
+}
+
+bool HapUtils::GetModuleContentFromHap(const std::string& hapPath, std::string& moduleContent)
+{
+    moduleContent.clear();
+    unzFile zFile = unzOpen(hapPath.c_str());
+    if (zFile == nullptr) {
+        PrintErrorNumberMsg(SignToolErrMsg::FILE_READ_FAILED, "open hap file: " + hapPath + " failed.");
+        return false;
+    }
+    if (unzLocateFile(zFile, MODULE_JSON_FILE.c_str(), 0) != UNZ_OK) {
+        // module.json is not mandatory (e.g. hap of FA model), treat it as empty content
+        unzClose(zFile);
+        return true;
+    }
+    if (unzOpenCurrentFile(zFile) != UNZ_OK) {
+        PrintErrorNumberMsg(SignToolErrMsg::FILE_READ_FAILED, "open module.json in hap failed.");
+        unzClose(zFile);
+        return false;
+    }
+    char readBuffer[BUFFER_LENGTH] = { 0 };
+    int readSize = 0;
+    bool readFlag = true;
+    do {
+        if (memset_s(readBuffer, sizeof(readBuffer), 0, sizeof(readBuffer)) != EOK) {
+            readFlag = false;
+            break;
+        }
+        readSize = unzReadCurrentFile(zFile, readBuffer, sizeof(readBuffer));
+        if (readSize > 0) {
+            moduleContent.append(readBuffer, readSize);
+        }
+    } while (readSize > 0);
+    unzCloseCurrentFile(zFile);
+    unzClose(zFile);
+    if (!readFlag) {
+        moduleContent.clear();
+        return false;
+    }
+    return true;
+}
+
+bool HapUtils::GetBundleTypeFromJson(const std::string& moduleContent, std::string& bundleType)
+{
+    bundleType.clear();
+    if (moduleContent.empty()) {
+        return true;
+    }
+    cJSON* root = cJSON_Parse(moduleContent.c_str());
+    if (root == nullptr) {
+        PrintErrorNumberMsg(SignToolErrMsg::MODULE_JSON_PARSE_ERROR, "parse module.json failed.");
+        return false;
+    }
+    cJSON* appObject = cJSON_GetObjectItemCaseSensitive(root, "app");
+    if (appObject == nullptr || !cJSON_IsObject(appObject)) {
+        cJSON_Delete(root);
+        return true;
+    }
+    cJSON* typeItem = cJSON_GetObjectItemCaseSensitive(appObject, "bundleType");
+    if (typeItem == nullptr) {
+        cJSON_Delete(root);
+        return true;
+    }
+    if (!cJSON_IsString(typeItem) || typeItem->valuestring == nullptr) {
+        PrintErrorNumberMsg(SignToolErrMsg::MODULE_JSON_PARSE_ERROR,
+                            "value type of 'bundleType' should be string.");
+        cJSON_Delete(root);
+        return false;
+    }
+    bundleType = typeItem->valuestring;
+    cJSON_Delete(root);
+    return true;
+}
+
+bool HapUtils::GetPluginIdItem(const cJSON* profileJson, cJSON*& pluginIdItem)
+{
+    cJSON* capabilitiesItem = cJSON_GetObjectItemCaseSensitive(profileJson, "app-services-capabilities");
+    if (capabilitiesItem == nullptr || !cJSON_IsObject(capabilitiesItem)) {
+        PrintErrorNumberMsg(SignToolErrMsg::PROFILE_PLUGIN_ID_NOT_EXISTED_ERROR,
+                            "tag 'app-services-capabilities' not existed in profile content.");
+        return false;
+    }
+    cJSON* permissionItem = cJSON_GetObjectItemCaseSensitive(capabilitiesItem,
+                                                             "ohos.permission.kernel.SUPPORT_PLUGIN");
+    if (permissionItem == nullptr || !cJSON_IsObject(permissionItem)) {
+        PrintErrorNumberMsg(SignToolErrMsg::PROFILE_PLUGIN_ID_NOT_EXISTED_ERROR,
+                            "tag 'ohos.permission.kernel.SUPPORT_PLUGIN' not existed in profile content.");
+        return false;
+    }
+    pluginIdItem = cJSON_GetObjectItemCaseSensitive(permissionItem, "pluginDistributionIDs");
+    if (pluginIdItem == nullptr) {
+        PrintErrorNumberMsg(SignToolErrMsg::PROFILE_PLUGIN_ID_NOT_EXISTED_ERROR,
+                            "tag 'pluginDistributionIDs' not existed in profile content.");
+        return false;
+    }
+    return true;
+}
+
+bool HapUtils::ParsePluginId(const std::string& profileContent, std::string& pluginId)
+{
+    pluginId.clear();
+    cJSON* profileJson = nullptr;
+    if (!ParseProfileJson(profileContent, profileJson)) {
+        return false;
     }
 
-    BundleInfo bundleInfo = provisionInfo.bundleInfo;
+    bool parseFlag = false;
+    do {
+        cJSON* distTypeItem = cJSON_GetObjectItemCaseSensitive(profileJson, "app-distribution-type");
+        if (distTypeItem != nullptr && cJSON_IsString(distTypeItem) && distTypeItem->valuestring != nullptr &&
+            std::string(distTypeItem->valuestring) == "developer_ID") {
+            // align with java: no pluginId for developer_ID distribution type
+            parseFlag = true;
+            break;
+        }
+        cJSON* pluginIdItem = nullptr;
+        if (!GetPluginIdItem(profileJson, pluginIdItem)) {
+            break;
+        }
+        if (!cJSON_IsString(pluginIdItem) || pluginIdItem->valuestring == nullptr) {
+            PrintErrorNumberMsg(SignToolErrMsg::PROFILE_PLUGIN_ID_VALUE_TYPE_ERROR,
+                                "value type of 'pluginDistributionIDs' should be string.");
+            break;
+        }
+        pluginId = pluginIdItem->valuestring;
+        if (pluginId.empty()) {
+            PrintErrorNumberMsg(SignToolErrMsg::PROFILE_PLUGIN_ID_VALUE_LENGTH_ERROR,
+                                "value of 'pluginDistributionIDs' is empty.");
+            pluginId.clear();
+            break;
+        }
+        parseFlag = true;
+    } while (0);
 
-    if (!bundleInfo.appIdentifier.empty()) {
-        ownerID = bundleInfo.appIdentifier;
-    }
-
-    return std::pair(ownerID, profileType);
+    cJSON_Delete(profileJson);
+    return parseFlag;
 }
 
 std::vector<int8_t> HapUtils::GetHapSigningBlockMagic(int compatibleVersion)

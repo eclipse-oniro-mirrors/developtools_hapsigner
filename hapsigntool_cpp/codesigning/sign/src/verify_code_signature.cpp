@@ -41,7 +41,11 @@ bool VerifyCodeSignature::VerifyHap(std::string file, int64_t offset, int64_t le
         return true;
     }
     // 1) generate CodeSignBlock
-    std::pair<std::string, std::string> pairResult = HapUtils::ParseAppIdentifier(profileContent);
+    std::pair<std::string, std::string> pairResult;
+    if (!HapUtils::ParseAppIdentifier(profileContent, pairResult)) {
+        SIGNATURE_TOOLS_LOGE("VerifyHap parse app identifier from profile failed");
+        return false;
+    }
     CodeSignBlock csb;
     bool generateFlag = GenerateCodeSignBlock(file, offset, length, csb);
     if (!generateFlag) {
@@ -52,6 +56,25 @@ bool VerifyCodeSignature::VerifyHap(std::string file, int64_t offset, int64_t le
     bool verifyFlag = VerifyCodeSign(file, pairResult, csb);
     if (!verifyFlag) {
         SIGNATURE_TOOLS_LOGE("VerifyHap VerifyCodeSign failed");
+        return false;
+    }
+    return true;
+}
+
+bool VerifyCodeSignature::CheckElfOwnerID(const std::string& profileContent, ElfSignBlock& elfSignBlock)
+{
+    if (profileContent.empty()) {
+        return true;
+    }
+    std::pair<std::string, std::string> pairResult;
+    if (!HapUtils::ParseAppIdentifier(profileContent, pairResult)) {
+        SIGNATURE_TOOLS_LOGE("elf parse app identifier from profile failed");
+        return false;
+    }
+    std::vector<int8_t>& signature = elfSignBlock.GetSignature();
+    std::string signatureStr(signature.begin(), signature.end());
+    if (!CmsUtils::CheckOwnerID(signatureStr, pairResult.first, pairResult.second)) {
+        SIGNATURE_TOOLS_LOGE("elf check owner id failed");
         return false;
     }
     return true;
@@ -89,22 +112,14 @@ bool VerifyCodeSignature::VerifyElf(std::string file, int64_t offset, int64_t le
     std::ifstream elf(file, std::ios::binary);
     bool verifySingleFileFlag = VerifySingleFile(elf, elfSignBlock.GetDataSize(), elfSignBlock.GetSignature(),
         elfSignBlock.GetTreeOffset(), merkleTree);
+    elf.close();
     if (!verifySingleFileFlag) {
         SIGNATURE_TOOLS_LOGE("verify elf file data failed");
-        elf.close();
         return false;
     }
-    elf.close();
     // 3) check ownerID
-    if (!profileContent.empty()) {
-        std::pair<std::string, std::string> pairResult = HapUtils::ParseAppIdentifier(profileContent);
-        std::vector<int8_t>& signature = elfSignBlock.GetSignature();
-        std::string signatureStr(signature.begin(), signature.end());
-        bool checkOwnerIDFlag = CmsUtils::CheckOwnerID(signatureStr, pairResult.first, pairResult.second);
-        if (!checkOwnerIDFlag) {
-            SIGNATURE_TOOLS_LOGE("elf check owner id failed");
-            return false;
-        }
+    if (!CheckElfOwnerID(profileContent, elfSignBlock)) {
+        return false;
     }
     return true;
 }

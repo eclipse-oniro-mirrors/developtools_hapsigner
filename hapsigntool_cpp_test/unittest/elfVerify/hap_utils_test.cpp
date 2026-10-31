@@ -41,11 +41,137 @@ public:
  */
 HWTEST_F(HapUtilsTest, GetAppIdentifier, testing::ext::TestSize.Level1)
 {
-    std::string content = "{\"type\":\"xxx\",\"bundle-info\":{\"app-identifier\":\"123\"}}";
-    std::string result = HapUtils::GetAppIdentifier(content);
-    int length = result.length();
+    std::string content = "{\"type\":\"release\",\"bundle-info\":{\"app-identifier\":\"123\"}}";
+    std::string result;
+    bool flag = HapUtils::GetAppIdentifier(content, result);
 
-    EXPECT_NE(length, 0);
+    EXPECT_EQ(flag, true);
+    EXPECT_EQ(result, "123");
+}
+
+/**
+ * @tc.name: GetAppIdentifierDebugType
+ * @tc.desc: Test function of HapUtilsTest::GetAppIdentifier() interface for DEBUG profile.
+ * @tc.size: MEDIUM
+ * @tc.type: FUNC
+ * @tc.level Level 1
+ * @tc.require: SR000H63TL
+ */
+HWTEST_F(HapUtilsTest, GetAppIdentifierDebugType, testing::ext::TestSize.Level1)
+{
+    std::string content = "{\"type\":\"debug\",\"bundle-info\":{\"app-identifier\":\"123\"}}";
+    std::string result;
+    bool flag = HapUtils::GetAppIdentifier(content, result);
+
+    EXPECT_EQ(flag, true);
+    EXPECT_EQ(result, "DEBUG_LIB_ID");
+}
+
+/**
+ * @tc.name: GetAppIdentifierUnsupportedType
+ * @tc.desc: Test function of HapUtilsTest::GetAppIdentifier() interface for FAILED.
+ * @tc.size: MEDIUM
+ * @tc.type: FUNC
+ * @tc.level Level 1
+ * @tc.require: SR000H63TL
+ */
+HWTEST_F(HapUtilsTest, GetAppIdentifierUnsupportedType, testing::ext::TestSize.Level1)
+{
+    std::string content = "{\"type\":\"xxx\",\"bundle-info\":{\"app-identifier\":\"123\"}}";
+    std::string result;
+    bool flag = HapUtils::GetAppIdentifier(content, result);
+
+    EXPECT_EQ(flag, false);
+}
+
+/**
+ * @tc.name: GetAppIdentifierInvalidContent
+ * @tc.desc: Test function of HapUtilsTest::GetAppIdentifier() interface for FAILED.
+ * @tc.size: MEDIUM
+ * @tc.type: FUNC
+ * @tc.level Level 1
+ * @tc.require: SR000H63TL
+ */
+HWTEST_F(HapUtilsTest, GetAppIdentifierInvalidContent, testing::ext::TestSize.Level1)
+{
+    std::string result;
+    EXPECT_EQ(HapUtils::GetAppIdentifier("", result), false);
+    EXPECT_EQ(HapUtils::GetAppIdentifier("not json", result), false);
+    EXPECT_EQ(HapUtils::GetAppIdentifier("{\"type\":\"release\"}", result), false);
+    EXPECT_EQ(HapUtils::GetAppIdentifier("{\"bundle-info\":{\"app-identifier\":\"123\"}}", result), false);
+    EXPECT_EQ(HapUtils::GetAppIdentifier(
+        "{\"type\":\"release\",\"bundle-info\":{\"app-identifier\":123}}", result), false);
+    std::string longId(33, 'a');
+    std::string content = "{\"type\":\"release\",\"bundle-info\":{\"app-identifier\":\"" + longId + "\"}}";
+    EXPECT_EQ(HapUtils::GetAppIdentifier(content, result), false);
+}
+
+/**
+ * @tc.name: GetBundleTypeFromJson
+ * @tc.desc: Test function of HapUtilsTest::GetBundleTypeFromJson() interface.
+ * @tc.size: MEDIUM
+ * @tc.type: FUNC
+ * @tc.level Level 1
+ * @tc.require: SR000H63TL
+ */
+HWTEST_F(HapUtilsTest, GetBundleTypeFromJson, testing::ext::TestSize.Level1)
+{
+    std::string bundleType;
+    // empty module content: not an error, bundleType is empty
+    EXPECT_EQ(HapUtils::GetBundleTypeFromJson("", bundleType), true);
+    EXPECT_EQ(bundleType, "");
+
+    std::string content = "{\"app\":{\"bundleType\":\"appPlugin\"}}";
+    EXPECT_EQ(HapUtils::GetBundleTypeFromJson(content, bundleType), true);
+    EXPECT_EQ(bundleType, "appPlugin");
+
+    // no app object: not an error, bundleType is empty
+    EXPECT_EQ(HapUtils::GetBundleTypeFromJson("{\"module\":{}}", bundleType), true);
+    EXPECT_EQ(bundleType, "");
+
+    // invalid json: parse error
+    EXPECT_EQ(HapUtils::GetBundleTypeFromJson("not json", bundleType), false);
+    // bundleType is not a string: parse error
+    EXPECT_EQ(HapUtils::GetBundleTypeFromJson("{\"app\":{\"bundleType\":123}}", bundleType), false);
+}
+
+/**
+ * @tc.name: ParsePluginId
+ * @tc.desc: Test function of HapUtilsTest::ParsePluginId() interface.
+ * @tc.size: MEDIUM
+ * @tc.type: FUNC
+ * @tc.level Level 1
+ * @tc.require: SR000H63TL
+ */
+HWTEST_F(HapUtilsTest, ParsePluginId, testing::ext::TestSize.Level1)
+{
+    std::string pluginId;
+    std::string content = "{\"app-services-capabilities\":"
+        "{\"ohos.permission.kernel.SUPPORT_PLUGIN\":{\"pluginDistributionIDs\":\"plugin-id-123\"}}}";
+    EXPECT_EQ(HapUtils::ParsePluginId(content, pluginId), true);
+    EXPECT_EQ(pluginId, "plugin-id-123");
+
+    // developer_ID distribution type: no plugin id, not an error
+    std::string developerContent = "{\"app-distribution-type\":\"developer_ID\"}";
+    EXPECT_EQ(HapUtils::ParsePluginId(developerContent, pluginId), true);
+    EXPECT_EQ(pluginId, "");
+
+    // app-services-capabilities not existed
+    EXPECT_EQ(HapUtils::ParsePluginId("{\"type\":\"release\"}", pluginId), false);
+    // pluginDistributionIDs not existed
+    std::string noIdContent = "{\"app-services-capabilities\":"
+        "{\"ohos.permission.kernel.SUPPORT_PLUGIN\":{}}}";
+    EXPECT_EQ(HapUtils::ParsePluginId(noIdContent, pluginId), false);
+    // pluginDistributionIDs is not a string
+    std::string badTypeContent = "{\"app-services-capabilities\":"
+        "{\"ohos.permission.kernel.SUPPORT_PLUGIN\":{\"pluginDistributionIDs\":123}}}";
+    EXPECT_EQ(HapUtils::ParsePluginId(badTypeContent, pluginId), false);
+    // pluginDistributionIDs is empty
+    std::string emptyIdContent = "{\"app-services-capabilities\":"
+        "{\"ohos.permission.kernel.SUPPORT_PLUGIN\":{\"pluginDistributionIDs\":\"\"}}}";
+    EXPECT_EQ(HapUtils::ParsePluginId(emptyIdContent, pluginId), false);
+    // invalid profile content
+    EXPECT_EQ(HapUtils::ParsePluginId("not json", pluginId), false);
 }
 
 /**
