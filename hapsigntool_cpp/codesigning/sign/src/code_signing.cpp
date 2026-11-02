@@ -42,6 +42,7 @@ const std::string CodeSigning::LIBS_PATH_PREFIX = "libs/";
 const std::string CodeSigning::NATIVE_LIB_AN_SUFFIX = ".an";
 const std::string CodeSigning::HNP_PATH_PREFIX = "hnp/";
 const std::string CodeSigning::HNP_FILE_SUFFIX = ".hnp";
+const std::string CodeSigning::BUNDLE_TYPE_PLUGIN = "appPlugin";
 const int ELF_MAGIC_LEN = 4;
 const char ELF_MAGIC[ELF_MAGIC_LEN] = { 0x7f, 0x45, 0x4c, 0x46 };
 
@@ -63,14 +64,31 @@ bool CodeSigning::GetCodeSignBlock(const std::string &input, int64_t offset,
                                    ZipSigner& zip, std::vector<int8_t>& ret)
 {
     SIGNATURE_TOOLS_LOGI("Start to sign code.");
-    bool flag = std::find(SUPPORT_FILE_FORM.begin(), SUPPORT_FILE_FORM.end(), inForm) == SUPPORT_FILE_FORM.end();
-    if (flag) {
-        SIGNATURE_TOOLS_LOGE("only support format is [hap, hqf, hsp, app]");
+    std::string inFormLower = inForm;
+    std::transform(inFormLower.begin(), inFormLower.end(), inFormLower.begin(), ::tolower);
+    if (std::find(SUPPORT_FILE_FORM.begin(), SUPPORT_FILE_FORM.end(), inFormLower) == SUPPORT_FILE_FORM.end()) {
+        PrintErrorNumberMsg(SignToolErrMsg::FILE_FORMAT_UNSUPPORTED_ERROR, "only support format is [hap, hsp, hqf]");
         return false;
     }
     int64_t dataSize = ComputeDataSize(zip);
     if (dataSize < 0) {
         SIGNATURE_TOOLS_LOGE("SignFile Failed because dataSize is invalid");
+        return false;
+    }
+    // parse pluginId for appPlugin bundle type, align with java CodeSigning.getCodeSignBlock
+    m_pluginId.clear();
+    std::string moduleContent;
+    if (!HapUtils::GetModuleContentFromHap(input, moduleContent)) {
+        SIGNATURE_TOOLS_LOGE("get module.json content from hap failed.");
+        return false;
+    }
+    std::string bundleType;
+    if (!HapUtils::GetBundleTypeFromJson(moduleContent, bundleType)) {
+        SIGNATURE_TOOLS_LOGE("get bundle type from module.json failed.");
+        return false;
+    }
+    if (bundleType == BUNDLE_TYPE_PLUGIN && !HapUtils::ParsePluginId(profileContent, m_pluginId)) {
+        SIGNATURE_TOOLS_LOGE("parse plugin id from profile failed.");
         return false;
     }
     int64_t fsvTreeOffset = 0;
@@ -91,7 +109,6 @@ bool CodeSigning::SignHapEntry(const std::string &input, int64_t dataSize, int64
                                const std::string &profileContent, int64_t& fsvTreeOffset,
                                std::string& ownerID)
 {
-    m_timestamp = GetTimestamp();
     fsvTreeOffset = m_codeSignBlock.ComputeMerkleTreeOffset(offset);
     std::unique_ptr<FsVerityInfoSegment> fsVerityInfoSegment =
         std::make_unique<FsVerityInfoSegment>((int8_t)FsVerityDescriptor::VERSION,
@@ -99,7 +116,10 @@ bool CodeSigning::SignHapEntry(const std::string &input, int64_t dataSize, int64
                                               (int8_t)FsVerityGenerator::GetLog2BlockSize());
     m_codeSignBlock.SetFsVerityInfoSegment(*(fsVerityInfoSegment.get()));
     SIGNATURE_TOOLS_LOGI("Sign hap.");
-    ownerID = HapUtils::GetAppIdentifier(profileContent);
+    if (!HapUtils::GetAppIdentifier(profileContent, ownerID)) {
+        SIGNATURE_TOOLS_LOGE("Get app identifier from profile failed.");
+        return false;
+    }
     std::ifstream inputStream;
     inputStream.open(input, std::ios::binary);
     if (!inputStream.is_open()) {
@@ -186,13 +206,6 @@ int64_t CodeSigning::ComputeDataSize(ZipSigner& zip)
     return dataSizeInt64;
 }
 
-int64_t CodeSigning::GetTimestamp()
-{
-    auto now = std::chrono::system_clock::now();
-    auto nowSeconds = std::chrono::time_point_cast<std::chrono::seconds>(now);
-    return nowSeconds.time_since_epoch().count();
-}
-
 bool CodeSigning::AddPageInfoExtensionToSignInfo(SignInfo& signInfo, FsVerityGenerator& gen,
                                                  const std::string &ownerID)
 {
@@ -258,11 +271,34 @@ bool CodeSigning::SignFile(std::istream& inputStream, int64_t fileSize, bool sto
     return true;
 }
 
-bool CodeSigning::GetElfCodeSignBlock(const std::string &input, int64_t offset,
-                                      const std::string &inForm, const std::string &profileContent,
-                                      std::vector<int8_t>& codesignData)
+FsVerityDescriptorWithSign CodeSigning::BuildElfDescriptorWithSign(int64_t fileSize, int64_t fsvTreeOffset,
+                                                                   FsVerityGenerator& fsVerityGenerator,
+                                                                   const std::vector<int8_t>& signature)
+{
+    FsVerityDescriptor::Builder fsdbuilder;
+    fsdbuilder.SetFileSize(fileSize)
+              .SetHashAlgorithm(FS_SHA256.GetId())
+              .SetLog2BlockSize(LOG_2_OF_FSVERITY_HASH_PAGE_SIZE)
+              .SetSaltSize(fsVerityGenerator.GetSaltSize())
+              .SetSignSize(signature.size())
+              .SetSalt(fsVerityGenerator.Getsalt())
+              .SetRawRootHash(fsVerityGenerator.GetRootHash())
+              .SetFlags(FsVerityDescriptor::FLAG_STORE_MERKLE_TREE_OFFSET)
+              .SetMerkleTreeOffset(fsvTreeOffset)
+              .SetCsVersion(FsVerityDescriptor::CODE_SIGN_VERSION);
+    return FsVerityDescriptorWithSign(FsVerityDescriptor(fsdbuilder), signature);
+}
+
+bool CodeSigning::GetElfCodeSignBlock(const std::string &input, int64_t offset, const std::string &inForm,
+                                      const std::string &profileContent, std::vector<int8_t>& codesignData)
 {
     SIGNATURE_TOOLS_LOGI("Start to sign elf code.");
+    std::string inFormLower = inForm;
+    std::transform(inFormLower.begin(), inFormLower.end(), inFormLower.begin(), ::tolower);
+    if (inFormLower != ELF) {
+        PrintErrorNumberMsg(SignToolErrMsg::FILE_FORMAT_UNSUPPORTED_ERROR, "only support format is [elf]");
+        return false;
+    }
     int paddingSize = ElfSignBlock::ComputeMerkleTreePaddingLength(offset);
     int64_t fsvTreeOffset = offset + FsVerityDescriptorWithSign::INTEGER_BYTES * 2 + paddingSize;
     std::ifstream inputstream(input, std::ios::binary | std::ios::ate);
@@ -275,29 +311,20 @@ bool CodeSigning::GetElfCodeSignBlock(const std::string &input, int64_t offset,
     std::unique_ptr<FsVerityGenerator> fsVerityGenerator = std::make_unique<FsVerityGenerator>();
     fsVerityGenerator->GenerateFsVerityDigest(inputstream, fileSize, fsvTreeOffset);
     std::vector<int8_t> fsVerityDigest = fsVerityGenerator->GetFsVerityDigest();
-    std::string ownerID = profileContent.empty() ? "DEBUF_LIB_ID" : HapUtils::GetAppIdentifier(profileContent);
+    std::string ownerID;
+    if (profileContent.empty()) {
+        ownerID = DEBUG_LIB_ID;
+    } else if (!HapUtils::GetAppIdentifier(profileContent, ownerID)) {
+        SIGNATURE_TOOLS_LOGE("Get app identifier from profile failed.");
+        return false;
+    }
     std::vector<int8_t> signature;
-    bool generateSignatureFlag = GenerateSignature(fsVerityDigest, ownerID, signature);
-    if (!generateSignatureFlag) {
+    if (!GenerateSignature(fsVerityDigest, ownerID, signature)) {
         SIGNATURE_TOOLS_LOGE("[SignElf] generate elf signature failed");
         return false;
     }
-
-    FsVerityDescriptor::Builder fsdbuilder;
-    fsdbuilder.SetFileSize(fileSize)
-              .SetHashAlgorithm(FS_SHA256.GetId())
-              .SetLog2BlockSize(LOG_2_OF_FSVERITY_HASH_PAGE_SIZE)
-              .SetSaltSize(fsVerityGenerator->GetSaltSize())
-              .SetSignSize(signature.size())
-              .SetFileSize(fileSize)
-              .SetSalt(fsVerityGenerator->Getsalt())
-              .SetRawRootHash(fsVerityGenerator->GetRootHash())
-              .SetFlags(FsVerityDescriptor::FLAG_STORE_MERKLE_TREE_OFFSET)
-              .SetMerkleTreeOffset(fsvTreeOffset)
-              .SetCsVersion(FsVerityDescriptor::CODE_SIGN_VERSION);
-
     FsVerityDescriptorWithSign fsVerityDescriptorWithSign =
-        FsVerityDescriptorWithSign(FsVerityDescriptor(fsdbuilder), signature);
+        BuildElfDescriptorWithSign(fileSize, fsvTreeOffset, *fsVerityGenerator, signature);
     std::vector<int8_t> treeBytes = fsVerityGenerator->GetTreeBytes();
     ElfSignBlock signBlock = ElfSignBlock(paddingSize, treeBytes, fsVerityDescriptorWithSign);
     signBlock.ToByteArray(codesignData);
@@ -563,7 +590,7 @@ bool CodeSigning::SignOneHapHnpEntry(unzFile zFile, uLong entryCount, uLong inde
     }
     auto ite = hnpTypeMap.find(HapUtils::ParseHnpPath(entryName));
     if (ite == hnpTypeMap.end()) {
-        PrintErrorNumberMsg(SignToolErrMsg::SIGNATURE_FAILED,
+        PrintErrorNumberMsg(SignToolErrMsg::HNP_FILE_DESCRIPTION_ERROR,
             "hnp should be described in module.json: " + entryName);
         return false;
     }
@@ -891,9 +918,12 @@ bool CodeSigning::GenerateSignature(const std::vector<int8_t>& signedData, const
     if (m_signConfig->GetSigner() != nullptr) {
         STACK_OF(X509)* certs = NULL;
         certs = m_signConfig->GetSigner()->GetCertificates();
-        if (certs == nullptr) {
-            PrintErrorNumberMsg(SignToolErrMsg::SIGNATURE_FAILED,
-                                "No certificates configured for sign.");
+        if (certs == nullptr || sk_X509_num(certs) == 0) {
+            PrintErrorNumberMsg(SignToolErrMsg::CERTIFICATES_CONFIGURE_ERROR,
+                                "No certificate is configured for sign");
+            if (certs != nullptr) {
+                sk_X509_pop_free(certs, X509_free);
+            }
             return false;
         }
         sk_X509_pop_free(certs, X509_free);
@@ -906,6 +936,7 @@ bool CodeSigning::GenerateSignature(const std::vector<int8_t>& signedData, const
         SIGNATURE_TOOLS_LOGW("generate signature get owner id not null.");
         bcSignedDataGenerator->SetOwnerId(ownerID);
     }
+    bcSignedDataGenerator->SetPluginId(m_pluginId);
     std::string signed_data(signedData.begin(), signedData.end());
     std::string ret_str;
     if (signedData.empty()) {

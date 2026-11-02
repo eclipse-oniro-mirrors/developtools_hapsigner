@@ -36,7 +36,7 @@
 | PKCS7/CMS 生成 | `hap/sign/src/bc_pkcs7_generator.cpp` + `codesigning/sign/src/bc_signeddata_generator.cpp` + `profile/src/pkcs7_data.cpp` | `bc_pkcs7_generator.cpp`(`BCPkcs7Generator`)；`bc_signeddata_generator.cpp`(带 ownerID OID) |
 | fs-verity Merkle 树/digest/描述符 | `codesigning/fsverity/` | `merkle_tree_builder.cpp`(`GenerateMerkleTree`)；`fs_verity_generator.cpp`(`GenerateFsVerityDigest`)；`fs_verity_descriptor.h:29-38`(VERSION=1/DESCRIPTOR_SIZE=256/PAGE_SIZE_4K=4096) |
 | 代码签名块（HAP） | `codesigning/sign/src/code_signing.cpp` | `:46`(`GetCodeSignBlock`，HAP 多段) |
-| 代码签名块（ELF） | `codesigning/sign/src/code_signing.cpp` | `:175`(`GetElfCodeSignBlock`，`ElfSignBlock`+`FsVerityDescriptorWithSign`；**`:192` 有拼写错误 `"DEBUF_LIB_ID"` 应为 `DEBUG_LIB_ID`**) |
+| 代码签名块（ELF） | `codesigning/sign/src/code_signing.cpp` | `GetElfCodeSignBlock`（`ElfSignBlock`+`FsVerityDescriptorWithSign`；无 profile 时 ownerID 回退 `DEBUG_LIB_ID` 常量，与 Java 版及 `cms_utils` 验签侧一致） |
 | 远程签名器插件 ABI | `signer/include/signer_factory.h` + `signer/src/signer_factory.cpp` | `signer_factory.h:27-36`(`RemoteSignerParamType`+`RemoteSignerCreator`，5 参数)；`signer_factory.cpp:42`(`LoadRemoteSigner` dlopen)、`:65`(dlsym "GetRemoteSignerInstance") |
 | 错误码 | `common/include/signature_tools_errno.h` | `:21`(`RET_OK=0`…`PROVISION_INVALID_ERROR=-117`) |
 | 日志 | `common/include/signature_tools_log.h` | `:35`(`SIGNATURE_LOG`=printf)；`:38`(LOGE/LOGF 常开、LOGI/LOGD/LOGW 需 `SIGNATURE_LOG_DEBUG`) |
@@ -191,4 +191,4 @@ out/<product>/.../hapsigntool_pc_unittest --gtest_filter=VerifyElfTest.*
 - **签名总流程不可乱序**：`SignProvider::Sign`（`:327`）必须 IO streams → `ZipSigner` → `InitDataSourceContents` → `DoSignBlock` → `OutputSignedFile`，含 **Zip64 重试**（`:1167`）。摘要计算依赖块布局最终状态，乱序将导致摘要失真。权限签名经 `BuildPermSignSubBlock`/`ComputePermissionDigests`（`:828-957`），代码签名经 `BuildCodeSignSubBlock`→`CodeSigning::GetCodeSignBlock`（`:670`）。
 - **fs-verity 计算需排除已写段**：`MerkleTreeBuilder` 多线程（`Uscript::ThreadPool`）构建 Merkle 树，`SetCsOffset` 让哈希计算跳过 codesign 区域，改动不得让签名段自身参与根哈希计算（自引用）。
 - **验签只读不写**：`VerifyHap`/`VerifyElf`/`VerifyBin` 仅解析与验证，不得修改输入文件。
-- **已知的拼写错误勿单独"修正"**：`constant.h:92` 命名空间注释误写 `UpdateEngine`（应为 `SignatureTools`）、`code_signing.cpp:192` `"DEBUF_LIB_ID"`（应为 `DEBUG_LIB_ID`）、多数包含保护 `SIGNATRUETOOLS_*_H`（应为 `SIGNATURETOOLS`）——单独修改会破坏一致性或引入下游包含顺序问题，如需修正须全量同步。
+- **已知的拼写错误勿单独"修正"**：`constant.h:92` 命名空间注释误写 `UpdateEngine`（应为 `SignatureTools`）、多数包含保护 `SIGNATRUETOOLS_*_H`（应为 `SIGNATURETOOLS`）——单独修改会破坏一致性或引入下游包含顺序问题，如需修正须全量同步。（原 `code_signing.cpp` 的 `"DEBUF_LIB_ID"` 拼写错误已修正为 `DEBUG_LIB_ID` 常量，与 Java 版对齐。）

@@ -31,6 +31,7 @@
 #include "signer_config.h"
 #include "signature_tools_log.h"
 #include "fs_verity_generator.h"
+#include "fs_verity_descriptor_with_sign.h"
 #include "merkle_tree_extension.h"
 #include "bc_signeddata_generator.h"
 #include "unzip_handle_param.h"
@@ -48,6 +49,7 @@ public:
     static const std::string NATIVE_LIB_AN_SUFFIX;
     static const std::string HNP_PATH_PREFIX;
     static const std::string HNP_FILE_SUFFIX;
+    static const std::string BUNDLE_TYPE_PLUGIN;
     CodeSigning(SignerConfig* signConfig);
     CodeSigning();
 
@@ -68,7 +70,6 @@ public:
     static bool IsElfFile(const char* data, int size);
     int64_t ComputeDataSize(ZipSigner& zip);
     void CreatePageInfoExtension(ZipEntry* entry);
-    int64_t GetTimestamp();
     bool SignNativeLibs(const std::string &input, std::string &ownerID,
                         std::vector<std::pair<std::string, SignInfo>>& outList);
     bool SignNativeHnps(const std::string &input, const std::string &profileContent,
@@ -86,16 +87,19 @@ public:
     bool RunParseZipInfo(const std::string& packageName, UnzipHandleParam& param, unz_file_pos pos);
     bool GenerateSignature(const std::vector<int8_t>& signedData, const std::string&,
                            std::vector<int8_t>&);
-    int64_t m_timestamp = 0;
     std::vector<std::string> m_extractedNativeLibSuffixs;
     SignerConfig* m_signConfig;
     CodeSignBlock m_codeSignBlock;
     std::mutex m_mutex;
     PageInfoExtension* m_pageInfoExtension = nullptr;
+    std::string m_pluginId;
 
 private:
     static bool CheckUnzParam(unzFile& zFile, unz_file_info& zFileInfo, char fileName[], size_t* nameLen);
     static bool CheckFileName(char fileName[], size_t* nameLen);
+    static FsVerityDescriptorWithSign BuildElfDescriptorWithSign(int64_t fileSize, int64_t fsvTreeOffset,
+                                                                 FsVerityGenerator& fsVerityGenerator,
+                                                                 const std::vector<int8_t>& signature);
     bool SignHapEntry(const std::string &input, int64_t dataSize, int64_t offset,
                       const std::string &profileContent, int64_t& fsvTreeOffset, std::string& ownerID);
     bool AddPageInfoExtensionToSignInfo(SignInfo& signInfo, FsVerityGenerator& gen,

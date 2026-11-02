@@ -226,14 +226,14 @@ HWTEST_F(CodeSigningTest, GetNativeEntriesFromHap, testing::ext::TestSize.Level1
 }
 
 /**
- * @tc.name: getTimestamp
- * @tc.desc: Test function of CodeSigningTest::getTimestamp() interface for SUCCESS.
+ * @tc.name: updateCodeSignBlock
+ * @tc.desc: Test function of CodeSigningTest::UpdateCodeSignBlock() interface for SUCCESS.
  * @tc.size: MEDIUM
  * @tc.type: FUNC
  * @tc.level Level 1
  * @tc.require: SR000H63TL
  */
-HWTEST_F(CodeSigningTest, getTimestamp, testing::ext::TestSize.Level1)
+HWTEST_F(CodeSigningTest, updateCodeSignBlock, testing::ext::TestSize.Level1)
 {
     SignerConfig signerConfig;
     signerConfig.SetCompatibleVersion(9);
@@ -277,8 +277,6 @@ HWTEST_F(CodeSigningTest, getTimestamp, testing::ext::TestSize.Level1)
 
     CodeSigning codeSigning(&signerConfig);
     codeSigning.UpdateCodeSignBlock();
-    int64_t timeStamp = codeSigning.GetTimestamp();
-    EXPECT_NE(timeStamp, 0);
 }
 
 /**

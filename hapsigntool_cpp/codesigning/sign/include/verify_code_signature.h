@@ -32,6 +32,7 @@
 
 namespace OHOS {
 namespace SignatureTools {
+class ElfSignBlock;
 class VerifyCodeSignature {
 public:
     static bool VerifyHap(std::string file, int64_t offset, int64_t length,
@@ -51,6 +52,7 @@ public:
 private:
     static bool GenerateCodeSignBlock(const std::string& file, int64_t offset, int64_t length,
                                       CodeSignBlock& csb);
+    static bool CheckElfOwnerID(const std::string& profileContent, ElfSignBlock& elfSignBlock);
     static bool VerifyOneHnpEntry(unzFile zFile, uLong entryCount, uLong index, CodeSignBlock& csb,
                                   std::unordered_map<std::string, std::string>& hnpTypeMap,
                                   std::pair<std::string, std::string>& pairResult);

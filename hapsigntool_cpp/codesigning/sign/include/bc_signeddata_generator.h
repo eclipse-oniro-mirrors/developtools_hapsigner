@@ -28,6 +28,10 @@
 namespace OHOS {
 namespace SignatureTools {
 
+const std::string PLUGINID_OID = "1.3.6.1.4.1.2011.2.376.1.4.2"; // SIGNER_PLUGIN_ID
+const std::string PLUGINID_OID_SHORT_NAME = "pluginID";
+const std::string PLUGINID_OID_LONG_NAME = "Code Signature Plugin ID";
+
 class BCSignedDataGenerator : public SignedDataGenerator {
 public:
     /**
@@ -41,6 +45,7 @@ public:
     static int GetSigAlg(SignerConfig* signerConfig, std::string& sigAlg);
     int GenerateSignedData(const std::string& content, SignerConfig* signerConfig, std::string& ret)override;
     void SetOwnerId(const std::string& ownerID);
+    void SetPluginId(const std::string& pluginId);
 
 private:
     // @return 0(NID_undef) >0: success(new NID)
@@ -50,9 +55,12 @@ private:
                           const std::string& sigAlg, std::string& ret);
     // @return 0:success <0 :error
     int AddOwnerID(std::vector<PKCS7Attr>& attrs, const std::string& ownerID);
+    // @return 0:success <0 :error
+    int AddPluginId(std::vector<PKCS7Attr>& attrs, const std::string& pluginId);
 
 private:
     std::string m_ownerID;
+    std::string m_pluginId;
 };
 } // namespace SignatureTools
 } // namespace OHOS
