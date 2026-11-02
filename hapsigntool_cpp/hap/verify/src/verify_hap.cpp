@@ -701,8 +701,7 @@ bool VerifyHap::CheckCodeSign(const std::string& hapFilePath,
     std::vector<std::string> fileNameArray = StringUtils::SplitString(hapFilePath, '.');
     uint32_t blockType;
     uint32_t blockLength;
-    uint32_t blockOffset;
-    if (!GetBlockHeaderInfo(propertyBlockArray, 0, blockType, blockLength, blockOffset)) {
+    if (!GetBlockHeaderInfo(propertyBlockArray, 0, blockType, blockLength)) {
         return false;
     }
 
@@ -710,6 +709,15 @@ bool VerifyHap::CheckCodeSign(const std::string& hapFilePath,
         PrintErrorNumberMsg(SignToolErrMsg::VERIFY_FAILED, "code sign data not exist in hap " + hapFilePath);
         return false;
     }
+    // extract code sign block content from in-memory property block (no file seekg(blockOffset))
+    if (static_cast<size_t>(propertyBlockArray.GetCapacity()) <
+        static_cast<size_t>(ZIP_HEAD_OF_SUBSIGNING_BLOCK_LENGTH) + blockLength) {
+        PrintErrorNumberMsg(SignToolErrMsg::VERIFY_FAILED, "code sign block content out of bounds");
+        return false;
+    }
+    const char* contentPtr = propertyBlockArray.GetBufferPtr() + ZIP_HEAD_OF_SUBSIGNING_BLOCK_LENGTH;
+    std::vector<int8_t> codeSignBlock(reinterpret_cast<const int8_t*>(contentPtr),
+                                      reinterpret_cast<const int8_t*>(contentPtr) + blockLength);
     auto ite = blockMap.find(HapUtils::HAP_PROFILE_BLOCK_ID);
     if (ite == blockMap.end()) {
         return false;
@@ -722,7 +730,8 @@ bool VerifyHap::CheckCodeSign(const std::string& hapFilePath,
         return false;
     }
     std::string suffix = fileNameArray[fileNameArray.size() - 1];
-    bool isCodeSign = VerifyCodeSignature::VerifyHap(hapFilePath, blockOffset, blockLength,
+    // blockOffset no longer used (merkle located by tail of gap, no offset/alignment needed)
+    bool isCodeSign = VerifyCodeSignature::VerifyHap(hapFilePath, codeSignBlock,
                                                      suffix, profileContent);
     if (!isCodeSign) {
         SIGNATURE_TOOLS_LOGE("verify codesign failed, file: %s", hapFilePath.c_str());
@@ -733,14 +742,13 @@ bool VerifyHap::CheckCodeSign(const std::string& hapFilePath,
 }
 
 bool VerifyHap::GetBlockHeaderInfo(ByteBuffer& blockArray, int32_t pos,
-                                   uint32_t& blockType, uint32_t& blockLength, uint32_t& blockOffset)
+                                   uint32_t& blockType, uint32_t& blockLength)
 {
     if (pos + ZIP_HEAD_OF_SUBSIGNING_BLOCK_LENGTH > blockArray.GetCapacity()) {
         return false;
     }
     return blockArray.GetUInt32(pos, blockType) &&
-           blockArray.GetUInt32(pos + OFFSET_FOUR, blockLength) &&
-           blockArray.GetUInt32(pos + OFFSET_EIGHT, blockOffset);
+           blockArray.GetUInt32(pos + OFFSET_FOUR, blockLength);
 }
 
 void VerifyHap::BuildBlockInfo(const std::vector<OptionalBlock>& optionalBlocks,
@@ -781,8 +789,7 @@ bool VerifyHap::CheckPermSign(const std::string& hapFilePath, const std::vector<
     uint32_t codeSignBlockLength = 0;
     uint32_t firstBlockType;
     uint32_t firstBlockLength;
-    uint32_t firstBlockOffset;
-    if (GetBlockHeaderInfo(propertyBlockArray, pos, firstBlockType, firstBlockLength, firstBlockOffset)) {
+    if (GetBlockHeaderInfo(propertyBlockArray, pos, firstBlockType, firstBlockLength)) {
         codeSignBlockLength = firstBlockLength + ZIP_HEAD_OF_SUBSIGNING_BLOCK_LENGTH;
     }
     pos = codeSignBlockLength;
@@ -793,8 +800,7 @@ bool VerifyHap::CheckPermSign(const std::string& hapFilePath, const std::vector<
 
     uint32_t blockType;
     uint32_t blockLength;
-    uint32_t blockOffset;
-    if (!GetBlockHeaderInfo(propertyBlockArray, pos, blockType, blockLength, blockOffset)) {
+    if (!GetBlockHeaderInfo(propertyBlockArray, pos, blockType, blockLength)) {
         SIGNATURE_TOOLS_LOGE("read block header failed at pos %d", pos);
         return false;
     }

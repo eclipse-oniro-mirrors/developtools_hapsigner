@@ -35,7 +35,7 @@ namespace SignatureTools {
 class ElfSignBlock;
 class VerifyCodeSignature {
 public:
-    static bool VerifyHap(std::string file, int64_t offset, int64_t length,
+    static bool VerifyHap(std::string file, const std::vector<int8_t>& codeSignBlock,
                           std::string fileFormat, std::string profileContent);
     static bool VerifyElf(std::string file, int64_t offset, int64_t length,
                           std::string fileFormat, std::string profileContent);
@@ -50,7 +50,7 @@ public:
     static bool AreVectorsEqual(const std::vector<int8_t>& vec1, const std::vector<int8_t>& vec2);
 
 private:
-    static bool GenerateCodeSignBlock(const std::string& file, int64_t offset, int64_t length,
+    static bool GenerateCodeSignBlock(const std::vector<int8_t>& codeSignBlock,
                                       CodeSignBlock& csb);
     static bool CheckElfOwnerID(const std::string& profileContent, ElfSignBlock& elfSignBlock);
     static bool VerifyOneHnpEntry(unzFile zFile, uLong entryCount, uLong index, CodeSignBlock& csb,
@@ -68,11 +68,9 @@ private:
     static bool VerifyHnpLibData(unzFile hnpZip, const std::string& libPath, SignInfo signInfo,
                                  const std::string& hnpType,
                                  std::pair<std::string, std::string>& pairResult);
-    static bool ParseSegmentHead(CodeSignBlock& csb, std::ifstream& signedHap,
-                                 std::vector<int8_t>& merkleTreeBytes, int32_t& fileReadOffset);
-    static bool ParseMerkleTree(CodeSignBlock& csb, int32_t readOffset, std::ifstream& signedHap,
-                                int64_t computedTreeOffset);
-    static int64_t GetAlignmentAddr(int64_t alignment, int64_t input);
+    static bool ParseSegmentHead(CodeSignBlock& csb, std::istream& signedHap,
+                                 std::vector<int8_t>& merkleTreeBytes, int32_t& blockReadOffset);
+    static bool ParseMerkleTree(CodeSignBlock& csb, int32_t readOffset, std::istream& signedHap);
 };
 } // namespace SignatureTools
 } // namespace OHOS

@@ -14,6 +14,8 @@
  */
 
 #include <memory>
+#include <fstream>
+#include <vector>
 #include <gtest/gtest.h>
 #include "cms_utils.h"
 #include "verify_code_signature.h"
@@ -143,7 +145,15 @@ HWTEST_F(CmsUtilsTest, VerifyHap, testing::ext::TestSize.Level1)
     int64_t length = 23221;
     std::string fileFormat = "hap";
     std::string profileContent = "";
-    bool flag = VerifyCodeSignature::VerifyHap(file, offset, length, fileFormat, profileContent);
+    // VerifyHap now takes in-memory code sign block content instead of file offset/length
+    std::vector<int8_t> codeSignBlock(static_cast<size_t>(length), 0);
+    std::ifstream in(file, std::ios::binary);
+    if (in.is_open()) {
+        in.seekg(offset, std::ios::beg);
+        in.read(reinterpret_cast<char*>(codeSignBlock.data()), length);
+        codeSignBlock.resize(static_cast<size_t>(in.gcount()));
+    }
+    bool flag = VerifyCodeSignature::VerifyHap(file, codeSignBlock, fileFormat, profileContent);
 
     EXPECT_EQ(flag, false);
 }

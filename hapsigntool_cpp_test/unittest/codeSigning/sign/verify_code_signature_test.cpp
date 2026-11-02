@@ -15,6 +15,7 @@
 
 #include <memory>
 #include <fstream>
+#include <vector>
 #include <gtest/gtest.h>
 #include "verify_code_signature.h"
 #include "verify_hap.h"
@@ -22,6 +23,26 @@
 
 namespace OHOS {
 namespace SignatureTools {
+namespace {
+// read code sign block content from file (VerifyHap now takes in-memory block content
+// instead of file offset/length, merkle is located by tail of gap without alignment)
+std::vector<int8_t> ReadCodeSignBlockFromFile(const std::string& file, int64_t offset, int64_t length)
+{
+    std::vector<int8_t> codeSignBlock;
+    if (length <= 0) {
+        return codeSignBlock;
+    }
+    std::ifstream in(file, std::ios::binary);
+    if (!in.is_open()) {
+        return codeSignBlock;
+    }
+    in.seekg(offset, std::ios::beg);
+    codeSignBlock.resize(static_cast<size_t>(length));
+    in.read(reinterpret_cast<char*>(codeSignBlock.data()), length);
+    codeSignBlock.resize(static_cast<size_t>(in.gcount()));
+    return codeSignBlock;
+}
+} // namespace
 
 /*
  * 测试套件,固定写法
@@ -111,7 +132,7 @@ HWTEST_F(VerifyCodeSignatureTest, VerifyCodeSign, testing::ext::TestSize.Level1)
     int64_t length = 23193;
     std::string fileFormat = "hap";
     std::string profileContent = "";
-    VerifyCodeSignature::VerifyHap(file, offset, length, fileFormat, profileContent);
+    VerifyCodeSignature::VerifyHap(file, ReadCodeSignBlockFromFile(file, offset, length), fileFormat, profileContent);
     CodeSignBlock csb;
     bool flag = VerifyCodeSignature::VerifyCodeSign(file, pairResult, csb);
 
@@ -133,7 +154,8 @@ HWTEST_F(VerifyCodeSignatureTest, VerifyHap001, testing::ext::TestSize.Level1)
     int64_t length = 23193;
     std::string fileFormat = "hap";
     std::string profileContent = "";
-    bool flag = VerifyCodeSignature::VerifyHap(file, offset, length, fileFormat, profileContent);
+    bool flag = VerifyCodeSignature::VerifyHap(file, ReadCodeSignBlockFromFile(file, offset, length),
+        fileFormat, profileContent);
 
     EXPECT_EQ(flag, false);
 }
@@ -153,7 +175,8 @@ HWTEST_F(VerifyCodeSignatureTest, VerifyHap002, testing::ext::TestSize.Level1)
     int64_t length = 23193;
     std::string fileFormat = "";
     std::string profileContent = "";
-    bool flag = VerifyCodeSignature::VerifyHap(file, offset, length, fileFormat, profileContent);
+    bool flag = VerifyCodeSignature::VerifyHap(file, ReadCodeSignBlockFromFile(file, offset, length),
+        fileFormat, profileContent);
 
     EXPECT_EQ(flag, true);
 }
@@ -173,7 +196,8 @@ HWTEST_F(VerifyCodeSignatureTest, VerifyHap003, testing::ext::TestSize.Level1)
     int64_t length = 23194;
     std::string fileFormat = "hap";
     std::string profileContent = "";
-    bool flag = VerifyCodeSignature::VerifyHap(file, offset, length, fileFormat, profileContent);
+    bool flag = VerifyCodeSignature::VerifyHap(file, ReadCodeSignBlockFromFile(file, offset, length),
+        fileFormat, profileContent);
 
     EXPECT_EQ(flag, false);
 }
@@ -193,7 +217,8 @@ HWTEST_F(VerifyCodeSignatureTest, VerifyHap004, testing::ext::TestSize.Level1)
     int64_t length = 23193;
     std::string fileFormat = "hap";
     std::string profileContent = "";
-    bool flag = VerifyCodeSignature::VerifyHap(file, offset, length, fileFormat, profileContent);
+    bool flag = VerifyCodeSignature::VerifyHap(file, ReadCodeSignBlockFromFile(file, offset, length),
+        fileFormat, profileContent);
 
     EXPECT_EQ(flag, false);
 }
@@ -213,7 +238,8 @@ HWTEST_F(VerifyCodeSignatureTest, VerifyHap005, testing::ext::TestSize.Level1)
     int64_t length = 23221;
     std::string fileFormat = "hap";
     std::string profileContent = "{\"version-code\":1,\"version-name\":\"1.0.0\"}";
-    bool flag = VerifyCodeSignature::VerifyHap(file, offset, length, fileFormat, profileContent);
+    bool flag = VerifyCodeSignature::VerifyHap(file, ReadCodeSignBlockFromFile(file, offset, length),
+        fileFormat, profileContent);
 
     EXPECT_EQ(flag, false);
 }
@@ -233,7 +259,8 @@ HWTEST_F(VerifyCodeSignatureTest, VerifyHap006, testing::ext::TestSize.Level1)
     int64_t length = 23193;
     std::string fileFormat = "hap";
     std::string profileContent = "{\"version-code\":1,\"version-name\":\"1.0.0\"}";
-    bool flag = VerifyCodeSignature::VerifyHap(file, offset, length, fileFormat, profileContent);
+    bool flag = VerifyCodeSignature::VerifyHap(file, ReadCodeSignBlockFromFile(file, offset, length),
+        fileFormat, profileContent);
 
     EXPECT_EQ(flag, false);
 }
@@ -253,7 +280,8 @@ HWTEST_F(VerifyCodeSignatureTest, VerifyHap007, testing::ext::TestSize.Level1)
     int64_t length = 23193;
     std::string fileFormat = "hap";
     std::string profileContent = "{\"version-code\":1,\"version-name\":\"1.0.0\"}";
-    bool flag = VerifyCodeSignature::VerifyHap(file, offset, length, fileFormat, profileContent);
+    bool flag = VerifyCodeSignature::VerifyHap(file, ReadCodeSignBlockFromFile(file, offset, length),
+        fileFormat, profileContent);
 
     EXPECT_EQ(flag, false);
 }
@@ -273,7 +301,8 @@ HWTEST_F(VerifyCodeSignatureTest, VerifyHap008, testing::ext::TestSize.Level1)
     int64_t length = 23193;
     std::string fileFormat = "hap";
     std::string profileContent = "{\"version-code\":1,\"version-name\":\"1.0.0\"}";
-    bool flag = VerifyCodeSignature::VerifyHap(file, offset, length, fileFormat, profileContent);
+    bool flag = VerifyCodeSignature::VerifyHap(file, ReadCodeSignBlockFromFile(file, offset, length),
+        fileFormat, profileContent);
 
     EXPECT_EQ(flag, false);
 }
@@ -476,7 +505,8 @@ HWTEST_F(VerifyCodeSignatureTest, VerifyNativeLib002, testing::ext::TestSize.Lev
     int64_t length = 23221;
     std::string fileFormat = "hap";
     std::string profileContent = "{\"version-code\":1,\"version-name\":\"1.0.0\"}";
-    bool flag = VerifyCodeSignature::VerifyHap(file, offset, length, fileFormat, profileContent);
+    bool flag = VerifyCodeSignature::VerifyHap(file, ReadCodeSignBlockFromFile(file, offset, length),
+        fileFormat, profileContent);
 
     EXPECT_EQ(flag, false);
 }

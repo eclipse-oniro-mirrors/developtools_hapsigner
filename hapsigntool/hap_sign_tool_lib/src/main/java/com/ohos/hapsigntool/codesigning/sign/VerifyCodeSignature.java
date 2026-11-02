@@ -43,6 +43,7 @@ import org.bouncycastle.cms.CMSException;
 import org.bouncycastle.cms.CMSSignedData;
 import org.bouncycastle.cms.SignerInformation;
 
+import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
@@ -167,8 +168,6 @@ public class VerifyCodeSignature {
      * Verify a signed hap's signature
      *
      * @param file       signed hap file
-     * @param offset     start position of code sign block based on the start of the hap file
-     * @param length     byte size of code sign block
      * @param fileFormat hap or hqf or hsp, etc.
      * @param profileContent profile of the hap
      * @return true if signature verify succeed and false otherwise
@@ -178,7 +177,8 @@ public class VerifyCodeSignature {
      * @throws CMSException            if signature verify failed
      * @throws ProfileException        profile of the hap failed
      */
-    public static boolean verifyHap(File file, long offset, long length, String fileFormat, String profileContent)
+    public static boolean verifyHap(File file, byte[] codeSignBlock, String fileFormat,
+        String profileContent)
             throws IOException, VerifyCodeSignException, FsVerityDigestException, CMSException, ProfileException {
         if (!StringUtils.containsIgnoreCase(CodeSigning.SUPPORT_FILE_FORM, fileFormat)) {
             LOGGER.info("Not hap, hsp or hqf file, skip code signing verify");
@@ -186,7 +186,7 @@ public class VerifyCodeSignature {
         }
         Pair<String, String> pairResult = HapUtils.parseAppIdentifier(profileContent);
 
-        CodeSignBlock csb = generateCodeSignBlock(file, offset, length);
+        CodeSignBlock csb = generateCodeSignBlock(codeSignBlock);
         // 2) verify hap
         try (FileInputStream hap = new FileInputStream(file)) {
             long dataSize = csb.getHapInfoSegment().getSignInfo().getDataSize();
@@ -198,7 +198,6 @@ public class VerifyCodeSignature {
             if (extension instanceof MerkleTreeExtension) {
                 mte = (MerkleTreeExtension) extension;
             }
-            // temporary: merkle tree offset set to zero, change to merkleTreeOffset
             verifySingleFile(hap, dataSize, signature, mte.getMerkleTreeOffset(),
                 csb.getOneMerkleTreeByFileName(CodeSigning.HAP_SIGNATURE_ENTRY_NAME));
             checkOwnerID(signature, pairResult.getFirst(), pairResult.getSecond());
@@ -282,52 +281,47 @@ public class VerifyCodeSignature {
         }
     }
 
-    private static CodeSignBlock generateCodeSignBlock(File file, long offset, long length)
+    private static CodeSignBlock generateCodeSignBlock(byte[] codeSignBlock)
         throws IOException, VerifyCodeSignException {
         CodeSignBlock csb = new CodeSignBlock();
-        // 1) parse sign block to CodeSignBlock object
-        try (FileInputStream signedHap = new FileInputStream(file)) {
-            int fileReadOffset = 0;
-            // 0) skip data part, but fileReadOffset remains at start(0)
-            signedHap.skip(offset);
+        // read code sign block from in-memory content (no offset/alignment needed)
+        try (ByteArrayInputStream signedHap = new ByteArrayInputStream(codeSignBlock)) {
+            int blockReadOffset = 0;
             // 1) parse codeSignBlockHeader
             byte[] codeSignBlockHeaderByteArray = new byte[CodeSignBlockHeader.size()];
-            fileReadOffset += signedHap.read(codeSignBlockHeaderByteArray);
+            blockReadOffset += signedHap.read(codeSignBlockHeaderByteArray);
             csb.setCodeSignBlockHeader(CodeSignBlockHeader.fromByteArray(codeSignBlockHeaderByteArray));
-            if (csb.getCodeSignBlockHeader().getBlockSize() != length) {
+            if (csb.getCodeSignBlockHeader().getBlockSize() != codeSignBlock.length) {
                 throw new VerifyCodeSignException("Invalid code Sign block size of setCodeSignBlockHeader");
             }
             // 2) parse segment headers
             for (int i = 0; i < csb.getCodeSignBlockHeader().getSegmentNum(); i++) {
                 byte[] segmentHeaderByteArray = new byte[SegmentHeader.SEGMENT_HEADER_LENGTH];
-                fileReadOffset += signedHap.read(segmentHeaderByteArray);
+                blockReadOffset += signedHap.read(segmentHeaderByteArray);
                 csb.addToSegmentList(SegmentHeader.fromByteArray(segmentHeaderByteArray));
             }
-            // compute merkle tree offset by alignment, based on file start
-            long computedTreeOffset = getAlignmentAddr(CodeSignBlock.PAGE_SIZE_4K, fileReadOffset + offset);
-            // skip zero padding before merkle tree, adds zero padding length to fileReadOffset
-            fileReadOffset += signedHap.skip(computedTreeOffset - offset - fileReadOffset);
-            parseMerkleTree(csb, fileReadOffset, signedHap, computedTreeOffset);
+            // parse merkle tree + segments; merkle located by tail of gap (padding + merkle), no offset/alignment
+            parseMerkleTree(csb, blockReadOffset, signedHap);
         }
         return csb;
     }
 
-    private static void parseMerkleTree(CodeSignBlock csb, int readOffset, FileInputStream signedHap,
-        long computedTreeOffset) throws VerifyCodeSignException, IOException {
+    private static void parseMerkleTree(CodeSignBlock csb, int readOffset, InputStream signedHap)
+        throws VerifyCodeSignException, IOException {
         // check segment offset and segment size
         byte[] merkleTreeBytes = new byte[0];
-        int fileReadOffset = readOffset;
+        int blockReadOffset = readOffset;
         for (SegmentHeader segmentHeader : csb.getSegmentHeaderList()) {
-            if (fileReadOffset > segmentHeader.getSegmentOffset()) {
+            if (blockReadOffset > segmentHeader.getSegmentOffset()) {
                 throw new VerifyCodeSignException("Invaild offset of merkle tree and segment header");
             }
             // get merkle tree bytes
-            if (fileReadOffset < segmentHeader.getSegmentOffset()) {
-                merkleTreeBytes = new byte[segmentHeader.getSegmentOffset() - fileReadOffset];
-                fileReadOffset += signedHap.read(merkleTreeBytes);
+            if (blockReadOffset < segmentHeader.getSegmentOffset()) {
+                merkleTreeBytes = new byte[segmentHeader.getSegmentOffset() - blockReadOffset];
+                blockReadOffset += signedHap.read(merkleTreeBytes);
             }
             byte[] sh = new byte[segmentHeader.getSegmentSize()];
-            fileReadOffset += signedHap.read(sh);
+            blockReadOffset += signedHap.read(sh);
             if (segmentHeader.getType() == SegmentHeader.CSB_FSVERITY_INFO_SEG) {
                 // 3) parse fs-verity info segment
                 csb.setFsVerityInfoSegment(FsVerityInfoSegment.fromByteArray(sh));
@@ -339,7 +333,7 @@ public class VerifyCodeSignature {
                 csb.setSoInfoSegment(NativeLibInfoSegment.fromByteArray(sh));
             }
         }
-        if (fileReadOffset != csb.getCodeSignBlockHeader().getBlockSize()) {
+        if (blockReadOffset != csb.getCodeSignBlockHeader().getBlockSize()) {
             throw new VerifyCodeSignException("Invalid blockSize of getCodeSignBlockHeader");
         }
         // parse merkle tree
@@ -351,22 +345,20 @@ public class VerifyCodeSignature {
         }
         if (extension instanceof MerkleTreeExtension) {
             MerkleTreeExtension mte = (MerkleTreeExtension) extension;
-            if (computedTreeOffset != mte.getMerkleTreeOffset()) {
-                throw new VerifyCodeSignException("Invalid merkle tree offset");
-            }
-            if (merkleTreeBytes.length != mte.getMerkleTreeSize()) {
+            // merkleTreeBytes = padding + merkle (gap between segment headers and first segment);
+            // merkle is at the tail (right before segment data), extract by size from end
+            long merkleSize = mte.getMerkleTreeSize();
+            // merkleTreeSize is not signature-protected: reject negative size, and zero size when data is non-empty
+            long dataSize = csb.getHapInfoSegment().getSignInfo().getDataSize();
+            if (merkleSize < 0 || (merkleSize == 0 && dataSize > 0)) {
                 throw new VerifyCodeSignException("Invalid merkle tree size");
             }
-            csb.addOneMerkleTree(CodeSigning.HAP_SIGNATURE_ENTRY_NAME, merkleTreeBytes);
-        }
-    }
-
-    private static long getAlignmentAddr(long alignment, long input) {
-        long residual = input % alignment;
-        if (residual == 0) {
-            return input;
-        } else {
-            return input + (alignment - residual);
+            if (merkleTreeBytes.length < merkleSize) {
+                throw new VerifyCodeSignException("Invalid merkle tree size");
+            }
+            int paddingSize = (int) (merkleTreeBytes.length - merkleSize);
+            byte[] merkle = Arrays.copyOfRange(merkleTreeBytes, paddingSize, merkleTreeBytes.length);
+            csb.addOneMerkleTree(CodeSigning.HAP_SIGNATURE_ENTRY_NAME, merkle);
         }
     }
 
