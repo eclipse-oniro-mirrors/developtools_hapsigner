@@ -40,12 +40,12 @@ public:
 
     class Builder;
     FsVerityDescriptor();
-    long GetFileSize()
+    int64_t GetFileSize()
     {
         return fileSize;
     }
 
-    long GetMerkleTreeOffset()
+    int64_t GetMerkleTreeOffset()
     {
         return merkleTreeOffset;
     }
@@ -88,7 +88,7 @@ public:
         return *this;
     }
 
-    Builder& SetFileSize(long fileSize)
+    Builder& SetFileSize(int64_t fileSize)
     {
         this->fileSize = fileSize;
         return *this;
@@ -136,7 +136,7 @@ public:
         return *this;
     }
 
-    Builder& SetMerkleTreeOffset(long merkleTreeOffset)
+    Builder& SetMerkleTreeOffset(int64_t merkleTreeOffset)
     {
         this->merkleTreeOffset = merkleTreeOffset;
         return *this;
@@ -155,7 +155,7 @@ public:
 
 private:
     uint8_t version = VERSION;
-    long fileSize;
+    int64_t fileSize;
     uint8_t hashAlgorithm;
     uint8_t log2BlockSize;
     uint8_t saltSize;
@@ -169,7 +169,7 @@ private:
 
 private:
     uint8_t version;
-    long fileSize;
+    int64_t fileSize;
     uint8_t hashAlgorithm;
     uint8_t log2BlockSize;
     uint8_t saltSize;
@@ -177,7 +177,7 @@ private:
     std::vector<int8_t> salt;
     std::vector<int8_t> rawRootHash;
     int flags;
-    long merkleTreeOffset;
+    int64_t merkleTreeOffset;
     uint8_t csVersion;
 };
 } // namespace SignatureTools
