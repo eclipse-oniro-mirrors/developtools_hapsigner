@@ -352,7 +352,8 @@ public class VerifyHap {
             throws ZipException {
         long signingBlockOffset = hapSigningBlockAndOffsetInFile.getOffset();
         ZipDataInput beforeHapSigningBlock = hapFile.slice(0, signingBlockOffset);
-        ZipDataInput centralDirectoryBlock = hapFile.slice(zipInfo.getCentralDirectoryOffset(),
+        long orgCentralDirectoryOffset = zipInfo.getCentralDirectoryOffset();
+        ZipDataInput centralDirectoryBlock = hapFile.slice(orgCentralDirectoryOffset,
                 zipInfo.getCentralDirectorySize());
         zipInfo.updateCentralDirectoryOffset(signingBlockOffset);
         ByteBuffer eocdBbyteBuffer = zipInfo.generateEocdBuffer();
@@ -360,6 +361,8 @@ public class VerifyHap {
         HapVerify verifyEngine = new HapVerify(beforeHapSigningBlock, signatureSchemeBlock,
                 centralDirectoryBlock, eocdBlock, optionalBlocks);
         verifyEngine.setIsPrintCert(isPrintCert);
+        // recover original centralDirectory.
+        zipInfo.updateCentralDirectoryOffset(orgCentralDirectoryOffset);
         return verifyEngine;
     }
 
