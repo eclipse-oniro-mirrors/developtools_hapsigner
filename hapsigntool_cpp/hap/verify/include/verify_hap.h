@@ -86,7 +86,7 @@ public:
     bool CheckPermSign(const std::string& hapFilePath, const std::vector<OptionalBlock>& optionBlocks,
     				   Pkcs7Context& pkcs7Context)const;
     static bool GetBlockHeaderInfo(ByteBuffer& blockArray, int32_t pos,
-    							   uint32_t& blockType, uint32_t& blockLength);
+    							   uint32_t& blockType, uint32_t& blockLength, uint32_t& blockOffset);
     bool VerifyPermSignBlock(ByteBuffer& permSignBlock, Pkcs7Context& profilePkcs7Context)const;
 
     bool VerifyPermSignSignature(const std::string& signature, const std::string& storedDigests,

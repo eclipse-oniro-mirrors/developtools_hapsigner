@@ -652,19 +652,20 @@ public class VerifyHap {
             }
             ByteBuffer byteBuffer = ByteBuffer.wrap(propertyBlockArray);
             ByteBuffer header = HapUtils.reverseSliceBuffer(byteBuffer, 0, ZIP_HEAD_OF_SUBSIGNING_BLOCK_LENGTH);
-            int blockLength = header.getInt();
+            UnsignedDecimalUtil.getUnsignedInt(header);
+            long blockLength = UnsignedDecimalUtil.getUnsignedInt(header);
             int blockType = header.getInt();
             if (blockType != HapUtils.HAP_CODE_SIGN_BLOCK_ID) {
                 LOGGER.error("Verify Hap has no code sign data error!");
                 return false;
             }
             // extract code sign block content from in-memory property block (no file seek(blockOffset))
-            if (blockLength < 0 || propertyBlockArray.length < ZIP_HEAD_OF_SUBSIGNING_BLOCK_LENGTH + blockLength) {
+            if (propertyBlockArray.length < ZIP_HEAD_OF_SUBSIGNING_BLOCK_LENGTH + blockLength) {
                 LOGGER.error("code sign block content out of bounds");
                 return false;
             }
             byte[] codeSignBlock = Arrays.copyOfRange(propertyBlockArray, ZIP_HEAD_OF_SUBSIGNING_BLOCK_LENGTH,
-                    ZIP_HEAD_OF_SUBSIGNING_BLOCK_LENGTH + blockLength);
+                (int) (ZIP_HEAD_OF_SUBSIGNING_BLOCK_LENGTH + blockLength));
             File outputFile = new File(hapFilePath);
             byte[] profileArray = map.get(HapUtils.HAP_PROFILE_BLOCK_ID);
             String profileContent = getProfileContent(profileArray);

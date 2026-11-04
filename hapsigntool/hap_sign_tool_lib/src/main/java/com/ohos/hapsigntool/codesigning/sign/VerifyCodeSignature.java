@@ -168,6 +168,7 @@ public class VerifyCodeSignature {
      * Verify a signed hap's signature
      *
      * @param file       signed hap file
+     * @param codeSignBlock code sign block
      * @param fileFormat hap or hqf or hsp, etc.
      * @param profileContent profile of the hap
      * @return true if signature verify succeed and false otherwise

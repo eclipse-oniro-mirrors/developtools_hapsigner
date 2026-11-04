@@ -682,8 +682,7 @@ bool VerifyHap::CheckFileNameAndBlockArray(const std::string& hapFilePath,
     return true;
 }
 
-bool VerifyHap::CheckCodeSign(const std::string& hapFilePath,
-                              const std::vector<OptionalBlock>& optionalBlocks)const
+bool VerifyHap::CheckCodeSign(const std::string& hapFilePath, const std::vector<OptionalBlock>& optionalBlocks)const
 {
     std::unordered_map<int, ByteBuffer> blockMap;
     ByteBuffer propertyBlockArray;
@@ -701,7 +700,8 @@ bool VerifyHap::CheckCodeSign(const std::string& hapFilePath,
     std::vector<std::string> fileNameArray = StringUtils::SplitString(hapFilePath, '.');
     uint32_t blockType;
     uint32_t blockLength;
-    if (!GetBlockHeaderInfo(propertyBlockArray, 0, blockType, blockLength)) {
+    uint32_t blockOffset;
+    if (!GetBlockHeaderInfo(propertyBlockArray, 0, blockType, blockLength, blockOffset)) {
         return false;
     }
 
@@ -722,8 +722,7 @@ bool VerifyHap::CheckCodeSign(const std::string& hapFilePath,
     if (ite == blockMap.end()) {
         return false;
     }
-    ByteBuffer profileArray = ite->second;
-    std::string profileArray_(profileArray.GetBufferPtr(), profileArray.GetCapacity());
+    std::string profileArray_(ite->second.GetBufferPtr(), ite->second.GetCapacity());
     std::string profileContent;
     if (GetProfileContent(profileArray_, profileContent) < 0) {
         SIGNATURE_TOOLS_LOGE("get profile content failed, file: %s", hapFilePath.c_str());
@@ -731,9 +730,7 @@ bool VerifyHap::CheckCodeSign(const std::string& hapFilePath,
     }
     std::string suffix = fileNameArray[fileNameArray.size() - 1];
     // blockOffset no longer used (merkle located by tail of gap, no offset/alignment needed)
-    bool isCodeSign = VerifyCodeSignature::VerifyHap(hapFilePath, codeSignBlock,
-                                                     suffix, profileContent);
-    if (!isCodeSign) {
+    if (!VerifyCodeSignature::VerifyHap(hapFilePath, codeSignBlock, suffix, profileContent)) {
         SIGNATURE_TOOLS_LOGE("verify codesign failed, file: %s", hapFilePath.c_str());
         return false;
     }
@@ -742,13 +739,14 @@ bool VerifyHap::CheckCodeSign(const std::string& hapFilePath,
 }
 
 bool VerifyHap::GetBlockHeaderInfo(ByteBuffer& blockArray, int32_t pos,
-                                   uint32_t& blockType, uint32_t& blockLength)
+                                   uint32_t& blockType, uint32_t& blockLength, uint32_t& blockOffset)
 {
     if (pos + ZIP_HEAD_OF_SUBSIGNING_BLOCK_LENGTH > blockArray.GetCapacity()) {
         return false;
     }
     return blockArray.GetUInt32(pos, blockType) &&
-           blockArray.GetUInt32(pos + OFFSET_FOUR, blockLength);
+           blockArray.GetUInt32(pos + OFFSET_FOUR, blockLength) &&
+           blockArray.GetUInt32(pos + OFFSET_EIGHT, blockOffset);
 }
 
 void VerifyHap::BuildBlockInfo(const std::vector<OptionalBlock>& optionalBlocks,
@@ -789,7 +787,8 @@ bool VerifyHap::CheckPermSign(const std::string& hapFilePath, const std::vector<
     uint32_t codeSignBlockLength = 0;
     uint32_t firstBlockType;
     uint32_t firstBlockLength;
-    if (GetBlockHeaderInfo(propertyBlockArray, pos, firstBlockType, firstBlockLength)) {
+    uint32_t firstBlockOffset;
+    if (GetBlockHeaderInfo(propertyBlockArray, pos, firstBlockType, firstBlockLength, firstBlockOffset)) {
         codeSignBlockLength = firstBlockLength + ZIP_HEAD_OF_SUBSIGNING_BLOCK_LENGTH;
     }
     pos = codeSignBlockLength;
@@ -800,7 +799,8 @@ bool VerifyHap::CheckPermSign(const std::string& hapFilePath, const std::vector<
 
     uint32_t blockType;
     uint32_t blockLength;
-    if (!GetBlockHeaderInfo(propertyBlockArray, pos, blockType, blockLength)) {
+    uint32_t blockOffset;
+    if (!GetBlockHeaderInfo(propertyBlockArray, pos, blockType, blockLength, blockOffset)) {
         SIGNATURE_TOOLS_LOGE("read block header failed at pos %d", pos);
         return false;
     }
