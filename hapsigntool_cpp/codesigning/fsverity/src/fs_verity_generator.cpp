@@ -21,14 +21,14 @@ const FsVerityHashAlgorithm FS_SHA512(2, "SHA-512", 512 / 8);
 const int8_t FsVerityGenerator::LOG_2_OF_FSVERITY_HASH_PAGE_SIZE = 12;
 const FsVerityHashAlgorithm FsVerityGenerator::FS_VERITY_HASH_ALGORITHM = FS_SHA256;
 
-MerkleTree* FsVerityGenerator::GenerateMerkleTree(std::istream& inputStream, long size,
+MerkleTree* FsVerityGenerator::GenerateMerkleTree(std::istream& inputStream, int64_t size,
     const FsVerityHashAlgorithm& fsVerityHashAlgorithm)
 {
     std::unique_ptr<MerkleTreeBuilder>builder = std::make_unique<MerkleTreeBuilder>(MerkleTreeBuilder());
     return builder->GenerateMerkleTree(inputStream, size, fsVerityHashAlgorithm);
 }
 
-bool FsVerityGenerator::GenerateFsVerityDigest(std::istream& inputStream, long size, long fsvTreeOffset)
+bool FsVerityGenerator::GenerateFsVerityDigest(std::istream& inputStream, int64_t size, int64_t fsvTreeOffset)
 {
     MerkleTree* merkleTree = nullptr;
     if (size == 0) {

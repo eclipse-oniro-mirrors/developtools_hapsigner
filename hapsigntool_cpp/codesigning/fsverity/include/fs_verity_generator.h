@@ -29,9 +29,9 @@ namespace OHOS {
 namespace SignatureTools {
 class FsVerityGenerator {
 public:
-    MerkleTree* GenerateMerkleTree(std::istream& inputStream, long size,
+    MerkleTree* GenerateMerkleTree(std::istream& inputStream, int64_t size,
                                    const FsVerityHashAlgorithm& fsVerityHashAlgorithm);
-    bool GenerateFsVerityDigest(std::istream& inputStream, long size, long fsvTreeOffset);
+    bool GenerateFsVerityDigest(std::istream& inputStream, int64_t size, int64_t fsvTreeOffset);
     void GenerateDigestV2(FsVerityDescriptor::Builder& builder, int flags);
     void SetPageInfoExtension(PageInfoExtension* ext) { pageInfoExtension = ext; }
     std::vector<int8_t> GetFsVerityDigest()

@@ -682,8 +682,7 @@ bool VerifyHap::CheckFileNameAndBlockArray(const std::string& hapFilePath,
     return true;
 }
 
-bool VerifyHap::CheckCodeSign(const std::string& hapFilePath,
-                              const std::vector<OptionalBlock>& optionalBlocks)const
+bool VerifyHap::CheckCodeSign(const std::string& hapFilePath, const std::vector<OptionalBlock>& optionalBlocks)const
 {
     std::unordered_map<int, ByteBuffer> blockMap;
     ByteBuffer propertyBlockArray;
@@ -710,21 +709,28 @@ bool VerifyHap::CheckCodeSign(const std::string& hapFilePath,
         PrintErrorNumberMsg(SignToolErrMsg::VERIFY_FAILED, "code sign data not exist in hap " + hapFilePath);
         return false;
     }
+    // extract code sign block content from in-memory property block (no file seekg(blockOffset))
+    if (static_cast<size_t>(propertyBlockArray.GetCapacity()) <
+        static_cast<size_t>(ZIP_HEAD_OF_SUBSIGNING_BLOCK_LENGTH) + blockLength) {
+        PrintErrorNumberMsg(SignToolErrMsg::VERIFY_FAILED, "code sign block content out of bounds");
+        return false;
+    }
+    const char* contentPtr = propertyBlockArray.GetBufferPtr() + ZIP_HEAD_OF_SUBSIGNING_BLOCK_LENGTH;
+    std::vector<int8_t> codeSignBlock(reinterpret_cast<const int8_t*>(contentPtr),
+                                      reinterpret_cast<const int8_t*>(contentPtr) + blockLength);
     auto ite = blockMap.find(HapUtils::HAP_PROFILE_BLOCK_ID);
     if (ite == blockMap.end()) {
         return false;
     }
-    ByteBuffer profileArray = ite->second;
-    std::string profileArray_(profileArray.GetBufferPtr(), profileArray.GetCapacity());
+    std::string profileArray_(ite->second.GetBufferPtr(), ite->second.GetCapacity());
     std::string profileContent;
     if (GetProfileContent(profileArray_, profileContent) < 0) {
         SIGNATURE_TOOLS_LOGE("get profile content failed, file: %s", hapFilePath.c_str());
         return false;
     }
     std::string suffix = fileNameArray[fileNameArray.size() - 1];
-    bool isCodeSign = VerifyCodeSignature::VerifyHap(hapFilePath, blockOffset, blockLength,
-                                                     suffix, profileContent);
-    if (!isCodeSign) {
+    // blockOffset no longer used (merkle located by tail of gap, no offset/alignment needed)
+    if (!VerifyCodeSignature::VerifyHap(hapFilePath, codeSignBlock, suffix, profileContent)) {
         SIGNATURE_TOOLS_LOGE("verify codesign failed, file: %s", hapFilePath.c_str());
         return false;
     }

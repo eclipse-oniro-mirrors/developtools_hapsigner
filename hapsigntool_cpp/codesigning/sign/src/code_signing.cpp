@@ -164,7 +164,7 @@ void CodeSigning::CreatePageInfoExtension(ZipEntry* entry)
     if (entry == nullptr) {
         return;
     }
-    int64_t bitmapOff = entry->GetCentralDirectory()->GetOffset()
+    int64_t bitmapOff = entry->GetCentralDirectory()->GetEffectiveOffset()
         + ZipEntryHeader::HEADER_LENGTH
         + entry->GetZipEntryData()->GetZipEntryHeader()->GetFileNameLength()
         + entry->GetZipEntryData()->GetZipEntryHeader()->GetExtraLength();
@@ -175,7 +175,7 @@ void CodeSigning::CreatePageInfoExtension(ZipEntry* entry)
 int64_t CodeSigning::ComputeDataSize(ZipSigner& zip)
 {
     const std::string BIT_MAP_FILENAME = ".pages.info";
-    uint32_t dataSize = 0L;
+    int64_t dataSize = 0;
     for (const auto& entry : zip.GetZipEntries()) {
         ZipEntryHeader* zipEntryHeader = entry->GetZipEntryData()->GetZipEntryHeader();
         bool runnableFileFlag = FileUtils::IsRunnableFile(zipEntryHeader->GetFileName())
@@ -189,11 +189,11 @@ int64_t CodeSigning::ComputeDataSize(ZipSigner& zip)
             continue;
         }
         // if the first file is not uncompressed abc or so, set dataSize to zero
-        if (entry->GetCentralDirectory()->GetOffset() == 0) {
+        if (entry->GetCentralDirectory()->GetEffectiveOffset() == 0) {
             break;
         }
         // the first entry which is not abc/so/an is found, return its data offset
-        dataSize = entry->GetCentralDirectory()->GetOffset() + ZipEntryHeader::HEADER_LENGTH
+        dataSize = entry->GetCentralDirectory()->GetEffectiveOffset() + ZipEntryHeader::HEADER_LENGTH
             + zipEntryHeader->GetFileNameLength() + zipEntryHeader->GetExtraLength();
         break;
     }
@@ -202,8 +202,7 @@ int64_t CodeSigning::ComputeDataSize(ZipSigner& zip)
                             "Invalid dataSize, the dataSize must be an integer multiple of 4096");
         return -1;
     }
-    int64_t dataSizeInt64 = static_cast<int64_t>(dataSize);
-    return dataSizeInt64;
+    return dataSize;
 }
 
 bool CodeSigning::AddPageInfoExtensionToSignInfo(SignInfo& signInfo, FsVerityGenerator& gen,
@@ -663,7 +662,7 @@ bool CodeSigning::GetNativeEntriesFromHap(const std::string& packageName, UnzipH
 
 bool CodeSigning::GetSingleFileStreamFromZip(unzFile &zFile, char fileName[],
                                              unz_file_info &zFileInfo,
-                                             int &readFileSize, std::stringbuf &sb)
+                                             int64_t &readFileSize, std::stringbuf &sb)
 {
     if (UNZ_OK != unzOpenCurrentFile(zFile)) {
         PrintErrorNumberMsg(SignToolErrMsg::CODE_SIGN_INTERNAL_ERROR,
@@ -713,7 +712,7 @@ bool CodeSigning::RunParseZipInfo(const std::string& packageName, UnzipHandlePar
     }
     unz_file_info zFileInfo;
     char fileName[FILE_NAME_SIZE];
-    int readFileSize = 0;
+    int64_t readFileSize = 0;
     std::stringbuf sb;
     if (memset_s(fileName, FILE_NAME_SIZE, 0, FILE_NAME_SIZE) != 0) {
         SIGNATURE_TOOLS_LOGE("memory of fileName memset_s failed");
@@ -801,7 +800,7 @@ bool CodeSigning::HandleZipGlobalInfo(const std::string& packageName, unzFile& z
 }
 
 bool CodeSigning::DoNativeLibVerify(std::string fileName, std::stringbuf& sb,
-                                    UnzipHandleParam& param, int readFileSize)
+                                    UnzipHandleParam& param, int64_t readFileSize)
 {
     std::istream input(&sb);
     CodeSignBlock csb = param.GetCodeSignBlock();
@@ -840,7 +839,7 @@ bool CodeSigning::DoNativeLibVerify(std::string fileName, std::stringbuf& sb,
 }
 
 bool CodeSigning::DoNativeLibSignOrVerify(std::string fileName, std::stringbuf& sb,
-                                          UnzipHandleParam& param, int readFileSize)
+                                          UnzipHandleParam& param, int64_t readFileSize)
 {
     bool isSign = param.IsSign();
     if (isSign) {

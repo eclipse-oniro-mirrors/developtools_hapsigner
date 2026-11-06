@@ -23,7 +23,7 @@ namespace SignatureTools {
 const int MerkleTreeBuilder::FSVERITY_HASH_PAGE_SIZE = 4096;
 const int64_t MerkleTreeBuilder::INPUTSTREAM_MAX_SIZE = 4503599627370496L;
 const int MerkleTreeBuilder::CHUNK_SIZE = 4096;
-const long MerkleTreeBuilder::MAX_READ_SIZE = 4194304L;
+const int64_t MerkleTreeBuilder::MAX_READ_SIZE = 4194304;
 const int MerkleTreeBuilder::MAX_PROCESSORS = 32;
 const int MerkleTreeBuilder::BLOCKINGQUEUE = 4;
 
@@ -33,7 +33,7 @@ void MerkleTreeBuilder::SetAlgorithm(const std::string& algorithm)
 }
 
 void MerkleTreeBuilder::TransInputStreamToHashData(std::istream& inputStream,
-                                                   long size, ByteBuffer* outputBuffer, int bufStartIdx)
+                                                   int64_t size, ByteBuffer* outputBuffer, int bufStartIdx)
 {
     if (size == 0 || static_cast<int64_t>(size) > INPUTSTREAM_MAX_SIZE) {
         SIGNATURE_TOOLS_LOGE("invalid input stream size");
@@ -51,15 +51,15 @@ void MerkleTreeBuilder::TransInputStreamToHashData(std::istream& inputStream,
     outputBuffer->SetPosition(writeSize);
 }
 
-std::vector<std::vector<int8_t>> MerkleTreeBuilder::GetDataHashes(std::istream& inputStream, long size)
+std::vector<std::vector<int8_t>> MerkleTreeBuilder::GetDataHashes(std::istream& inputStream, int64_t size)
 {
     int count = (int)(GetChunkCount(size, MAX_READ_SIZE));
     int chunks = (int)(GetChunkCount(size, CHUNK_SIZE));
     std::vector<std::vector<int8_t>> hashes(chunks);
     std::vector<std::future<void>> thread_results;
-    long readOffset = 0L;
+    int64_t readOffset = 0;
     for (int i = 0; i < count; i++) {
-        long readLimit = std::min(readOffset + MAX_READ_SIZE, size);
+        int64_t readLimit = std::min(readOffset + MAX_READ_SIZE, size);
         int readSize = (int)((readLimit - readOffset));
         int fullChunkSize = (int)(GetFullChunkSize(readSize, CHUNK_SIZE, CHUNK_SIZE));
         ByteBuffer* byteBuffer(new ByteBuffer(fullChunkSize));
@@ -110,9 +110,9 @@ ByteBuffer* MerkleTreeBuilder::Slice(ByteBuffer* buffer, int begin, int end)
     return &tmpBuffer->slice_for_codesigning();
 }
 
-std::vector<int64_t> MerkleTreeBuilder::GetOffsetArrays(long dataSize, int digestSize)
+std::vector<int64_t> MerkleTreeBuilder::GetOffsetArrays(int64_t dataSize, int digestSize)
 {
-    std::vector<long> levelSize = GetLevelSize(dataSize, digestSize);
+    std::vector<int64_t> levelSize = GetLevelSize(dataSize, digestSize);
     std::vector<int64_t> levelOffset(levelSize.size() + 1);
     levelOffset[0] = 0;
     for (int i = 0; i < levelSize.size(); i++) {
@@ -121,12 +121,12 @@ std::vector<int64_t> MerkleTreeBuilder::GetOffsetArrays(long dataSize, int diges
     return levelOffset;
 }
 
-std::vector<long> MerkleTreeBuilder::GetLevelSize(long dataSize, int digestSize)
+std::vector<int64_t> MerkleTreeBuilder::GetLevelSize(int64_t dataSize, int digestSize)
 {
-    std::vector<long> levelSize;
+    std::vector<int64_t> levelSize;
 
-    long fullChunkSize = 0L;
-    long originalDataSize = dataSize;
+    int64_t fullChunkSize = 0;
+    int64_t originalDataSize = dataSize;
     do {
         fullChunkSize = GetFullChunkSize(originalDataSize, CHUNK_SIZE, digestSize);
         int size = GetFullChunkSize(fullChunkSize, CHUNK_SIZE, CHUNK_SIZE);
@@ -165,13 +165,13 @@ void MerkleTreeBuilder::RunHashTask(std::vector<std::vector<int8_t>>& hashes,
 void MerkleTreeBuilder::TransInputDataToHashData(ByteBuffer* inputBuffer, ByteBuffer* outputBuffer,
                                                  int64_t inputStartIdx, int64_t outputStartIdx)
 {
-    long size = inputBuffer->GetCapacity();
+    int64_t size = inputBuffer->GetCapacity();
     int chunks = (int)GetChunkCount(size, CHUNK_SIZE);
     std::vector<std::vector<int8_t>> hashes(chunks);
-    long readOffset = 0L;
+    int64_t readOffset = 0;
     int startChunkIndex = 0;
     while (readOffset < size) {
-        long readLimit = std::min(readOffset + MAX_READ_SIZE, size);
+        int64_t readLimit = std::min(readOffset + MAX_READ_SIZE, size);
         ByteBuffer* buffer = Slice(inputBuffer, (int)readOffset, (int)readLimit);
         buffer->SetPosition(0);
         int readChunkIndex = startChunkIndex;
@@ -193,7 +193,7 @@ OHOS::SignatureTools::MerkleTreeBuilder::MerkleTreeBuilder() :mPools(new Uscript
     CheckCalculateHashResult = true;
 }
 
-MerkleTree* MerkleTreeBuilder::GenerateMerkleTree(std::istream& inputStream, long size,
+MerkleTree* MerkleTreeBuilder::GenerateMerkleTree(std::istream& inputStream, int64_t size,
                                                   const FsVerityHashAlgorithm& fsVerityHashAlgorithm)
 {
     SetAlgorithm(fsVerityHashAlgorithm.GetHashAlgorithm());
@@ -210,7 +210,7 @@ MerkleTree* MerkleTreeBuilder::GenerateMerkleTree(std::istream& inputStream, lon
     return nullptr;
 }
 
-void MerkleTreeBuilder::GenerateHashDataByInputData(std::istream& inputStream, long size, ByteBuffer* outputBuffer,
+void MerkleTreeBuilder::GenerateHashDataByInputData(std::istream& inputStream, int64_t size, ByteBuffer* outputBuffer,
                                                     std::vector<int64_t>& offsetArrays, int digestSize)
 {
     int64_t inputDataOffsetBegin = offsetArrays[offsetArrays.size() - 2];
@@ -238,7 +238,7 @@ void MerkleTreeBuilder::GenerateHashDataByHashData(ByteBuffer* buffer,
     }
 }
 
-MerkleTree* MerkleTreeBuilder::GetMerkleTree(ByteBuffer* dataBuffer, long inputDataSize,
+MerkleTree* MerkleTreeBuilder::GetMerkleTree(ByteBuffer* dataBuffer, int64_t inputDataSize,
                                              FsVerityHashAlgorithm fsVerityHashAlgorithm)
 {
     int digestSize = fsVerityHashAlgorithm.GetOutputByteSize();
@@ -274,21 +274,21 @@ MerkleTree* MerkleTreeBuilder::GetMerkleTree(ByteBuffer* dataBuffer, long inputD
     return new MerkleTree(rootHash, tree, fsVerityHashAlgorithm);
 }
 
-void MerkleTreeBuilder::DataRoundupChunkSize(ByteBuffer* data, long originalDataSize, int digestSize)
+void MerkleTreeBuilder::DataRoundupChunkSize(ByteBuffer* data, int64_t originalDataSize, int digestSize)
 {
-    long fullChunkSize = GetFullChunkSize(originalDataSize, CHUNK_SIZE, digestSize);
+    int64_t fullChunkSize = GetFullChunkSize(originalDataSize, CHUNK_SIZE, digestSize);
     int diffValue = (int)(fullChunkSize % CHUNK_SIZE);
     if (diffValue > 0) {
         data->SetPosition(data->GetPosition() + (CHUNK_SIZE - diffValue));
     }
 }
 
-long MerkleTreeBuilder::GetChunkCount(long dataSize, long divisor)
+int64_t MerkleTreeBuilder::GetChunkCount(int64_t dataSize, int64_t divisor)
 {
-    return (long)std::ceil((double)dataSize / (double)divisor);
+    return (int64_t)std::ceil((double)dataSize / (double)divisor);
 }
 
-long MerkleTreeBuilder::GetFullChunkSize(long dataSize, long divisor, long multiplier)
+int64_t MerkleTreeBuilder::GetFullChunkSize(int64_t dataSize, int64_t divisor, int64_t multiplier)
 {
     return GetChunkCount(dataSize, divisor) * multiplier;
 }

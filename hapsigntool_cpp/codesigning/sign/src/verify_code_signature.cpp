@@ -29,7 +29,7 @@ namespace fs = std::filesystem;
 
 namespace OHOS {
 namespace SignatureTools {
-bool VerifyCodeSignature::VerifyHap(std::string file, int64_t offset, int64_t length,
+bool VerifyCodeSignature::VerifyHap(std::string file, const std::vector<int8_t>& codeSignBlock,
                                     std::string fileFormat, std::string profileContent)
 {
     std::string fileFromatTmp = fileFormat;
@@ -47,7 +47,7 @@ bool VerifyCodeSignature::VerifyHap(std::string file, int64_t offset, int64_t le
         return false;
     }
     CodeSignBlock csb;
-    bool generateFlag = GenerateCodeSignBlock(file, offset, length, csb);
+    bool generateFlag = GenerateCodeSignBlock(codeSignBlock, csb);
     if (!generateFlag) {
         SIGNATURE_TOOLS_LOGE("VerifyHap GenerateCodeSignBlock failed, file: %s", file.c_str());
         return false;
@@ -155,7 +155,6 @@ bool VerifyCodeSignature::VerifyCodeSign(std::string file, std::pair<std::string
     if (ext != nullptr) {
         mte = static_cast<MerkleTreeExtension*>(ext);
     }
-    // temporary: merkle tree offset set to zero, change to merkleTreeOffset
     bool verifyFlag = VerifySingleFile(hap, dataSize, signature, mte->GetMerkleTreeOffset(),
         csb.GetOneMerkleTreeByFileName(CodeSigning::HAP_SIGNATURE_ENTRY_NAME));
     if (!verifyFlag) {
@@ -425,76 +424,64 @@ bool VerifyCodeSignature::VerifySingleFile(std::istream& input, int64_t length,
     return true;
 }
 
-bool VerifyCodeSignature::GenerateCodeSignBlock(const std::string& file, int64_t offset,
-    int64_t length, CodeSignBlock& csb)
+bool VerifyCodeSignature::GenerateCodeSignBlock(const std::vector<int8_t>& codeSignBlock,
+    CodeSignBlock& csb)
 {
-    // 1) parse sign block to CodeSignBlock object
-    std::ifstream signedHap(file, std::ios::binary);
-    if (!signedHap.is_open()) {
-        PrintErrorNumberMsg(SignToolErrMsg::FILE_READ_FAILED, "open file: " + file + "failed");
-        return false;
-    }
-    int32_t fileReadOffset = 0;
-    // 1.1) skip data part, but fileReadOffset remains at start(0)
-    signedHap.seekg(offset, std::ios::beg);
+    // read code sign block from in-memory content (no offset/alignment needed)
+    std::string content(reinterpret_cast<const char*>(codeSignBlock.data()), codeSignBlock.size());
+    std::istringstream signedHap(content);
+    int32_t blockReadOffset = 0;
     // 1.2) parse codeSignBlockHeader
     std::vector<int8_t> codeSignBlockHeaderByteArray(CodeSignBlockHeader::Size());
     signedHap.read(reinterpret_cast<char*>(codeSignBlockHeaderByteArray.data()), codeSignBlockHeaderByteArray.size());
-    fileReadOffset += signedHap.gcount();
+    blockReadOffset += signedHap.gcount();
     CodeSignBlockHeader* pCodeSignBlockHeader =
         CodeSignBlockHeader::FromByteArray(codeSignBlockHeaderByteArray);
     if (pCodeSignBlockHeader == nullptr) {
         SIGNATURE_TOOLS_LOGE("Invalid code Sign block header");
-        signedHap.close();
         return false;
     }
     std::shared_ptr<CodeSignBlockHeader> codeSignBlockHeader(pCodeSignBlockHeader);
     csb.SetCodeSignBlockHeader(*codeSignBlockHeader);
     int64_t headerBlockSize = csb.GetCodeSignBlockHeader().GetBlockSize();
-    if (headerBlockSize != length) {
+    if (headerBlockSize != static_cast<int64_t>(codeSignBlock.size())) {
         PrintErrorNumberMsg(SignToolErrMsg::VERIFY_FAILED,
             "Invalid code Sign block size of setCodeSignBlockHeader");
-        signedHap.close();
         return false;
     }
     // 2) parse segment headers
     for (int i = 0; i < csb.GetCodeSignBlockHeader().GetSegmentNum(); i++) {
         std::vector<int8_t> segmentHeaderByteArray(SegmentHeader::SEGMENT_HEADER_LENGTH);
         signedHap.read(reinterpret_cast<char*>(segmentHeaderByteArray.data()), segmentHeaderByteArray.size());
-        fileReadOffset += signedHap.gcount();
+        blockReadOffset += signedHap.gcount();
         csb.AddToSegmentList(*SegmentHeader::FromByteArray(segmentHeaderByteArray));
     }
-    // compute merkle tree offset by alignment, based on file start
-    int64_t computedTreeOffset = GetAlignmentAddr(CodeSignBlock::PAGE_SIZE_4K, fileReadOffset + offset);
-    // skip zero padding before merkle tree, adds zero padding length to fileReadOffset
-    signedHap.seekg(computedTreeOffset - offset - fileReadOffset, std::ios::cur);
-    fileReadOffset += computedTreeOffset - offset - fileReadOffset;
-    bool parseMerkleTreeFlag = ParseMerkleTree(csb, fileReadOffset, signedHap, computedTreeOffset);
+    // parse merkle tree + segments; merkle located by tail of gap (padding + merkle), no offset/alignment
+    bool parseMerkleTreeFlag = ParseMerkleTree(csb, blockReadOffset, signedHap);
     if (!parseMerkleTreeFlag) {
         SIGNATURE_TOOLS_LOGE("GenerateCodeSignBlock parse merkle tree failed.");
         return false;
     }
-    signedHap.close();
     return true;
 }
 
-bool VerifyCodeSignature::ParseSegmentHead(CodeSignBlock& csb, std::ifstream& signedHap,
-    std::vector<int8_t> &merkleTreeBytes, int32_t &fileReadOffset)
+bool VerifyCodeSignature::ParseSegmentHead(CodeSignBlock& csb, std::istream& signedHap,
+    std::vector<int8_t> &merkleTreeBytes, int32_t &blockReadOffset)
 {
     for (auto& segmentHeader : csb.GetSegmentHeaderList()) {
-        if (fileReadOffset > segmentHeader.GetSegmentOffset()) {
+        if (blockReadOffset > segmentHeader.GetSegmentOffset()) {
             PrintErrorNumberMsg(SignToolErrMsg::VERIFY_FAILED, "Invaild offset of merkle tree and segment header");
             return false;
         }
         // get merkle tree bytes
-        if (fileReadOffset < segmentHeader.GetSegmentOffset()) {
-            merkleTreeBytes.resize(segmentHeader.GetSegmentOffset() - fileReadOffset);
+        if (blockReadOffset < segmentHeader.GetSegmentOffset()) {
+            merkleTreeBytes.resize(segmentHeader.GetSegmentOffset() - blockReadOffset);
             signedHap.read(reinterpret_cast<char*>(merkleTreeBytes.data()), merkleTreeBytes.size());
-            fileReadOffset += signedHap.gcount();
+            blockReadOffset += signedHap.gcount();
         }
         std::vector<int8_t> sh(segmentHeader.GetSegmentSize(), 0);
         signedHap.read(reinterpret_cast<char*>(sh.data()), sh.size());
-        fileReadOffset += signedHap.gcount();
+        blockReadOffset += signedHap.gcount();
         int32_t type = segmentHeader.GetType();
         if (type == SegmentHeader::CSB_FSVERITY_INFO_SEG) {
             // 3) parse fs-verity info segment
@@ -516,18 +503,17 @@ bool VerifyCodeSignature::ParseSegmentHead(CodeSignBlock& csb, std::ifstream& si
     return true;
 }
 
-bool VerifyCodeSignature::ParseMerkleTree(CodeSignBlock& csb, int32_t readOffset, std::ifstream& signedHap,
-                                          int64_t computedTreeOffset)
+bool VerifyCodeSignature::ParseMerkleTree(CodeSignBlock& csb, int32_t readOffset, std::istream& signedHap)
 {
     std::vector<int8_t> merkleTreeBytes;
-    int32_t fileReadOffset = readOffset;
-    bool parseFlag = ParseSegmentHead(csb, signedHap, merkleTreeBytes, fileReadOffset);
+    int32_t blockReadOffset = readOffset;
+    bool parseFlag = ParseSegmentHead(csb, signedHap, merkleTreeBytes, blockReadOffset);
     if (!parseFlag) {
         SIGNATURE_TOOLS_LOGE("ParsesegmentHead failed");
         return false;
     }
     int32_t blockSize = csb.GetCodeSignBlockHeader().GetBlockSize();
-    if (fileReadOffset != blockSize) {
+    if (blockReadOffset != blockSize) {
         PrintErrorNumberMsg(SignToolErrMsg::VERIFY_FAILED,
             "Invalid blockSize of getCodeSignBlockHeader");
         return false;
@@ -541,28 +527,24 @@ bool VerifyCodeSignature::ParseMerkleTree(CodeSignBlock& csb, int32_t readOffset
     }
     MerkleTreeExtension* mte = static_cast<MerkleTreeExtension*>(extension);
     if (mte != nullptr) {
-        bool merkleTreeFlag = computedTreeOffset != mte->GetMerkleTreeOffset() ||
-            merkleTreeBytes.size() != mte->GetMerkleTreeSize();
-        if (merkleTreeFlag) {
-            PrintErrorNumberMsg(SignToolErrMsg::VERIFY_FAILED, "Invalid merkle tree offset or tree size");
+        // merkleTreeBytes = padding + merkle (gap between segment headers and first segment);
+        // merkle is at the tail (right before segment data), extract by size from end
+        size_t merkleSize = static_cast<size_t>(mte->GetMerkleTreeSize());
+        // merkleTreeSize is not signature-protected: reject zero size when data is non-empty,
+        int64_t dataSize = csb.GetHapInfoSegment().GetSignInfo().GetDataSize();
+        if (merkleSize == 0 && dataSize > 0) {
+            PrintErrorNumberMsg(SignToolErrMsg::VERIFY_FAILED, "Invalid merkle tree size");
             return false;
         }
-        csb.AddOneMerkleTree(CodeSigning::HAP_SIGNATURE_ENTRY_NAME, merkleTreeBytes);
+        if (merkleTreeBytes.size() < merkleSize) {
+            PrintErrorNumberMsg(SignToolErrMsg::VERIFY_FAILED, "Invalid merkle tree size");
+            return false;
+        }
+        size_t paddingSize = merkleTreeBytes.size() - merkleSize;
+        std::vector<int8_t> merkle(merkleTreeBytes.begin() + paddingSize, merkleTreeBytes.end());
+        csb.AddOneMerkleTree(CodeSigning::HAP_SIGNATURE_ENTRY_NAME, merkle);
     }
     return true;
-}
-
-int64_t VerifyCodeSignature::GetAlignmentAddr(int64_t alignment, int64_t input)
-{
-    if (alignment == 0) {
-        return input;
-    }
-    int64_t residual = input % alignment;
-    if (residual == 0) {
-        return input;
-    } else {
-        return input + (alignment - residual);
-    }
 }
 
 bool VerifyCodeSignature::AreVectorsEqual(const std::vector<int8_t>& vec1, const std::vector<int8_t>& vec2)
