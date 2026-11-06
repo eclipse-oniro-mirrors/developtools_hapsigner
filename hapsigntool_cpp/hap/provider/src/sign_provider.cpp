@@ -364,10 +364,6 @@ bool SignProvider::Sign(Options* options)
         return PrintErrorLog("[signHap] Init Data Source Contents failed", ZIP_ERROR, tmpOutputFilePath);
     }
 
-    if (!ValidateSignConstraints(inputFilePath, dataSrcContents.isZip64)) {
-        return false;
-    }
-
     ByteBuffer signingBlock;
     if (!DoSignBlock(signerConfig, dataSrcContents, suffix, *zip, signingBlock)) {
         return false;
@@ -487,6 +483,10 @@ bool SignProvider::ReSignHap(Options* options)
     }
 
     int64_t newCentralDirectoryOffset = dataSrcContents.cDOffset + signingBlock.GetCapacity();
+    if (!dataSrcContents.isZip64 && IsEocdOverflow(newCentralDirectoryOffset, dataSrcContents, *zip)) {
+        return PrintErrorLog("[ReSignHap] Re-signed file would exceed 4GB, "
+            "ZIP64 conversion not supported for re-signing", ZIP_ERROR, tmpOutputFilePath);
+    }
 
     dataSrcContents.eocdPair.first.SetPosition(0);
     if (!ZipUtils::SetCentralDirectoryOffset(dataSrcContents.eocdPair.first, newCentralDirectoryOffset,
@@ -599,6 +599,7 @@ bool SignProvider::AppendPropertyBlock(SignerConfig* signerConfig, std::string o
     SignContext signContext;
     signContext.signerConfig = signerConfig;
     signContext.outputFilePath = outputFilePath;
+    signContext.signingBlockStart = centralDirectoryOffset;
 
     if (enableCodeSign) {
         SIGNATURE_TOOLS_LOGI("start code signing.");
@@ -686,7 +687,10 @@ bool SignProvider::BuildCodeSignSubBlock(const std::string& suffix, int64_t code
     subBlock.SetCapacity(signContext.codeSignArray.size() + PROPERTY_BLOCK_HEADER_SIZE);
     subBlock.PutInt32(HapUtils::HAP_CODE_SIGN_BLOCK_ID);
     subBlock.PutInt32(signContext.codeSignArray.size());
-    subBlock.PutInt32((int32_t)codeSignOffset);
+    int32_t storedOffset = zip.IsZip64()
+        ? static_cast<int32_t>(codeSignOffset - signContext.signingBlockStart)
+        : static_cast<int32_t>(codeSignOffset);
+    subBlock.PutInt32(storedOffset);
     subBlock.PutData((const char*)signContext.codeSignArray.data(), signContext.codeSignArray.size());
     return true;
 }
@@ -1039,6 +1043,7 @@ bool SignProvider::AppendReCodeSignBlock(SignerConfig* signerConfig, std::string
     SignContext signContext;
     signContext.signerConfig = signerConfig;
     signContext.outputFilePath = outputFilePath;
+    signContext.signingBlockStart = centralDirectoryOffset;
 
     CodeSigning codeSigning(signContext.signerConfig);
     if (!codeSigning.GetCodeSignBlock(signContext.outputFilePath, codeSignOffset, suffixTmp,
@@ -1051,7 +1056,10 @@ bool SignProvider::AppendReCodeSignBlock(SignerConfig* signerConfig, std::string
     auto codeSignResult = std::make_unique<ByteBuffer>(signContext.codeSignArray.size() + PROPERTY_BLOCK_HEADER_SIZE);
     codeSignResult->PutInt32(HapUtils::HAP_CODE_SIGN_BLOCK_ID);
     codeSignResult->PutInt32(signContext.codeSignArray.size());
-    codeSignResult->PutInt32((int32_t)codeSignOffset);
+    int32_t storedOffset = zip.IsZip64()
+        ? static_cast<int32_t>(codeSignOffset - signContext.signingBlockStart)
+        : static_cast<int32_t>(codeSignOffset);
+    codeSignResult->PutInt32(storedOffset);
     codeSignResult->PutData(signContext.codeSignArray.data(), signContext.codeSignArray.size());
 
     std::unique_ptr<ByteBuffer> permSignResult;
@@ -1179,9 +1187,6 @@ bool SignProvider::RedoSignWithZip64(SignerConfig& signerConfig, std::shared_ptr
     std::string inputFilePath = signParams.at(ParamConstants::PARAM_BASIC_INPUT_FILE);
     std::string suffix = FileUtils::GetSuffix(inputFilePath);
     SIGNATURE_TOOLS_LOGI("EOCD fields overflow after signing block insertion, re-processing with ZIP64 mode");
-    if (!ValidateSignConstraints(inputFilePath, true)) {
-        return false;
-    }
     zip->SetForceZip64(true);
     auto inputStream = std::make_shared<std::ifstream>(inputFilePath, std::ios::binary);
     if (!inputStream->good()) {
@@ -1464,18 +1469,6 @@ bool SignProvider::ValidateOutputFileSize(DataSourceContents& dataSrcContents, B
     if (outputFileSize > HapUtils::MAX_INPUT_FILE_SIZE) {
         SIGNATURE_TOOLS_LOGE("Output file size %" PRId64 " exceeds 200GB limit", outputFileSize);
         return PrintErrorLog("[SignHap] Output file size exceeds 200GB limit", COMMAND_PARAM_ERROR);
-    }
-    return true;
-}
-
-bool SignProvider::ValidateSignConstraints(const std::string& inputFilePath, bool isZip64)
-{
-    if (isZip64 &&
-        !(inputFilePath.size() >= APP_SUFFIX_LEN &&
-          inputFilePath.compare(inputFilePath.size() - APP_SUFFIX_LEN, APP_SUFFIX_LEN, APP_SUFFIX) == 0)) {
-        SIGNATURE_TOOLS_LOGE("Only APP file supports ZIP64 format, input: %s", inputFilePath.c_str());
-        return PrintErrorLog("[signHap] ZIP64 format is only supported for .app files",
-            ZIP_ERROR, tmpOutputFilePath);
     }
     return true;
 }

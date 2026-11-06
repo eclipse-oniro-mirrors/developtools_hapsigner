@@ -125,6 +125,7 @@ private:
         SignerConfig* signerConfig = nullptr;
         std::string outputFilePath;
         std::vector<int8_t> codeSignArray;
+        int64_t signingBlockStart = 0;
     };
 
     int CheckParmaAndInitConfig(SignerConfig& config, Options* options, std::string& suffix);
@@ -147,7 +148,6 @@ private:
     bool CopyFileAndAlignment(std::ifstream& input, std::ofstream& tmpOutput, int alignment, ZipSigner& zip);
 
     bool CheckSignatureAlg();
-    bool ValidateSignConstraints(const std::string& inputFilePath, bool isZip64);
     bool ValidateOutputFileSize(DataSourceContents& dataSrcContents, ByteBuffer& signingBlock);
 
     int LoadOptionalBlock(const std::string& file, int type);
@@ -212,8 +212,6 @@ private:
 
     static std::vector<std::string> VALID_SIGN_ALG_NAME;
     static constexpr int FOUR_BYTE = 4;
-    static constexpr const char* APP_SUFFIX = ".app";
-    static constexpr size_t APP_SUFFIX_LEN = 4;
     static const std::string PROFILE_PREFIX;
     static constexpr int PROPERTY_BLOCK_HEADER_SIZE = 12;
     static constexpr int PROPERTY_BLOCK_COUNT = 2; // The sum of property block and hap sign block
