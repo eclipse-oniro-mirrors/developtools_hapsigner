@@ -198,6 +198,7 @@ private:
     std::pair<bool, bool> CheckSignEnabled();
     bool IsCodeSignAndPermSignSupportedFile(const std::string& suffixTmp);
     int64_t CalCodeSignBlockOffset(int64_t centralDirectoryOffset);
+    int32_t GetStoredCodeSignOffset(int64_t codeSignOffset, int64_t signingBlockStart, bool isZip64);
     bool AppendReCodeSignBlock(SignerConfig* signerConfig, std::string outputFilePath,
                              const std::string& suffix, int64_t centralDirectoryOffset, ZipSigner& zip);
     int64_t ComputeCodeSignOffset(int64_t centralDirectoryOffset);

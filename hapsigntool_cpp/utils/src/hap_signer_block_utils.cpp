@@ -31,6 +31,7 @@
 #include "hap_utils.h"
 #include "zip64_end_of_central_directory.h"
 #include "zip64_end_of_central_directory_locator.h"
+#include "zip64_extended_info.h"
 
 namespace OHOS {
 namespace SignatureTools {
@@ -699,8 +700,9 @@ bool HapSignerBlockUtils::VerifyHapIntegrity(
 bool HapSignerBlockUtils::VerifyOldHapIntegrity(
     Pkcs7Context& digestInfo, RandomAccessFile& hapFile, SignatureInfo& signInfo)
 {
-    int64_t eocdCdOffset = signInfo.isZip64 ? static_cast<int64_t>(0xFFFFFFFF)
-                                             : signInfo.hapSigningBlockOffset;
+    int64_t eocdCdOffset = signInfo.isZip64
+        ? static_cast<int64_t>(Zip64ExtendedInfo::UINT32_SENTINEL)
+        : signInfo.hapSigningBlockOffset;
     if (!SetUnsignedInt32(signInfo.hapEocd, ZIP_CD_OFFSET_IN_EOCD, eocdCdOffset)) {
         SIGNATURE_TOOLS_LOGE("Set central dir offset failed");
         return false;

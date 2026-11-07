@@ -328,9 +328,9 @@ bool SignProvider::DoSignBlock(SignerConfig& signerConfig, DataSourceContents& d
 bool SignProvider::IsEocdOverflow(int64_t newCentralDirectoryOffset, const DataSourceContents& dataSrcContents,
                                   ZipSigner& zip)
 {
-    return newCentralDirectoryOffset > UINT32_MAX ||
-        dataSrcContents.cDSize > UINT32_MAX ||
-        static_cast<uint64_t>(zip.GetZipEntries().size()) > UINT16_MAX;
+    return newCentralDirectoryOffset >= static_cast<int64_t>(UINT32_MAX) ||
+        dataSrcContents.cDSize >= UINT32_MAX ||
+        static_cast<uint64_t>(zip.GetZipEntries().size()) >= UINT16_MAX;
 }
 
 bool SignProvider::Sign(Options* options)
@@ -484,8 +484,8 @@ bool SignProvider::ReSignHap(Options* options)
 
     int64_t newCentralDirectoryOffset = dataSrcContents.cDOffset + signingBlock.GetCapacity();
     if (!dataSrcContents.isZip64 && IsEocdOverflow(newCentralDirectoryOffset, dataSrcContents, *zip)) {
-        return PrintErrorLog("[ReSignHap] Re-signed file would exceed 4GB, "
-            "ZIP64 conversion not supported for re-signing", ZIP_ERROR, tmpOutputFilePath);
+        return PrintErrorLog("[ReSignHap] Re-signed file exceeds ZIP32 limits (CD offset/size or entries),"
+            " ZIP64 conversion not supported for re-signing", ZIP_ERROR, tmpOutputFilePath);
     }
 
     dataSrcContents.eocdPair.first.SetPosition(0);
@@ -687,9 +687,8 @@ bool SignProvider::BuildCodeSignSubBlock(const std::string& suffix, int64_t code
     subBlock.SetCapacity(signContext.codeSignArray.size() + PROPERTY_BLOCK_HEADER_SIZE);
     subBlock.PutInt32(HapUtils::HAP_CODE_SIGN_BLOCK_ID);
     subBlock.PutInt32(signContext.codeSignArray.size());
-    int32_t storedOffset = zip.IsZip64()
-        ? static_cast<int32_t>(codeSignOffset - signContext.signingBlockStart)
-        : static_cast<int32_t>(codeSignOffset);
+    int32_t storedOffset = GetStoredCodeSignOffset(codeSignOffset, signContext.signingBlockStart,
+        zip.IsZip64());
     subBlock.PutInt32(storedOffset);
     subBlock.PutData((const char*)signContext.codeSignArray.data(), signContext.codeSignArray.size());
     return true;
@@ -1056,9 +1055,8 @@ bool SignProvider::AppendReCodeSignBlock(SignerConfig* signerConfig, std::string
     auto codeSignResult = std::make_unique<ByteBuffer>(signContext.codeSignArray.size() + PROPERTY_BLOCK_HEADER_SIZE);
     codeSignResult->PutInt32(HapUtils::HAP_CODE_SIGN_BLOCK_ID);
     codeSignResult->PutInt32(signContext.codeSignArray.size());
-    int32_t storedOffset = zip.IsZip64()
-        ? static_cast<int32_t>(codeSignOffset - signContext.signingBlockStart)
-        : static_cast<int32_t>(codeSignOffset);
+    int32_t storedOffset = GetStoredCodeSignOffset(codeSignOffset, signContext.signingBlockStart,
+        zip.IsZip64());
     codeSignResult->PutInt32(storedOffset);
     codeSignResult->PutData(signContext.codeSignArray.data(), signContext.codeSignArray.size());
 
@@ -1087,6 +1085,14 @@ bool SignProvider::AppendReCodeSignBlock(SignerConfig* signerConfig, std::string
     OptionalBlock tmp = {HapUtils::ENTERPRISE_CODE_RE_SIGN_BLOCK_ID, *result};
     optionalBlocks.push_back(tmp);
     return true;
+}
+
+int32_t SignProvider::GetStoredCodeSignOffset(int64_t codeSignOffset, int64_t signingBlockStart,
+    bool isZip64)
+{
+    return isZip64
+        ? static_cast<int32_t>(codeSignOffset - signingBlockStart)
+        : static_cast<int32_t>(codeSignOffset);
 }
 
 int64_t SignProvider::ComputeCodeSignOffset(int64_t centralDirectoryOffset)
