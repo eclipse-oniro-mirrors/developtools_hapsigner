@@ -509,7 +509,7 @@ public class Zip {
     private Zip64EocdLocator createZip64EocdLocator() {
         Zip64EocdLocator newZip64EocdLocator = new Zip64EocdLocator();
         newZip64EocdLocator.setDiskNumberOfZip64Eocd(endOfCentralDirectory.getcDStartDiskNum());
-        newZip64EocdLocator.setTotalNumberOfDisk(endOfCentralDirectory.getDiskNum());
+        newZip64EocdLocator.setTotalNumberOfDisk(endOfCentralDirectory.getDiskNum() + 1);
         return newZip64EocdLocator;
     }
 
