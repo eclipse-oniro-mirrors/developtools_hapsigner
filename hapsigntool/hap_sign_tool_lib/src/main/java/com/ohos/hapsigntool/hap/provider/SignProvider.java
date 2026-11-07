@@ -355,7 +355,7 @@ public abstract class SignProvider {
                 appendPermissionSignBlock(signerConfig, tmpOutput, zip, suffix);
                 byte[] signingBlock = doSign(zipInfo, outputHapIn, centralDirectory, signerConfig);
                 long newCentralDirectoryOffset = centralDirectoryOffset + signingBlock.length;
-                checkCentralDirectoryOffset(newCentralDirectoryOffset, suffix);
+                checkCentralDirectoryOffset(newCentralDirectoryOffset);
                 if (!zipInfo.isZip64() && newCentralDirectoryOffset >= UnsignedDecimalUtil.MAX_UNSIGNED_INT_VALUE) {
                     zipInfo.toZip64();
                     signingBlock = doSign(zipInfo, outputHapIn, centralDirectory, signerConfig);
@@ -387,12 +387,8 @@ public abstract class SignProvider {
         return SignHap.sign(contents, signerConfig, optionalBlocks);
     }
 
-    private boolean isSupportedZip64(String suffix) {
-        return ZIP64_SUPPORTED_SUFFIX.equalsIgnoreCase(suffix);
-    }
-
-    private void checkCentralDirectoryOffset(long centralDirectoryOffset, String suffix) {
-        if (centralDirectoryOffset >= UnsignedDecimalUtil.MAX_UNSIGNED_INT_VALUE && !isSupportedZip64(suffix)) {
+    private void checkCentralDirectoryOffset(long centralDirectoryOffset) {
+        if (centralDirectoryOffset >= Zip.MAX_APP_FILE_LENGTH) {
             CustomException.throwException(ERROR.ZIP_ERROR, SignToolErrMsg.SIGNED_APP_SIZE_INVALID.toString());
         }
     }
@@ -458,10 +454,12 @@ public abstract class SignProvider {
             ZipFileInfo zipInfo = verifyResult.getZipInfo();
             HapUtils.HapSignBlockInfo hapSignBlockInfo = verifyResult.getHapSignBlockInfo();
             long offset = hapSignBlockInfo.getOffset();
-            ByteBuffer eocd = zipInfo.getEocd();
-            ZipUtils.setCentralDirectoryOffset(eocd, offset);
+            long orgCentralDirectoryOffset = zipInfo.getCentralDirectoryOffset();
+            zipInfo.updateCentralDirectoryOffset(offset);
+            ByteBuffer eocd = zipInfo.generateEocdBuffer();
+            zipInfo.updateCentralDirectoryOffset(orgCentralDirectoryOffset);
             ZipDataInput beforeCentralDir = srcHapFile.slice(0, offset);
-            ZipDataInput centralDirectory = srcHapFile.slice(zipInfo.getCentralDirectoryOffset(),
+            ZipDataInput centralDirectory = srcHapFile.slice(orgCentralDirectoryOffset,
                     zipInfo.getCentralDirectorySize());
             Zip zip = new Zip(tmpOutput);
             appendResignCodeSignBlock(signerConfig, tmpOutput, "hap", offset, zip);
@@ -472,7 +470,11 @@ public abstract class SignProvider {
             ZipDataInput[] contents = {beforeCentralDir, centralDirectory, new ByteBufferZipDataInput(eocd)};
             byte[] reSignEnterpriseAppBytes = SignHap.reSignEnterpriseApp(contents, signerConfig, optionalBlocks);
             long newCentralDirectoryOffset = offset + reSignEnterpriseAppBytes.length;
-            checkCentralDirectoryOffset(newCentralDirectoryOffset, "hap");
+            checkCentralDirectoryOffset(newCentralDirectoryOffset);
+            if (!zipInfo.isZip64() && newCentralDirectoryOffset >= UnsignedDecimalUtil.MAX_UNSIGNED_INT_VALUE) {
+                CustomException.throwException(ERROR.SIGN_ERROR, SignToolErrMsg.SIGNATURE_FAILED.toString(
+                        "re-sign hap would exceed 4GB limit, zip64 conversion requires re-signing"));
+            }
             zipInfo.updateCentralDirectoryOffset(newCentralDirectoryOffset);
             outputSignedFile(outputHap, offset, reSignEnterpriseAppBytes, centralDirectory, zipInfo);
         }
@@ -497,10 +499,12 @@ public abstract class SignProvider {
             ZipFileInfo zipInfo = verifyResult.getZipInfo();
             HapUtils.HapSignBlockInfo hapSignBlockInfo = verifyResult.getHapSignBlockInfo();
             long offset = hapSignBlockInfo.getOffset();
-            ByteBuffer eocd = zipInfo.getEocd().slice().order(ByteOrder.LITTLE_ENDIAN);
-            ZipUtils.setCentralDirectoryOffset(eocd, offset);
+            long orgCentralDirectoryOffset = zipInfo.getCentralDirectoryOffset();
+            zipInfo.updateCentralDirectoryOffset(offset);
+            ByteBuffer eocd = zipInfo.generateEocdBuffer();
+            zipInfo.updateCentralDirectoryOffset(orgCentralDirectoryOffset);
             srcHapFile.copyTo(0, offset, outputHapIn);
-            ZipDataInput centralDirectory = srcHapFile.slice(zipInfo.getCentralDirectoryOffset(),
+            ZipDataInput centralDirectory = srcHapFile.slice(orgCentralDirectoryOffset,
                     zipInfo.getCentralDirectorySize());
             centralDirectory.copyTo(0, centralDirectory.size(), outputHapIn);
             outputHapIn.write(eocd);
@@ -775,8 +779,7 @@ public abstract class SignProvider {
         long outputFileLength = signingBlock.length + centralDirectoryOffset
                 + centralDirectory.size() + eocdBuffer.remaining();
         if (outputFileLength > Zip.MAX_APP_FILE_LENGTH) {
-            CustomException.throwException(ERROR.ZIP_ERROR, SignToolErrMsg.WRITE_ZIP_FAILED
-                    .toString("The size of signed application exceeded 200GB."));
+            CustomException.throwException(ERROR.ZIP_ERROR, SignToolErrMsg.SIGNED_APP_SIZE_INVALID.toString());
         }
         ZipDataOutput outputHapOut = new RandomAccessFileZipDataOutput(outputHap, centralDirectoryOffset);
         outputHapOut.write(signingBlock, 0, signingBlock.length);
@@ -830,8 +833,6 @@ public abstract class SignProvider {
     private Zip copyFileAndAlignment(File input, File tmpOutput, int alignment, String suffix)
         throws IOException, HapFormatException, ElfFormatException {
         Zip zip = new Zip(input);
-        // check zip64 supported before alignment
-        checkZip64Supported(zip, suffix);
         zip.alignment(alignment);
         if (StringUtils.containsIgnoreCase(CodeSigning.SUPPORT_FILE_FORM, suffix)
             && ParamConstants.SignCodeFlag.ENABLE_SIGN_CODE.getSignCodeFlag()
@@ -844,20 +845,11 @@ public abstract class SignProvider {
             }
         }
         zip.removeSignBlock();
-        // check zip64 supported after alignment
-        checkZip64Supported(zip, suffix);
         long start = System.currentTimeMillis();
         zip.toFile(tmpOutput.getCanonicalPath());
         long end = System.currentTimeMillis();
         LOGGER.debug("zip to file use {} ms", end - start);
         return zip;
-    }
-
-    private void checkZip64Supported(Zip zip, String suffix) {
-        if (zip.isZip64() && !ZIP64_SUPPORTED_SUFFIX.equalsIgnoreCase(suffix)) {
-            CustomException.throwException(ERROR.ZIP_ERROR,
-                    SignToolErrMsg.READ_ZIP_FAILED.toString("Unsupported zip64 file."));
-        }
     }
 
     /**

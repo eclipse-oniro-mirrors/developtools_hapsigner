@@ -434,10 +434,8 @@ public class SignToolErrMsg {
             .addErrCode("001")
             .addDescription("Read zip file failed")
             .addCause("%s")
-            .addSolution("App (or hap/hsp/hnp) use zip format.")
-            .addSolution("Zip file can support a maximum size of 4G and 65535 sub files.")
-            .addSolution("If this value is exceeded, it will be automatically converted to zip64.")
-            .addSolution("Please check if file is zip64 format, or zip formatted correctly.")
+            .addSolution("App (or hap/hsp/hnp) use zip or zip64 format.")
+            .addSolution("Please check if file is zip or zip64 formatted correctly.")
             .build();
 
     /**
@@ -477,7 +475,8 @@ public class SignToolErrMsg {
             .addTypeCode("17")
             .addErrCode("005")
             .addDescription("The size of signed application is out of range")
-            .addCause("The size of application exceeded 4GB after being signed, which is beyond the zip specification.")
+            .addCause("The size of application exceeded 200GB after being signed,"
+                    + " which is beyond the 200GB limit supported by this tool.")
             .addSolution("Please reduce the application package size.")
             .build();
 
