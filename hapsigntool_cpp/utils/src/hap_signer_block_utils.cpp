@@ -31,6 +31,7 @@
 #include "hap_utils.h"
 #include "zip64_end_of_central_directory.h"
 #include "zip64_end_of_central_directory_locator.h"
+#include "zip64_extended_info.h"
 
 namespace OHOS {
 namespace SignatureTools {
@@ -699,16 +700,30 @@ bool HapSignerBlockUtils::VerifyHapIntegrity(
 bool HapSignerBlockUtils::VerifyOldHapIntegrity(
     Pkcs7Context& digestInfo, RandomAccessFile& hapFile, SignatureInfo& signInfo)
 {
-    if (!SetUnsignedInt32(signInfo.hapEocd, ZIP_CD_OFFSET_IN_EOCD, signInfo.hapSigningBlockOffset)) {
+    int64_t eocdCdOffset = signInfo.isZip64
+        ? static_cast<int64_t>(Zip64ExtendedInfo::UINT32_SENTINEL)
+        : signInfo.hapSigningBlockOffset;
+    if (!SetUnsignedInt32(signInfo.hapEocd, ZIP_CD_OFFSET_IN_EOCD, eocdCdOffset)) {
         SIGNATURE_TOOLS_LOGE("Set central dir offset failed");
         return false;
     }
 
     int64_t centralDirSize = signInfo.hapEocdOffset - signInfo.hapCentralDirOffset;
+    if (signInfo.isZip64) {
+        centralDirSize -= Zip64EndOfCentralDirectory::ZIP64_EOCD_LENGTH +
+            Zip64EndOfCentralDirectoryLocator::ZIP64_EOCD_LOCATOR_LENGTH;
+    }
+
     FileDataSource contentsZip(hapFile, 0, signInfo.hapSigningBlockOffset, 0);
     FileDataSource centralDir(hapFile, signInfo.hapCentralDirOffset, centralDirSize, 0);
-    ByteBufferDataSource eocd(signInfo.hapEocd);
-    DataSource* content[ZIP_BLOCKS_NUM_NEED_DIGEST] = {&contentsZip, &centralDir, &eocd};
+
+    ByteBuffer eocdFullBuffer;
+    auto eocdHolder = CreateEocdDataSource(hapFile, signInfo, centralDirSize, eocdFullBuffer);
+    if (!eocdHolder) {
+        return false;
+    }
+
+    DataSource* content[ZIP_BLOCKS_NUM_NEED_DIGEST] = {&contentsZip, &centralDir, eocdHolder.get()};
     int32_t nId = DigestCommon::GetDigestAlgorithmId(digestInfo.digestAlgorithm);
     DigestParameter digestParam = GetDigestParameter(nId);
     ByteBuffer chunkDigest;

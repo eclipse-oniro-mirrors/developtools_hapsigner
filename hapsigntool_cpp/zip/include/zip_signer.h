@@ -107,6 +107,8 @@ public:
 
     void SetForceZip64(bool forceZip64);
 
+    bool IsZip64() const { return m_isZip64; }
+
 private:
     EndOfCentralDirectory* GetZipEndOfCentralDirectory(std::ifstream& input);
 

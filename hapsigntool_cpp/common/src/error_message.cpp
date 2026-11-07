@@ -264,10 +264,8 @@ const SignToolErrMsg SignToolErrMsg::READ_ZIP_FAILED = SignToolErrMsg(
     "11017001",
     "Read zip file failed",
     {
-        "App (or hap/hsp/hnp) use zip format.",
-        "Zip file can support a maximum size of 4G and 65535 sub files.",
-        "If this value is exceeded, it will be automatically converted to zip64.",
-        "Please check if file is zip64 format, or zip formatted correctly."
+        "App (or hap/hsp/hnp) use zip or zip64 format.",
+        "Please check if file is zip or zip64 formatted correctly."
     });
 
 const SignToolErrMsg SignToolErrMsg::WRITE_ZIP_FAILED = SignToolErrMsg(
@@ -289,7 +287,7 @@ const SignToolErrMsg SignToolErrMsg::SIGNED_APP_SIZE_INVALID = SignToolErrMsg(
     "11017005",
     "The size of signed application is out of range",
     {
-        "The size of application exceeded 4GB after being signed, which is beyond the zip specification.",
+        "The size of application exceeded 200GB after being signed, beyond the 200GB limit of this tool.",
         "Please reduce the application package size."
     });
 

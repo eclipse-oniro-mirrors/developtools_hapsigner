@@ -400,7 +400,7 @@ HWTEST_F(HapSignerBlockUtilsTest, CheckSignBlockHeadTest001, TestSize.Level1)
      * @tc.expected: step3. check the hapSignBlockSize is greater than MAX_HAP_SIGN_BLOCK_SIZE,
      * the return will be false.
      */
-    hapSignBlockHead.hapSignBlockSize = INT_MAX;
+    hapSignBlockHead.hapSignBlockSize = HapSignerBlockUtils::MAX_HAP_SIGN_BLOCK_SIZE + 1;
     ASSERT_FALSE(HapSignerBlockUtils::CheckSignBlockHead(hapSignBlockHead));
     /*
      * @tc.steps: step4. test CheckSignBlockHead function

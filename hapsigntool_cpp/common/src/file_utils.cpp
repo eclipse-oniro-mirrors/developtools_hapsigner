@@ -276,24 +276,20 @@ int FileUtils::WriteInputToOutPut(std::ifstream& input, std::ofstream& output, s
         return RET_FAILED;
     }
 
-    while (input) {
-        int min = std::min(static_cast<int>(length), FILE_BUFFER_BLOCK);
-        input.read(buf, min);
+    while (input && length > 0) {
+        size_t min = std::min(length, static_cast<size_t>(FILE_BUFFER_BLOCK));
+        input.read(buf, static_cast<std::streamsize>(min));
         if (input.fail() && !input.eof()) {
             SIGNATURE_TOOLS_LOGE("read error!");
             delete[] buf;
             return IO_ERROR;
         }
-        length -= input.gcount();
+        length -= static_cast<size_t>(input.gcount());
         output.write(buf, input.gcount());
         if (!output.good()) {
             SIGNATURE_TOOLS_LOGE("write error!");
             delete[] buf;
             return IO_ERROR;
-        }
-        
-        if (length <= 0) {
-            break;
         }
     }
     delete[] buf;
