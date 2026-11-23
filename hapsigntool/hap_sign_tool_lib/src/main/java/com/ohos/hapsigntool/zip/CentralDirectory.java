@@ -296,8 +296,8 @@ public class CentralDirectory {
         if (newOffset == preOffset) {
             return;
         }
-        this.offset = Math.min(newOffset, UnsignedDecimalUtil.MAX_UNSIGNED_INT_VALUE);
         if (zip64ExtendedInfo != null) {
+            this.offset = UnsignedDecimalUtil.MAX_UNSIGNED_INT_VALUE;
             zip64ExtendedInfo.setLocalHeaderOffset(newOffset);
             byte[] newZip64ExtendedInfoBytes = zip64ExtendedInfo.toBytes();
             int newExtraLength = extraData.length + newZip64ExtendedInfoBytes.length - zip64InfoLengthInExtra;
@@ -317,6 +317,7 @@ public class CentralDirectory {
             updateLength();
             return;
         }
+        this.offset = Math.min(newOffset, UnsignedDecimalUtil.MAX_UNSIGNED_INT_VALUE);
         if (newOffset >= UnsignedDecimalUtil.MAX_UNSIGNED_INT_VALUE) {
             // need add zip64 extend info to extra data
             zip64ExtendedInfo = new Zip64ExtendedInfo();

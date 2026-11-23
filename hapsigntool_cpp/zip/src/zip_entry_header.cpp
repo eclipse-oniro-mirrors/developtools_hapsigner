@@ -141,27 +141,23 @@ bool ZipEntryHeader::UpdateForZip64Mode(bool outputIsZip64)
     m_isZip64 = outputIsZip64;
 
     if (outputIsZip64) {
-        if (m_compressedSizeActual > UINT32_MAX) {
-            m_compressedSize = UINT32_MAX;
+        bool compOverflow = m_compressedSizeActual > UINT32_MAX;
+        bool uncompOverflow = m_unCompressedSizeActual > UINT32_MAX;
+        m_compressedSize = compOverflow ? UINT32_MAX : static_cast<uint32_t>(m_compressedSizeActual);
+        m_unCompressedSize = uncompOverflow ? UINT32_MAX : static_cast<uint32_t>(m_unCompressedSizeActual);
+
+        bool needsZip64 = compOverflow || uncompOverflow;
+        if (needsZip64) {
+            if (m_version < Zip64ExtendedInfo::ZIP64_VERSION_NEEDED) {
+                m_version = Zip64ExtendedInfo::ZIP64_VERSION_NEEDED;
+            }
+            m_zip64ExtendedInfo = Zip64ExtendedInfo(m_compressedSizeActual,
+                m_unCompressedSizeActual, 0, 0);
         } else {
-            m_compressedSize = static_cast<uint32_t>(m_compressedSizeActual);
-        }
-        if (m_unCompressedSizeActual > UINT32_MAX) {
-            m_unCompressedSize = UINT32_MAX;
-        } else {
-            m_unCompressedSize = static_cast<uint32_t>(m_unCompressedSizeActual);
+            m_zip64ExtendedInfo = std::nullopt;
         }
 
-        // version needed must be >= ZIP64_VERSION_NEEDED for ZIP64
-        if (m_version < Zip64ExtendedInfo::ZIP64_VERSION_NEEDED) {
-            m_version = Zip64ExtendedInfo::ZIP64_VERSION_NEEDED;
-        }
-
-        Zip64ExtendedInfo newInfo(m_compressedSizeActual, m_unCompressedSizeActual, 0, 0);
-        m_zip64ExtendedInfo = newInfo;
-
-        // Rebuild extra field
-        if (!RebuildExtraField(true)) {
+        if (!RebuildExtraField(needsZip64)) {
             return false;
         }
     } else {

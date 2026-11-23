@@ -184,40 +184,27 @@ bool CentralDirectory::UpdateForZip64Mode(bool outputIsZip64)
     m_isZip64 = outputIsZip64;
 
     if (outputIsZip64) {
-        // ZIP64 output: set sentinel values for overflow fields, update Zip64 Extended Info
-        if (m_compressedSizeActual > UINT32_MAX) {
-            m_compressedSize = UINT32_MAX;
+        bool compOverflow = m_compressedSizeActual > UINT32_MAX;
+        bool uncompOverflow = m_unCompressedSizeActual > UINT32_MAX;
+        bool offsetOverflow = m_offsetActual > UINT32_MAX;
+        bool diskOverflow = m_diskNumStartActual > UINT16_MAX;
+        m_compressedSize = compOverflow ? UINT32_MAX : static_cast<uint32_t>(m_compressedSizeActual);
+        m_unCompressedSize = uncompOverflow ? UINT32_MAX : static_cast<uint32_t>(m_unCompressedSizeActual);
+        m_offset = offsetOverflow ? UINT32_MAX : static_cast<uint32_t>(m_offsetActual);
+        m_diskNumStart = diskOverflow ? UINT16_MAX : static_cast<uint16_t>(m_diskNumStartActual);
+
+        bool needsZip64 = compOverflow || uncompOverflow || offsetOverflow || diskOverflow;
+        if (needsZip64) {
+            if (m_versionExtra < Zip64ExtendedInfo::ZIP64_VERSION_NEEDED) {
+                m_versionExtra = Zip64ExtendedInfo::ZIP64_VERSION_NEEDED;
+            }
+            m_zip64ExtendedInfo = Zip64ExtendedInfo(m_compressedSizeActual,
+                m_unCompressedSizeActual, m_offsetActual, m_diskNumStartActual);
         } else {
-            m_compressedSize = static_cast<uint32_t>(m_compressedSizeActual);
-        }
-        if (m_unCompressedSizeActual > UINT32_MAX) {
-            m_unCompressedSize = UINT32_MAX;
-        } else {
-            m_unCompressedSize = static_cast<uint32_t>(m_unCompressedSizeActual);
-        }
-        if (m_offsetActual > UINT32_MAX) {
-            m_offset = UINT32_MAX;
-        } else {
-            m_offset = static_cast<uint32_t>(m_offsetActual);
-        }
-        if (m_diskNumStartActual > UINT16_MAX) {
-            m_diskNumStart = UINT16_MAX;
-        } else {
-            m_diskNumStart = static_cast<uint16_t>(m_diskNumStartActual);
+            m_zip64ExtendedInfo = std::nullopt;
         }
 
-        // version needed must be >= ZIP64_VERSION_NEEDED for ZIP64
-        if (m_versionExtra < Zip64ExtendedInfo::ZIP64_VERSION_NEEDED) {
-            m_versionExtra = Zip64ExtendedInfo::ZIP64_VERSION_NEEDED;
-        }
-
-        // Rebuild or create Zip64 Extended Info with actual values
-        Zip64ExtendedInfo newInfo(m_compressedSizeActual, m_unCompressedSizeActual,
-                                   m_offsetActual, m_diskNumStartActual);
-        m_zip64ExtendedInfo = newInfo;
-
-        // Rebuild extra field: keep non-ZIP64 parts + new Zip64 Extended Info
-        if (!RebuildExtraField(true)) {
+        if (!RebuildExtraField(needsZip64)) {
             return false;
         }
     } else {
