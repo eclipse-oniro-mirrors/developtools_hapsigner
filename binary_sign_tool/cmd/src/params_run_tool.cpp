@@ -107,8 +107,49 @@ static bool UpdateParamForPwd(Options* options)
     return true;
 }
 
+static bool CheckSkipCodeSignValue(const std::string& skipCodeSign)
+{
+    if (!skipCodeSign.empty() && skipCodeSign != ParamConstants::SKIP_CODE_SIGN_TRUE &&
+        skipCodeSign != ParamConstants::SKIP_CODE_SIGN_FALSE) {
+        PrintErrorNumberMsg("COMMAND_ERROR", COMMAND_ERROR,
+            "not support command param '" + skipCodeSign + "', value must be true/false");
+        return false;
+    }
+    return true;
+}
+
+static bool RunSkipCodeSignApp(Options* params, SignToolServiceImpl& api)
+{
+    if (params->GetString(Options::SELF_SIGN) == ParamConstants::SELF_SIGN_TYPE_1) {
+        PrintErrorNumberMsg("COMMAND_ERROR", COMMAND_ERROR, "skipCodeSign and selfSign cannot be used together");
+        return false;
+    }
+    // skipCodeSign only writes profile/permission sections, signing params are not required
+    if (!params->Required({Options::IN_FILE, Options::OUT_FILE})) {
+        return false;
+    }
+    if (!CmdUtil::UpdateParamForCheckInFile(params, {Options::IN_FILE, Options::PROFILE_FILE,
+                                            Options::MODULE_FILE})) {
+        return false;
+    }
+    if (!CmdUtil::UpdateParamForCheckOutFile(params, {Options::OUT_FILE})) {
+        return false;
+    }
+    if (!ParamsRunTool::CheckProfile(*params)) {
+        return false;
+    }
+    return api.Sign(params);
+}
+
 bool ParamsRunTool::RunSignApp(Options* params, SignToolServiceImpl& api)
 {
+    std::string skipCodeSign = params->GetString(Options::SKIP_CODE_SIGN);
+    if (!CheckSkipCodeSignValue(skipCodeSign)) {
+        return false;
+    }
+    if (skipCodeSign == ParamConstants::SKIP_CODE_SIGN_TRUE) {
+        return RunSkipCodeSignApp(params, api);
+    }
     if (!params->Required({Options::MODE, Options::IN_FILE, Options::OUT_FILE})) {
         return false;
     }

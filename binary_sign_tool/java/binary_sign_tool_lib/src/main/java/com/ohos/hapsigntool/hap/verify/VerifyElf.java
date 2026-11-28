@@ -20,6 +20,7 @@ import com.google.gson.GsonBuilder;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonParseException;
 import com.google.gson.JsonParser;
+import com.ohos.elfio.ElfTypes;
 import com.ohos.elfio.Elfio;
 import com.ohos.elfio.Section;
 import com.ohos.hapsigntool.entity.ElfSignConstants;
@@ -106,32 +107,25 @@ public class VerifyElf {
      * @return true, if verify successfully.
      */
     public boolean verify(Options options) {
-        VerifyResult verifyResult;
-        try {
-            if (!checkParams(options)) {
-                LOGGER.error("Check params failed!");
-                throw new IOException();
-            }
-            String filePath = options.getString(ParamConstants.PARAM_BASIC_INPUT_FILE);
-            if (StringUtils.isEmpty(filePath)) {
-                LOGGER.error("Not found verify file path!");
-                throw new IOException();
-            }
-            File signedFile = new File(filePath);
-            if (!checkSignFile(signedFile)) {
-                LOGGER.error("Check input signature ELF false!");
-                throw new IOException();
-            }
-            verifyResult = verifyElf(filePath);
-            if (!verifyResult.isVerified()) {
-                LOGGER.error("verify: {}", verifyResult.getMessage());
-                throw new IOException();
-            }
-        } catch (IOException e) {
-            LOGGER.error("Write certificate chain error", e);
+        if (!checkParams(options)) {
+            LOGGER.error("Check params failed!");
             return false;
         }
-
+        String filePath = options.getString(ParamConstants.PARAM_BASIC_INPUT_FILE);
+        if (StringUtils.isEmpty(filePath)) {
+            LOGGER.error("Not found verify file path!");
+            return false;
+        }
+        File signedFile = new File(filePath);
+        if (!checkSignFile(signedFile)) {
+            LOGGER.error("Check input signature ELF false!");
+            return false;
+        }
+        VerifyResult verifyResult = verifyElf(filePath);
+        if (!verifyResult.isVerified()) {
+            LOGGER.error("verify: {}", verifyResult.getMessage());
+            return false;
+        }
         LOGGER.info("verify: {}", verifyResult.getMessage());
         return true;
     }
@@ -250,6 +244,15 @@ public class VerifyElf {
             LOGGER.error("File does not exist or is not a file: {}", binFile);
             return new VerifyResult(false, VerifyResult.RET_FILE_NOT_FOUND_ERROR,
                 "File does not exist or is not a file: " + binFile);
+        }
+
+        long fileSize = bin.length();
+        if (fileSize < ElfTypes.EI_NIDENT) {
+            LOGGER.error("File type error: file size {} is less than the minimum ELF identification size {}",
+                fileSize, ElfTypes.EI_NIDENT);
+            return new VerifyResult(false, VerifyResult.RET_UNSUPPORTED_FORMAT_ERROR,
+                "File type error: file size " + fileSize + " is less than the minimum ELF identification size "
+                    + ElfTypes.EI_NIDENT);
         }
 
         try {

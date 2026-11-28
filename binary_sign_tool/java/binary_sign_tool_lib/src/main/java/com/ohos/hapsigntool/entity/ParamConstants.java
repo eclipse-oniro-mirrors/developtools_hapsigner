@@ -177,6 +177,21 @@ public class ParamConstants {
     public static final String SELF_SIGN_TYPE_0 = "0";
 
     /**
+     * Skip code sign flag
+     */
+    public static final String PARAM_SKIP_CODE_SIGN = "skipCodeSign";
+
+    /**
+     * Skip code sign value true - skip code signing step
+     */
+    public static final String SKIP_CODE_SIGN_TRUE = "true";
+
+    /**
+     * Skip code sign value false - do not skip code signing step
+     */
+    public static final String SKIP_CODE_SIGN_FALSE = "false";
+
+    /**
      * Permission version constant
      */
     public static final int PERMISSION_VERSION = 1;

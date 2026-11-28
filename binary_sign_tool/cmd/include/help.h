@@ -46,6 +46,8 @@ const std::string SIGN_HELP_TXT = R"(
         -selfSign : Whether the elf file is self sign, The value 1 means enable self sign, and value 0 means disable.
     The default value is 0. It is optional.
         -quiet : quiet mode, suppress non-result output and only output the final result. value: true/false. optional.
+        -skipCodeSign : whether to skip code signing step and only write profile/permission sections.
+    value: true/false. default false. optional.
 
     EXAMPLE :
         sign -keyAlias "oh-app1-key-v1" -appCertFile "/home/app-release-cert.cer" -signCode "1"

@@ -52,6 +52,7 @@ public class SignToolServiceImpl implements ServiceApi {
     public boolean signHap(Options options) {
         String mode = options.getString(Options.MODE, Options.LOCAL_SIGN);
         String selfSign = options.getString(Options.SELF_SIGN);
+        String skipCodeSign = options.getString(Options.SKIP_CODE_SIGN, ParamConstants.SKIP_CODE_SIGN_FALSE);
 
         // Sign provider selection
         SignProvider signProvider;
@@ -59,6 +60,11 @@ public class SignToolServiceImpl implements ServiceApi {
             // Self-sign mode
             signProvider = new SelfSignSignProvider();
             LOGGER.info("Using SelfSignSignProvider");
+        } else if (ParamConstants.SKIP_CODE_SIGN_TRUE.equals(skipCodeSign)) {
+            // skipCodeSign generates no code signature, no keystore/cert/signAlg is needed.
+            // Reuse the keyless provider path; SignElf writes only .profile/.permission sections.
+            signProvider = new SelfSignSignProvider();
+            LOGGER.info("Using SelfSignSignProvider for skipCodeSign");
         } else if (Options.LOCAL_SIGN.equalsIgnoreCase(mode)) {
             // Local sign mode
             signProvider = new LocalJKSSignProvider();
