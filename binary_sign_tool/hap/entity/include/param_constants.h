@@ -63,11 +63,14 @@ public:
     static const std::string PARAM_SIGN_CODE;
     static const std::string PARAM_SELF_SIGN;
     static const std::string PARAM_MODULE_FILE;
+    static const std::string PARAM_SKIP_CODE_SIGN;
     static constexpr int FILE_NAME_MIN_LENGTH = 2;
     static const std::string DISABLE_SIGN_CODE;
     static const std::string ENABLE_SIGN_CODE;
     static const std::string SELF_SIGN_TYPE_0;
     static const std::string SELF_SIGN_TYPE_1;
+    static const std::string SKIP_CODE_SIGN_TRUE;
+    static const std::string SKIP_CODE_SIGN_FALSE;
 };
 } // namespace SignatureTools
 } // namespace OHOS

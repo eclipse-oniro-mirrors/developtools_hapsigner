@@ -35,8 +35,13 @@ bool SignToolServiceImpl::Sign(Options* options)
     }
     std::string mode = options->GetString(Options::MODE);
     std::string selfSign = options->GetString(Options::SELF_SIGN);
+    std::string skipCodeSign = options->GetString(Options::SKIP_CODE_SIGN);
     std::shared_ptr<SignProvider> signProvider;
     if (ParamConstants::SELF_SIGN_TYPE_1 == selfSign) {
+        signProvider = std::make_shared<SelfSignSignProvider>();
+    } else if (ParamConstants::SKIP_CODE_SIGN_TRUE == skipCodeSign) {
+        // skipCodeSign generates no code signature, no keystore/cert/signAlg is needed.
+        // Reuse the keyless provider path; SignElf::Sign writes only .profile/.permission sections.
         signProvider = std::make_shared<SelfSignSignProvider>();
     } else if (LOCAL_SIGN == mode) {
         signProvider = std::make_shared<LocalSignProvider>();

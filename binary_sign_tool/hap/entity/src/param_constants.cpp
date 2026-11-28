@@ -55,9 +55,12 @@ const std::string ParamConstants::PARAM_IN_FORM = "inForm";
 const std::string ParamConstants::PARAM_SIGN_CODE = "signCode";
 const std::string ParamConstants::PARAM_SELF_SIGN = "selfSign";
 const std::string ParamConstants::PARAM_MODULE_FILE = "moduleFile";
+const std::string ParamConstants::PARAM_SKIP_CODE_SIGN = "skipCodeSign";
 const std::string ParamConstants::DISABLE_SIGN_CODE = "0";
 const std::string ParamConstants::ENABLE_SIGN_CODE = "1";
 const std::string ParamConstants::SELF_SIGN_TYPE_0 = "0";
 const std::string ParamConstants::SELF_SIGN_TYPE_1 = "1";
+const std::string ParamConstants::SKIP_CODE_SIGN_TRUE = "true";
+const std::string ParamConstants::SKIP_CODE_SIGN_FALSE = "false";
 } // namespace SignatureTools
 } // namespace OHOS

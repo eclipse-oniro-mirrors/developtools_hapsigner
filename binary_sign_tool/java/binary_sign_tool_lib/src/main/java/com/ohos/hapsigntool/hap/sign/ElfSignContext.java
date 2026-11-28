@@ -402,8 +402,15 @@ public class ElfSignContext {
      * @throws ElfFormatException if section layout validation fails
      */
     public boolean load(FileChannel inputFc) throws IOException, ElfFormatException {
-        Elfio elfio = new Elfio();
         long inputFileLength = inputFc.size();
+        // The file must at least hold the 16-byte ELF identification (e_ident);
+        // Elfio.load would otherwise throw BufferUnderflowException on shorter files.
+        if (inputFileLength < ElfTypes.EI_NIDENT) {
+            LOGGER.error("File type error: file size {} is less than the minimum ELF identification size {}",
+                inputFileLength, ElfTypes.EI_NIDENT);
+            return false;
+        }
+        Elfio elfio = new Elfio();
         if (!elfio.load(inputFc, true)) {
             LOGGER.error("Failed to load ELF file: {}", inputFileLength);
             return false;

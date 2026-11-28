@@ -36,6 +36,7 @@ USAGE:  <sign|display-sign> [options]
         -userPwd : user password for online auth, required fields on remoteSign mode with account auth mode;
         -ext : extend parameters for remote signer plugin, optional fields;
         -quiet : quiet mode, suppress non-result output and only output the final result. value: true/false. optional;
+        -skipCodeSign : whether to skip code signing step and only write profile/permission sections. value: true/false. default false. optional;
 
     EXAMPLE:
         sign -mode localSign -keyAlias "oh-app1-key-v1" -appCertFile "app-release-cert.cer" -profileFile "signed-profile.p7b" -inFile "unsigned.elf" -signAlg SHA256withECDSA  -keystoreFile  "app-keypair.jks" -keystorePwd ****** -outFile "signed.elf"

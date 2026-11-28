@@ -62,16 +62,26 @@ bool SignElf::Sign(SignerConfig& signerConfig, std::map<std::string, std::string
         SIGNATURE_TOOLS_LOGE("[SignElf] Failed to write signed ELF file");
         return false;
     }
-    PrintMsg("add codesign section success");
-    std::string selfSign = signParams.at(ParamConstants::PARAM_SELF_SIGN);
-    uint64_t csOffset = static_cast<uint64_t>(codesignOffset);
-    bool generateCodeSignFlag = GenerateCodeSignByte(signerConfig, tmpOutputFile, csOffset, selfSign);
-    if (!generateCodeSignFlag) {
-        unlink(tmpOutputFile.c_str());
-        return false;
+    if (!IsSkipCodeSign(signParams)) {
+        PrintMsg("add codesign section success");
+        std::string selfSign = signParams.at(ParamConstants::PARAM_SELF_SIGN);
+        uint64_t csOffset = static_cast<uint64_t>(codesignOffset);
+        bool generateCodeSignFlag = GenerateCodeSignByte(signerConfig, tmpOutputFile, csOffset, selfSign);
+        if (!generateCodeSignFlag) {
+            unlink(tmpOutputFile.c_str());
+            return false;
+        }
+    } else {
+        PrintMsg("skip code sign, only profile/permission sections written");
     }
     FileUtils::CopyPermissions(inputFile, tmpOutputFile);
     return FileUtils::CopyTmpFileAndDel(tmpOutputFile, outputFile);
+}
+
+bool SignElf::IsSkipCodeSign(const std::map<std::string, std::string>& signParams)
+{
+    auto it = signParams.find(ParamConstants::PARAM_SKIP_CODE_SIGN);
+    return it != signParams.end() && it->second == ParamConstants::SKIP_CODE_SIGN_TRUE;
 }
 
 bool SignElf::BuildNewSections(ElfSignContext& ctx, SignerConfig& signerConfig,
@@ -106,6 +116,10 @@ bool SignElf::BuildNewSections(ElfSignContext& ctx, SignerConfig& signerConfig,
             ctx.AddSignSection(PERMISSION_SEC_NAME, 1, permData);
             PrintMsg("add permission section success");
         }
+    }
+    if (IsSkipCodeSign(signParams)) {
+        // skipCodeSign: no .codesign section is added, only profile/permission sections are kept
+        return true;
     }
     std::vector<uint8_t> placeholder(PAGE_SIZE, 0);
     ctx.AddSignSection(CODE_SIGN_SEC_NAME, PAGE_SIZE, placeholder);
@@ -145,8 +159,16 @@ bool SignElf::loadProfileAndSign(SignerConfig& signerConfig, std::map<std::strin
     }
     std::string profileSigned = signParams.at(ParamConstants::PARAM_BASIC_PROFILE_SIGNED);
     if (profileSigned == DEFAULT_PROFILE_SIGNED_0) {
-        std::string alg = signParams.at(ParamConstants::PARAM_BASIC_SIGANTURE_ALG);
-        if (ProfileSignTool::SignProfile(profileContent, signerConfig.GetSigner(), alg, p7b) < 0) {
+        auto algIt = signParams.find(ParamConstants::PARAM_BASIC_SIGANTURE_ALG);
+        if (algIt == signParams.end() || algIt->second.empty()) {
+            SIGNATURE_TOOLS_LOGE("[SignElf] signAlg is required when profileSigned is 0");
+            return false;
+        }
+        if (signerConfig.GetSigner() == nullptr) {
+            SIGNATURE_TOOLS_LOGE("[SignElf] signer is not configured for profile signing");
+            return false;
+        }
+        if (ProfileSignTool::SignProfile(profileContent, signerConfig.GetSigner(), algIt->second, p7b) < 0) {
             SIGNATURE_TOOLS_LOGE("[SignElf] SignProfile error");
             return false;
         }

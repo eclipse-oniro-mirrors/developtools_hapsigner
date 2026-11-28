@@ -141,6 +141,7 @@ public final class BinarySignTool {
         params.required(Options.IN_FILE, Options.OUT_FILE);
         String mode = params.getString(Options.MODE, LOCAL_SIGN);
         String selfSign = params.getString(Options.SELF_SIGN, "0");
+        String skipCodeSign = params.getString(Options.SKIP_CODE_SIGN, ParamConstants.SKIP_CODE_SIGN_FALSE);
 
         if (!LOCAL_SIGN.equalsIgnoreCase(mode) && !REMOTE_SIGN.equalsIgnoreCase(mode)) {
             CustomException.throwException(ERROR.COMMAND_ERROR,
@@ -151,6 +152,22 @@ public final class BinarySignTool {
             && !ParamConstants.SELF_SIGN_TYPE_0.equalsIgnoreCase(selfSign)) {
             CustomException.throwException(ERROR.COMMAND_ERROR,
                 SignToolErrMsg.PARAM_CHECK_FAILED.toString(Options.SELF_SIGN, "value must be 0/1"));
+        }
+
+        if (!ParamConstants.SKIP_CODE_SIGN_TRUE.equals(skipCodeSign)
+            && !ParamConstants.SKIP_CODE_SIGN_FALSE.equals(skipCodeSign)) {
+            CustomException.throwException(ERROR.COMMAND_ERROR,
+                SignToolErrMsg.PARAM_CHECK_FAILED.toString(Options.SKIP_CODE_SIGN, "value must be true/false"));
+        }
+
+        if (ParamConstants.SKIP_CODE_SIGN_TRUE.equals(skipCodeSign)) {
+            if (ParamConstants.SELF_SIGN_TYPE_1.equals(selfSign)) {
+                CustomException.throwException(ERROR.COMMAND_ERROR,
+                    "skipCodeSign and selfSign cannot be used together");
+            }
+            // skipCodeSign only writes profile/permission sections, signing params are not required
+            checkProfile(params);
+            return api.signHap(params);
         }
 
         if (ParamConstants.SELF_SIGN_TYPE_1.equals(selfSign)) {

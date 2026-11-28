@@ -198,6 +198,7 @@ bool SignProvider::CheckParams(Options* options)
     paramFileds.emplace_back(ParamConstants::PARAM_SIGN_CODE);
     paramFileds.emplace_back(ParamConstants::PARAM_MODULE_FILE);
     paramFileds.emplace_back(ParamConstants::PARAM_SELF_SIGN);
+    paramFileds.emplace_back(ParamConstants::PARAM_SKIP_CODE_SIGN);
 
     std::unordered_set<std::string> paramSet = Params::InitParamField(paramFileds);
     for (auto it = options->begin(); it != options->end(); it++) {
@@ -213,6 +214,10 @@ bool SignProvider::CheckParams(Options* options)
     if (signParams.find(ParamConstants::PARAM_SELF_SIGN) == signParams.end()
         || signParams.at(ParamConstants::PARAM_SELF_SIGN).empty()) {
         signParams[ParamConstants::PARAM_SELF_SIGN] = ParamConstants::SELF_SIGN_TYPE_0;
+    }
+    if (signParams.find(ParamConstants::PARAM_SKIP_CODE_SIGN) == signParams.end()
+        || signParams.at(ParamConstants::PARAM_SKIP_CODE_SIGN).empty()) {
+        signParams[ParamConstants::PARAM_SKIP_CODE_SIGN] = ParamConstants::SKIP_CODE_SIGN_FALSE;
     }
     return true;
 }

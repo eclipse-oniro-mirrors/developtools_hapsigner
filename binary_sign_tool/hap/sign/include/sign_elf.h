@@ -40,6 +40,7 @@ private:
     static bool loadModule(std::map<std::string, std::string>& signParams, std::string& moduleContent);
     static bool loadProfileAndSign(SignerConfig& signerConfig, std::map<std::string, std::string>& signParams,
                             std::string& p7b);
+    static bool IsSkipCodeSign(const std::map<std::string, std::string>& signParams);
     static bool BuildNewSections(ElfSignContext& ctx, SignerConfig& signerConfig,
                                  std::map<std::string, std::string>& signParams);
     static bool GenerateCodeSignByte(SignerConfig& signerConfig, const std::string& inputFile, uint64_t& csOffset,

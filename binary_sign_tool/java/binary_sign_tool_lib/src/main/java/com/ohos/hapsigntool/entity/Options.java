@@ -169,6 +169,11 @@ public class Options extends HashMap<String, Object> {
     public static final String SELF_SIGN = "selfSign";
 
     /**
+     * Skip code sign parameter name.
+     */
+    public static final String SKIP_CODE_SIGN = "skipCodeSign";
+
+    /**
      * Out file parameter name.
      */
     public static final String OUT_FILE = "outFile";

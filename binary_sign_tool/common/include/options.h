@@ -122,6 +122,7 @@ public:
     static const std::string MODULE_FILE;
     static const std::string SELF_SIGN;
     static const std::string QUIET;
+    static const std::string SKIP_CODE_SIGN;
 };
 } // namespace SignatureTools
 } // namespace OHOS

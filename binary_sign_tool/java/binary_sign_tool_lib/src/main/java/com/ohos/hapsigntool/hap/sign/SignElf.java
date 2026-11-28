@@ -174,16 +174,25 @@ public class SignElf {
         ElfSignWriter writer = new ElfSignWriter();
         writer.setCtx(ctx);
         long codesignOffset = writer.write(context.inputFile, context.tmpOutputFile);
-        boolean isSelfSign = ParamConstants.SELF_SIGN_TYPE_1.equals(signParams.get(ParamConstants.PARAM_SELF_SIGN));
-        byte[] codeSignBlock = generateCodeSignBlock(context.tmpOutputFile, codesignOffset, signerConfig, isSelfSign);
-        if (codeSignBlock == null) {
-            return false;
-        }
-        if (!replaceCodeSignData(context.tmpOutputFile, codesignOffset, codeSignBlock)) {
-            LOGGER.error("Replace .codesign section data failed");
-            return false;
+        if (!isSkipCodeSign(signParams)) {
+            boolean isSelfSign = ParamConstants.SELF_SIGN_TYPE_1.equals(signParams.get(ParamConstants.PARAM_SELF_SIGN));
+            byte[] codeSignBlock = generateCodeSignBlock(context.tmpOutputFile, codesignOffset, signerConfig,
+                isSelfSign);
+            if (codeSignBlock == null) {
+                return false;
+            }
+            if (!replaceCodeSignData(context.tmpOutputFile, codesignOffset, codeSignBlock)) {
+                LOGGER.error("Replace .codesign section data failed");
+                return false;
+            }
+        } else {
+            LOGGER.info("Skip code sign, only profile/permission sections written");
         }
         return moveSignedOutput(context);
+    }
+
+    private static boolean isSkipCodeSign(Map<String, String> signParams) {
+        return ParamConstants.SKIP_CODE_SIGN_TRUE.equals(signParams.get(ParamConstants.PARAM_SKIP_CODE_SIGN));
     }
 
     private boolean buildNewSections(ElfSignContext ctx, SignerConfig signerConfig, Map<String, String> signParams)
@@ -213,6 +222,10 @@ public class SignElf {
                 byte[] permData = processed.getBytes(StandardCharsets.UTF_8);
                 ctx.addSignSection(ElfSignConstants.PERMISSION_SEC_NAME, 1, permData);
             }
+        }
+        if (isSkipCodeSign(signParams)) {
+            // skipCodeSign: no .codesign section is added, only profile/permission sections are kept
+            return true;
         }
         byte[] placeholder = new byte[PAGE_SIZE];
         ctx.addSignSection(ElfSignConstants.CODE_SIGN_SEC_NAME, PAGE_SIZE, placeholder);

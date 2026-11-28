@@ -406,7 +406,8 @@ public abstract class SignProvider {
                 ParamConstants.PARAM_LOCAL_PUBLIC_CERT,
                 ParamConstants.PARAM_SIGN_CODE,
                 ParamConstants.PARAM_MODULE_FILE,
-                ParamConstants.PARAM_SELF_SIGN
+                ParamConstants.PARAM_SELF_SIGN,
+                ParamConstants.PARAM_SKIP_CODE_SIGN
         };
         Set<String> paramSet = ParamProcessUtil.initParamField(paramFileds);
 
@@ -426,6 +427,12 @@ public abstract class SignProvider {
         }
         if (StringUtils.isEmpty(signParams.get(ParamConstants.PARAM_SELF_SIGN))) {
             signParams.put(ParamConstants.PARAM_SELF_SIGN, "0");
+        }
+        if (!signParams.containsKey(ParamConstants.PARAM_SKIP_CODE_SIGN)) {
+            signParams.put(ParamConstants.PARAM_SKIP_CODE_SIGN, ParamConstants.SKIP_CODE_SIGN_FALSE);
+        }
+        if (StringUtils.isEmpty(signParams.get(ParamConstants.PARAM_SKIP_CODE_SIGN))) {
+            signParams.put(ParamConstants.PARAM_SKIP_CODE_SIGN, ParamConstants.SKIP_CODE_SIGN_FALSE);
         }
         checkSignAlignment();
     }
